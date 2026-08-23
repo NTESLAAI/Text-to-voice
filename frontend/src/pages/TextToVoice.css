@@ -1,0 +1,1290 @@
+/* =========================================================
+   TEXT TO VOICE
+   Mobile-first UI
+   ========================================================= */
+
+.ttv-page {
+    width: 100%;
+    min-height: 100vh;
+    box-sizing: border-box;
+    padding: 20px 16px 32px;
+}
+
+.ttv-header {
+    margin-bottom: 20px;
+}
+
+.ttv-header h1 {
+    margin: 0 0 6px;
+}
+
+.ttv-header p {
+    margin: 0;
+    opacity: 0.75;
+}
+
+/* =========================================================
+   FILTER GRID
+   ========================================================= */
+
+.ttv-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.ttv-filter {
+    position: relative;
+    min-width: 0;
+}
+
+/* =========================================================
+   FILTER BUTTON
+   ========================================================= */
+
+.ttv-filter-button {
+    width: 100%;
+    min-height: 72px;
+    padding: 12px;
+    box-sizing: border-box;
+
+    border: 1px solid rgba(139, 92, 246, 0.75);
+    border-radius: 14px;
+
+    background: rgba(23, 21, 47, 0.95);
+    color: #ffffff;
+
+    cursor: pointer;
+    text-align: left;
+
+    transition:
+        border-color 0.2s ease,
+        box-shadow 0.2s ease,
+        transform 0.15s ease;
+}
+
+.ttv-filter-button:hover {
+    border-color: #a78bfa;
+    box-shadow:
+        0 0 12px rgba(139, 92, 246, 0.35);
+}
+
+.ttv-filter-button:active {
+    transform: scale(0.98);
+}
+
+.ttv-filter-label {
+    display: block;
+    margin-bottom: 5px;
+
+    font-size: 13px;
+    opacity: 0.72;
+}
+
+.ttv-filter-value {
+    display: block;
+
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+/* =========================================================
+   FILTER MENU
+   ========================================================= */
+
+.ttv-filter-menu {
+    position: absolute;
+    z-index: 50;
+
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+
+    overflow: hidden;
+
+    border: 1px solid rgba(139, 92, 246, 0.8);
+    border-radius: 12px;
+
+    background: #17152f;
+
+    box-shadow:
+        0 10px 30px rgba(0, 0, 0, 0.45),
+        0 0 18px rgba(139, 92, 246, 0.18);
+}
+
+.ttv-filter-option {
+    display: block;
+
+    width: 100%;
+    padding: 13px 12px;
+
+    border: none;
+
+    background: transparent;
+    color: #ffffff;
+
+    text-align: left;
+    font-size: 14px;
+
+    cursor: pointer;
+}
+
+.ttv-filter-option:hover {
+    background: rgba(139, 92, 246, 0.18);
+}
+
+.ttv-filter-option:active {
+    background: rgba(139, 92, 246, 0.28);
+}
+
+/* =========================================================
+   TEXT AREA
+   ========================================================= */
+
+.ttv-textarea {
+    display: block;
+
+    width: 100%;
+    min-height: 220px;
+
+    box-sizing: border-box;
+    padding: 16px;
+
+    border: 1px solid rgba(139, 92, 246, 0.65);
+    border-radius: 16px;
+
+    background-color: #0a0c23;
+    color: #ffffff;
+
+    font-family: inherit;
+    font-size: 16px;
+    line-height: 1.6;
+
+    resize: vertical;
+    outline: none;
+
+    caret-color: #ffffff;
+
+    -webkit-text-fill-color: #ffffff;
+
+    transition:
+        border-color 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+.ttv-textarea::placeholder {
+    color: rgba(255, 255, 255, 0.45);
+    -webkit-text-fill-color: rgba(255, 255, 255, 0.45);
+}
+
+.ttv-textarea:focus {
+    background-color: #0a0c23;
+    color: #ffffff;
+
+    caret-color: #ffffff;
+    -webkit-text-fill-color: #ffffff;
+
+    border-color: #a78bfa;
+
+    box-shadow:
+        0 0 0 2px rgba(139, 92, 246, 0.12),
+        0 0 18px rgba(139, 92, 246, 0.18);
+}
+
+.ttv-textarea::placeholder {
+    color: rgba(255, 255, 255, 0.45);
+}
+
+/* =========================================================
+   CHARACTER COUNT
+   ========================================================= */
+
+.ttv-character-count {
+    margin-top: 7px;
+    margin-bottom: 16px;
+
+    text-align: right;
+
+    font-size: 13px;
+    opacity: 0.65;
+}
+
+/* =========================================================
+   GENERATE BUTTON
+   ========================================================= */
+
+.ttv-generate-button {
+    width: 100%;
+
+    min-height: 52px;
+    padding: 13px 18px;
+
+    border: none;
+    border-radius: 16px;
+
+    background: linear-gradient(135deg,
+            #2563eb,
+            #7c3aed);
+
+    color: #ffffff;
+
+    font-size: 16px;
+    font-weight: 700;
+
+    cursor: pointer;
+
+    box-shadow:
+        0 0 18px rgba(59, 130, 246, 0.25),
+        0 0 22px rgba(124, 58, 237, 0.2);
+
+    transition:
+        transform 0.15s ease,
+        opacity 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+.ttv-generate-button:hover:not(:disabled) {
+    box-shadow:
+        0 0 24px rgba(59, 130, 246, 0.4),
+        0 0 28px rgba(124, 58, 237, 0.35);
+}
+
+.ttv-generate-button:active:not(:disabled) {
+    transform: scale(0.98);
+}
+
+.ttv-generate-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* =========================================================
+   ERROR
+   ========================================================= */
+
+.ttv-error {
+    margin-top: 12px;
+
+    padding: 10px 12px;
+
+    border-radius: 10px;
+
+    background: rgba(220, 38, 38, 0.12);
+    border: 1px solid rgba(248, 113, 113, 0.35);
+
+    color: #fecaca;
+}
+
+/* =========================================================
+   AUDIO
+   ========================================================= */
+
+.ttv-audio-section {
+    margin-top: 20px;
+}
+
+.ttv-audio {
+    width: 100%;
+}
+
+/* =========================================================
+   DESKTOP
+   ========================================================= */
+
+@media (min-width: 768px) {
+    .ttv-page {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 32px 24px 48px;
+    }
+
+    .ttv-filter-button {
+        min-height: 78px;
+    }
+
+    .ttv-textarea {
+        min-height: 260px;
+    }
+
+}
+
+/* =========================================================
+   LANGUAGE
+   ========================================================= */
+
+.ttv-language {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    width: 100%;
+    min-height: 58px;
+    margin-bottom: 16px;
+    padding: 8px 12px;
+
+    box-sizing: border-box;
+
+    border: 1px solid rgba(139, 92, 246, 0.75);
+    border-radius: 14px;
+
+    background: rgba(23, 21, 47, 0.95);
+
+    box-shadow:
+        0 0 12px rgba(139, 92, 246, 0.18);
+}
+
+.ttv-language-label {
+    display: flex;
+    align-items: center;
+
+    flex-shrink: 0;
+
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.ttv-language-control {
+    flex: 0 0 170px;
+    min-width: 0;
+}
+
+/*
+   LanguageSelector có sẵn một label "Ngôn ngữ".
+   Trang TTS đã có nhãn riêng có icon,
+   nên ẩn label bên trong component.
+ */
+.ttv-language-control>div>label {
+    display: none;
+}
+
+.ttv-language-control select {
+    display: block;
+
+    width: 100%;
+    min-height: 42px;
+
+    box-sizing: border-box;
+    padding: 8px 34px 8px 12px;
+
+    border: 1px solid rgba(139, 92, 246, 0.65);
+    border-radius: 10px;
+
+    background-color: #0a0c23;
+    color: #ffffff;
+
+    font-family: inherit;
+    font-size: 15px;
+
+    outline: none;
+    cursor: pointer;
+
+    -webkit-appearance: auto;
+    appearance: auto;
+}
+
+.ttv-language-control select:focus {
+    background-color: #0a0c23;
+    color: #ffffff;
+
+    border-color: #a78bfa;
+
+    box-shadow:
+        0 0 0 2px rgba(139, 92, 246, 0.12),
+        0 0 14px rgba(139, 92, 246, 0.18);
+}
+
+/* =========================================================
+   VOLUME + SPEED
+   ========================================================= */
+
+.ttv-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+
+    width: 100%;
+    margin-bottom: 16px;
+}
+
+.ttv-control {
+    min-width: 0;
+
+    padding: 12px;
+
+    box-sizing: border-box;
+
+    border: 1px solid rgba(139, 92, 246, 0.75);
+    border-radius: 14px;
+
+    background: rgba(23, 21, 47, 0.95);
+
+    box-shadow:
+        0 0 12px rgba(139, 92, 246, 0.12);
+}
+
+.ttv-control-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.ttv-control-label {
+    color: #ffffff;
+
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.ttv-control-value {
+    flex-shrink: 0;
+
+    color: #a78bfa;
+
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.ttv-range-row {
+    display: flex;
+    align-items: center;
+
+    gap: 7px;
+
+    width: 100%;
+}
+
+.ttv-range-icon {
+    flex-shrink: 0;
+    font-size: 14px;
+}
+
+.ttv-range-text {
+    flex-shrink: 0;
+
+    color: rgba(255, 255, 255, 0.65);
+
+    font-size: 11px;
+}
+
+.ttv-range {
+    flex: 1;
+
+    width: 100%;
+    min-width: 0;
+    height: 5px;
+
+    accent-color: #8b5cf6;
+
+    cursor: pointer;
+}
+
+.ttv-range:focus {
+    outline: none;
+}
+
+.ttv-range::-webkit-slider-runnable-track {
+    height: 5px;
+
+    border-radius: 999px;
+
+    background: rgba(255, 255, 255, 0.22);
+}
+
+.ttv-range::-webkit-slider-thumb {
+    width: 16px;
+    height: 16px;
+
+    margin-top: -5.5px;
+
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+
+    background: #8b5cf6;
+
+    cursor: pointer;
+
+    -webkit-appearance: none;
+}
+
+.ttv-range::-moz-range-track {
+    height: 5px;
+
+    border-radius: 999px;
+
+    background: rgba(255, 255, 255, 0.22);
+}
+
+.ttv-range::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+
+    background: #8b5cf6;
+
+    cursor: pointer;
+}
+
+/* =========================================================
+   TEXT INPUT AREA
+   ========================================================= */
+
+.ttv-input-area {
+    position: relative;
+    width: 100%;
+}
+
+.ttv-input-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    gap: 12px;
+
+    width: 100%;
+    margin-top: 7px;
+}
+
+.ttv-input-footer .ttv-character-count {
+    margin: 0;
+}
+
+.ttv-input-footer .ttv-generate-button {
+    width: auto;
+    min-width: 150px;
+    min-height: 46px;
+
+    padding: 10px 18px;
+
+    border-radius: 14px;
+
+    white-space: nowrap;
+}
+
+/* =========================================================
+   BOTTOM CONTROL GRID
+   Theo thiết kế TEXT-TO-VOICE
+   ========================================================= */
+
+.ttv-bottom-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+
+    width: 100%;
+    margin-top: 16px;
+}
+
+.ttv-bottom-card {
+    min-width: 0;
+    min-height: 130px;
+
+    box-sizing: border-box;
+    padding: 12px;
+
+    border: 1px solid rgba(139, 92, 246, 0.85);
+    border-radius: 14px;
+
+    background:
+        linear-gradient(145deg,
+            rgba(28, 24, 58, 0.98),
+            rgba(10, 12, 35, 0.98));
+
+    box-shadow:
+        0 0 12px rgba(139, 92, 246, 0.18);
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+
+    text-align: center;
+}
+
+.ttv-bottom-card-title {
+    width: 100%;
+
+    color: #ffffff;
+
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.25;
+
+    text-align: center;
+}
+
+/* =========================================================
+   NGÔN NGỮ
+   ========================================================= */
+
+.ttv-language-card {
+    border-color: rgba(34, 211, 238, 0.9);
+
+    box-shadow:
+        0 0 12px rgba(34, 211, 238, 0.2),
+        0 0 18px rgba(59, 130, 246, 0.12);
+}
+
+.ttv-bottom-language {
+    width: 100%;
+}
+
+/*
+   LanguageSelector có label riêng.
+   Trong ô thiết kế này ta chỉ cần select.
+ */
+.ttv-bottom-language>div>label {
+    display: none;
+}
+
+.ttv-bottom-language select {
+    display: block;
+
+    width: 100%;
+    min-height: 38px;
+
+    box-sizing: border-box;
+    padding: 7px 28px 7px 10px;
+
+    border: 1px solid rgba(34, 211, 238, 0.75);
+    border-radius: 10px;
+
+    background: #0a0c23;
+    color: #ffffff;
+
+    font-family: inherit;
+    font-size: 13px;
+
+    outline: none;
+}
+
+.ttv-bottom-language select:focus {
+    border-color: #22d3ee;
+
+    box-shadow:
+        0 0 0 2px rgba(34, 211, 238, 0.1),
+        0 0 14px rgba(34, 211, 238, 0.18);
+}
+
+/* =========================================================
+   XỬ LÝ & PHÁT
+   ========================================================= */
+
+.ttv-play-card {
+    border-color: rgba(59, 130, 246, 0.9);
+
+    box-shadow:
+        0 0 12px rgba(59, 130, 246, 0.2),
+        0 0 18px rgba(124, 58, 237, 0.12);
+}
+
+.ttv-play-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 100%;
+
+    min-height: 70px;
+
+    padding: 0;
+
+    border: none;
+
+    background: transparent;
+
+    cursor: pointer;
+}
+
+.ttv-play-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.ttv-play-circle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    flex-shrink: 0;
+
+    width: 58px;
+    height: 58px;
+
+    border: 2px solid #22d3ee;
+    border-radius: 50%;
+
+    background:
+        linear-gradient(145deg,
+            #2563eb,
+            #7c3aed);
+
+    color: #ffffff;
+
+    font-size: 23px;
+    font-weight: 700;
+
+    box-shadow:
+        0 0 12px rgba(34, 211, 238, 0.55),
+        0 0 20px rgba(124, 58, 237, 0.45);
+
+    transition:
+        transform 0.15s ease,
+        box-shadow 0.2s ease;
+}
+
+.ttv-play-button:hover:not(:disabled) .ttv-play-circle {
+    transform: scale(1.05);
+
+    box-shadow:
+        0 0 18px rgba(34, 211, 238, 0.7),
+        0 0 26px rgba(124, 58, 237, 0.55);
+}
+
+.ttv-play-button:active:not(:disabled) .ttv-play-circle {
+    transform: scale(0.96);
+}
+
+.ttv-play-waves {
+    display: flex;
+    align-items: center;
+
+    width: 24px;
+
+    color: #22d3ee;
+
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: -2px;
+
+    opacity: 0.9;
+}
+
+.ttv-play-waves:first-child {
+    justify-content: flex-end;
+    margin-right: 4px;
+}
+
+.ttv-play-waves:last-child {
+    justify-content: flex-start;
+    margin-left: 4px;
+}
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 767px) {
+    .ttv-bottom-grid {
+        gap: 8px;
+    }
+
+    .ttv-bottom-card {
+        min-height: 122px;
+        padding: 10px 8px;
+    }
+
+    .ttv-bottom-card-title {
+        font-size: 12px;
+    }
+
+    .ttv-bottom-language select {
+        min-height: 36px;
+
+        font-size: 12px;
+        padding-left: 7px;
+        padding-right: 22px;
+    }
+
+    .ttv-play-circle {
+        width: 52px;
+        height: 52px;
+
+        font-size: 21px;
+    }
+
+    .ttv-play-waves {
+        width: 18px;
+        font-size: 10px;
+    }
+}
+
+/* =========================================================
+   3 x 3 CONTROL GRID
+   ========================================================= */
+
+.ttv-control-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+
+    width: 100%;
+}
+
+.ttv-control-grid .ttv-filter-grid,
+.ttv-control-grid .ttv-controls,
+.ttv-control-grid .ttv-bottom-grid {
+    display: contents;
+}
+
+.ttv-control-grid .ttv-filter,
+.ttv-control-grid .ttv-control,
+.ttv-control-grid .ttv-bottom-card {
+    min-width: 0;
+    min-height: 130px;
+}
+
+/* =========================================================
+   TEXT AREA - FULL WIDTH
+   ========================================================= */
+
+.ttv-input-area {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.ttv-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    display: block;
+}
+
+/* =========================================================
+   3 x 3 GRID - EQUAL CELLS
+   ========================================================= */
+
+.ttv-control-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: 130px;
+    gap: 12px;
+
+    width: 100%;
+    align-items: stretch;
+}
+
+.ttv-control-grid .ttv-filter-grid,
+.ttv-control-grid .ttv-controls,
+.ttv-control-grid .ttv-bottom-grid {
+    display: contents;
+}
+
+.ttv-control-grid .ttv-filter,
+.ttv-control-grid .ttv-control,
+.ttv-control-grid .ttv-bottom-card {
+    width: 100%;
+    height: 130px;
+    min-height: 130px;
+    box-sizing: border-box;
+}
+
+.ttv-input-area {
+    position: relative;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.ttv-input-area .ttv-textarea {
+    width: 100%;
+    box-sizing: border-box;
+
+    /* Chừa khoảng để chữ không đè lên bộ đếm */
+    padding-bottom: 36px;
+}
+
+.ttv-input-area .ttv-character-count {
+    position: absolute;
+
+    right: 12px;
+    bottom: 10px;
+
+    margin: 0;
+    padding: 0;
+
+    white-space: nowrap;
+
+    font-size: 13px;
+    line-height: 1;
+
+    color: #7f8aa3;
+
+    pointer-events: none;
+}
+
+/* =========================================================
+   ĐỒNG BỘ CHIỀU CAO 4 Ô BỘ LỌC
+   ========================================================= */
+
+.ttv-control-grid .ttv-filter {
+    width: 100%;
+    height: 130px;
+    min-height: 130px;
+    max-height: 130px;
+    box-sizing: border-box;
+}
+
+.ttv-control-grid .ttv-filter-button {
+    width: 100%;
+    height: 100%;
+    min-height: 130px;
+    box-sizing: border-box;
+}
+
+/* =========================================================
+   FIX CLICK / TOUCH FOR 3x3 CONTROLS
+   ========================================================= */
+
+.ttv-control-grid {
+    position: relative;
+    z-index: 1;
+    pointer-events: auto;
+}
+
+.ttv-control-grid .ttv-filter,
+.ttv-control-grid .ttv-control,
+.ttv-control-grid .ttv-bottom-card {
+    position: relative;
+    z-index: 2;
+    pointer-events: auto;
+}
+
+.ttv-control-grid button,
+.ttv-control-grid input,
+.ttv-control-grid select {
+    position: relative;
+    z-index: 3;
+    pointer-events: auto;
+}
+
+/* Bộ lọc */
+.ttv-control-grid .ttv-filter-button {
+    position: relative;
+    z-index: 4;
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+/* Menu lựa chọn */
+.ttv-control-grid .ttv-filter-menu {
+    position: absolute;
+    z-index: 100;
+    pointer-events: auto;
+}
+
+/* Ngôn ngữ */
+.ttv-control-grid .ttv-bottom-language,
+.ttv-control-grid .ttv-bottom-language select {
+    position: relative;
+    z-index: 4;
+    pointer-events: auto;
+}
+
+/* Tốc độ đọc */
+.ttv-control-grid .ttv-control input[type="range"] {
+    position: relative;
+    z-index: 4;
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+/* Xử lý & Phát */
+.ttv-control-grid .ttv-play-button {
+    position: relative;
+    z-index: 4;
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+/* =========================================================
+   DROPDOWN MENU - LUÔN NẰM TRÊN CÁC Ô KHÁC
+   ========================================================= */
+
+.ttv-control-grid .ttv-filter {
+    position: relative;
+    z-index: 1;
+}
+
+/* Ô đang mở menu phải nằm trên tất cả các ô khác */
+.ttv-control-grid .ttv-filter:has(.ttv-filter-menu) {
+    z-index: 1000;
+}
+
+/* Menu xổ xuống */
+.ttv-control-grid .ttv-filter-menu {
+    position: absolute;
+    z-index: 1001;
+
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+
+    overflow: hidden;
+
+    border: 1px solid rgba(139, 92, 246, 0.9);
+    border-radius: 12px;
+
+    background: #17152f;
+
+    box-shadow:
+        0 10px 30px rgba(0, 0, 0, 0.55),
+        0 0 18px rgba(139, 92, 246, 0.25);
+}
+
+/* Các lựa chọn trong menu */
+.ttv-control-grid .ttv-filter-option {
+    position: relative;
+    z-index: 1002;
+}
+
+/* =========================================================
+   DAY / NIGHT MODE
+   ========================================================= */
+
+.ttv-page.ttv-night-mode {
+    background: #080b18;
+    color: #ffffff;
+}
+
+.ttv-page.ttv-day-mode {
+    background: #f5f7fb;
+    color: #172033;
+}
+
+/* Ô nhập */
+.ttv-page.ttv-day-mode .ttv-textarea {
+    background: #ffffff;
+    color: #172033;
+    border-color: #c7d2fe;
+}
+
+.ttv-page.ttv-day-mode .ttv-textarea::placeholder {
+    color: #7b8498;
+}
+
+/* Các ô */
+.ttv-page.ttv-day-mode .ttv-filter,
+.ttv-page.ttv-day-mode .ttv-control,
+.ttv-page.ttv-day-mode .ttv-bottom-card {
+    background: #ffffff;
+    color: #172033;
+    border-color: #c7d2fe;
+}
+
+/* Chữ */
+.ttv-page.ttv-day-mode .ttv-filter-label,
+.ttv-page.ttv-day-mode .ttv-control-label,
+.ttv-page.ttv-day-mode .ttv-bottom-card-title {
+    color: #172033;
+}
+
+/* Giá trị */
+.ttv-page.ttv-day-mode .ttv-filter-value,
+.ttv-page.ttv-day-mode .ttv-control-value {
+    color: #334155;
+}
+
+/* =========================================================
+   DAY / NIGHT - CHỈ ÁP DỤNG CHO Ô NHẬP VĂN BẢN
+   ========================================================= */
+
+.ttv-textarea.ttv-textarea-night {
+    background: #080b18;
+    color: #ffffff;
+}
+
+.ttv-textarea.ttv-textarea-night::placeholder {
+    color: #8b94a8;
+}
+
+.ttv-textarea.ttv-textarea-day {
+    background: #ffffff;
+    color: #172033;
+}
+
+.ttv-textarea.ttv-textarea-day::placeholder {
+    color: #7b8498;
+}
+
+/* Bộ đếm giữ nguyên màu thiết kế */
+.ttv-textarea.ttv-textarea-night+.ttv-character-count,
+.ttv-textarea.ttv-textarea-day+.ttv-character-count {
+    color: #7f8aa3;
+}
+
+/* =========================================================
+   SỬA CÂU TỪ
+   ========================================================= */
+
+.ttv-edit-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    box-sizing: border-box;
+}
+
+.ttv-edit-button {
+    width: 80%;
+    max-width: 180px;
+    min-height: 48px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+
+    margin: 0 auto;
+
+    border: 1px solid #8b5cf6;
+    border-radius: 14px;
+
+    background: linear-gradient(135deg,
+            #30205f,
+            #1e1740);
+
+    color: #ffffff;
+
+    font-size: 15px;
+    font-weight: 600;
+
+    cursor: pointer;
+
+    box-shadow:
+        0 0 12px rgba(139, 92, 246, 0.25);
+
+    transition:
+        transform 0.15s ease,
+        box-shadow 0.15s ease,
+        background 0.15s ease;
+}
+
+.ttv-edit-button:hover {
+    transform: translateY(-1px);
+
+    box-shadow:
+        0 0 18px rgba(139, 92, 246, 0.45);
+}
+
+.ttv-edit-button:active {
+    transform: scale(0.97);
+}
+
+.ttv-edit-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* =========================================================
+   AI - SỬA CÂU TỪ
+   HỘP XÁC NHẬN
+   ========================================================= */
+
+.ttv-review-overlay {
+    position: fixed;
+    inset: 0;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 20px;
+
+    background: rgba(5, 8, 20, 0.72);
+
+    z-index: 9999;
+
+    box-sizing: border-box;
+}
+
+.ttv-review-dialog {
+    width: min(460px, 100%);
+
+    padding: 24px;
+
+    border: 1px solid rgba(139, 92, 246, 0.65);
+    border-radius: 18px;
+
+    background: #17152f;
+
+    color: #ffffff;
+
+    box-shadow:
+        0 20px 60px rgba(0, 0, 0, 0.55),
+        0 0 30px rgba(139, 92, 246, 0.18);
+
+    box-sizing: border-box;
+}
+
+.ttv-review-dialog h3 {
+    margin: 0 0 16px;
+
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.ttv-review-dialog p {
+    margin: 0;
+
+    white-space: pre-line;
+
+    color: #c9c7d9;
+
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.ttv-review-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+
+    margin-top: 24px;
+}
+
+.ttv-review-actions button {
+    min-width: 90px;
+    height: 40px;
+
+    padding: 0 16px;
+
+    border-radius: 10px;
+
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+
+    cursor: pointer;
+}
+
+.ttv-review-cancel {
+    border: 1px solid rgba(255, 255, 255, 0.18);
+
+    background: rgba(255, 255, 255, 0.06);
+
+    color: #c9c7d9;
+}
+
+.ttv-review-confirm {
+    border: 1px solid rgba(139, 92, 246, 0.8);
+
+    background: linear-gradient(135deg,
+            #7c3aed,
+            #4f46e5);
+
+    color: #ffffff;
+
+    box-shadow:
+        0 0 14px rgba(139, 92, 246, 0.25);
+}
+
+.ttv-review-actions button:hover {
+    transform: translateY(-1px);
+}
