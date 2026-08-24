@@ -10,8 +10,8 @@ const PROJECT_ID=import.meta.env.VITE_PROJECT_ID;
 
 
 export default function TextToVoicePage() {
-  const { t }=useTranslation();
 
+  const { t }=useTranslation();
   const [language, setLanguage]=
     useState<'vi'|'en'>('vi');
 
@@ -38,7 +38,13 @@ export default function TextToVoicePage() {
   const [showTextReview, setShowTextReview]=
     useState(false);
 
-  const [textReviewMessage, setTextReviewMessage]=
+  const [isTextReviewing, setIsTextReviewing]=
+    useState(false);
+
+  const [textReviewErrors, setTextReviewErrors]=
+    useState<string[]>([]);
+
+  const [textReviewSuggestion, setTextReviewSuggestion]=
     useState('');
 
   const [correctedText, setCorrectedText]=
@@ -135,9 +141,9 @@ export default function TextToVoicePage() {
     );
   });
 
-  const hasValidPreset=filteredPresets.some(
-    (preset) => preset.id===selectedPreset,
-  );
+  const selectedVoicePreset=filteredPresets[0]??null;
+
+  const hasValidPreset=selectedVoicePreset!==null;
 
   useEffect(() => {
     if (filteredPresets.length===0) {
@@ -153,7 +159,6 @@ export default function TextToVoicePage() {
     }
   }, [
     filteredPresets,
-    selectedPreset,
   ]);
 
   useEffect(() => {
@@ -164,54 +169,41 @@ export default function TextToVoicePage() {
 
   const handleAutoTextReview=async () => {
     if (!text.trim()) {
-      setTextReviewMessage(
-        'Vui lòng nhập văn bản trước khi sử dụng chức năng Sửa câu từ.',
-      );
-
+      setTextReviewErrors([]);
+      setTextReviewSuggestion('');
+      setCorrectedText('');
+      setIsTextReviewing(false);
       setShowTextReview(true);
-
       return;
     }
 
+    setShowTextReview(true);
+    setIsTextReviewing(true);
+    setTextReviewErrors([]);
+    setTextReviewSuggestion('');
+    setCorrectedText('');
+
     try {
-      setTextReviewMessage(
-        'AI đang kiểm tra văn bản...',
-      );
+      const response=await reviewText(text);
 
-      setShowTextReview(true);
-
-      const response=await reviewText(
-        text,
-      );
-
-      setTextReviewMessage(
-        response.hasErrors
-          ? [
-            ...response.errors,
-            response.suggestion
-              ? `\n💡 ${response.suggestion}`
-              :'',
-          ]
-            .filter(Boolean)
-            .join('\n')
-          :'Văn bản không có lỗi cần sửa.',
-      );
-
-      setCorrectedText(
-        response.correctedText,
-      );
+      setTextReviewErrors(response.errors);
+      setTextReviewSuggestion(response.suggestion);
+      setCorrectedText(response.correctedText);
     } catch (error) {
       console.error(
         'TEXT REVIEW ERROR:',
         error,
       );
 
-      setTextReviewMessage(
+      setTextReviewErrors([
         'Không thể kiểm tra văn bản. Vui lòng thử lại.',
-      );
+      ]);
+      setTextReviewSuggestion('');
+      setCorrectedText('');
+    } finally {
+      setIsTextReviewing(false);
     }
   };
-
   const handleGenerate=async () => {
     if (!text.trim()||isGenerating||isLoadingPresets) {
       return;
@@ -229,9 +221,7 @@ export default function TextToVoicePage() {
       return;
     }
 
-    const selectedVoicePreset=presets.find(
-      (preset) => preset.id===selectedPreset,
-    );
+    const selectedVoicePreset=filteredPresets[0]??null;
 
     if (!selectedVoicePreset) {
       setError('Selected voice preset is unavailable.');
@@ -796,53 +786,155 @@ export default function TextToVoicePage() {
         <div className="ttv-review-overlay">
           <div className="ttv-review-dialog">
 
-            <h3>
-              ✍️ Kiểm tra câu từ
-            </h3>
+            <div className="ttv-review-header">
+              <h3>
+                🤖✨ AI Tự động
+              </h3>
 
-            <p>
-              {textReviewMessage}
-            </p>
+              <button
+                type="button"
+                className="ttv-review-close"
+                onClick={() => {
+                  setShowTextReview(false);
+                }}
+                aria-label="Đóng"
+              >
+                ×
+              </button>
+            </div>
 
-            {correctedText&&(
-              <div className="ttv-corrected-preview">
+            {isTextReviewing? (
+              <div className="ttv-review-loading">
+                <div className="ttv-review-spinner">
+                  ✨
+                </div>
+
                 <strong>
-                  📝 Bản sửa đề xuất:
+                  AI đang phân tích văn bản...
                 </strong>
 
-                <div>
-                  {correctedText}
-                </div>
+                <p>
+                  Đang kiểm tra chính tả, dấu câu và cách diễn đạt.
+                </p>
               </div>
+            ):(
+              <>
+                {textReviewErrors.length===0? (
+                  <div className="ttv-review-success">
+                    <div className="ttv-review-success-icon">
+                      ✓
+                    </div>
+
+                    <h4>
+                      Văn bản đã ổn
+                    </h4>
+
+                    <p>
+                      AI không phát hiện lỗi chính tả,
+                      dấu câu hoặc cách diễn đạt cần chỉnh sửa.
+                    </p>
+                  </div>
+                ):(
+                  <>
+                    <div className="ttv-review-summary">
+                      <span>🔎</span>
+
+                      <div>
+                        <strong>
+                          AI phát hiện {textReviewErrors.length} điểm
+                          cần cải thiện
+                        </strong>
+
+                        <p>
+                          Bạn có thể xem các đề xuất bên dưới.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="ttv-review-errors">
+                      {textReviewErrors.map((reviewError, index) => (
+                        <div
+                          key={`${index}-${reviewError}`}
+                          className="ttv-review-error-item"
+                        >
+                          <span className="ttv-review-error-number">
+                            {String(index+1).padStart(2, '0')}
+                          </span>
+
+                          <span className="ttv-review-error-text">
+                            {reviewError}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {textReviewSuggestion&&(
+                      <div className="ttv-review-suggestion">
+                        <strong>
+                          💡 Gợi ý của AI
+                        </strong>
+
+                        <p>
+                          {textReviewSuggestion}
+                        </p>
+                      </div>
+                    )}
+
+                    {correctedText&&(
+                      <div className="ttv-corrected-preview">
+                        <strong>
+                          ✨ Bản sửa đề xuất
+                        </strong>
+
+                        <div>
+                          {correctedText}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                <div className="ttv-review-actions">
+                  {textReviewErrors.length===0? (
+                    <button
+                      type="button"
+                      className="ttv-review-confirm"
+                      onClick={() => {
+                        setShowTextReview(false);
+                      }}
+                    >
+                      Đóng
+                    </button>
+                  ):(
+                    <>
+                      <button
+                        type="button"
+                        className="ttv-review-cancel"
+                        onClick={() => {
+                          setShowTextReview(false);
+                        }}
+                      >
+                        Không, giữ nguyên
+                      </button>
+
+                      <button
+                        type="button"
+                        className="ttv-review-confirm"
+                        onClick={() => {
+                          if (correctedText) {
+                            setText(correctedText);
+                          }
+
+                          setShowTextReview(false);
+                        }}
+                      >
+                        ✓ Đồng ý sửa
+                      </button>
+                    </>
+                  )}
+                </div>
+              </>
             )}
-
-            <div className="ttv-review-actions">
-
-              <button
-                type="button"
-                className="ttv-review-cancel"
-                onClick={() => {
-                  setShowTextReview(false);
-                }}
-              >
-                Không
-              </button>
-
-              <button
-                type="button"
-                className="ttv-review-confirm"
-                onClick={() => {
-                  if (correctedText) {
-                    setText(correctedText);
-                  }
-
-                  setShowTextReview(false);
-                }}
-              >
-                Đồng ý
-              </button>
-
-            </div>
 
           </div>
         </div>
