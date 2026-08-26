@@ -59,9 +59,13 @@ export class VoiceDirectorService {
       VOICE_REGIONS[options.region];
 
     const genderInstruction=
-      profile.gender==='male'
-        ? 'Use a clearly male adult human voice. The speaker must sound distinctly masculine, not female. Use a natural masculine vocal range and vocal character. Do not use a female voice.'
-        :'Use a clearly female adult human voice. The speaker must sound distinctly feminine, not male. Use a natural feminine vocal range and vocal character. Do not use a male voice.';
+      options.character==='boy'
+        ? 'Use a clearly male child voice. The speaker must sound distinctly like a young boy, not an adult male and not female.'
+        :options.character==='girl'
+          ? 'Use a clearly female child voice. The speaker must sound distinctly like a young girl, not an adult female and not male.'
+          :profile.gender==='male'
+            ? 'Use a clearly male adult human voice. The speaker must sound distinctly masculine, not female. Use a natural masculine vocal range and vocal character. Do not use a female voice.'
+            :'Use a clearly female adult human voice. The speaker must sound distinctly feminine, not male. Use a natural feminine vocal range and vocal character. Do not use a male voice.';
 
     const ageInstruction=
       options.character==='boy'
@@ -69,11 +73,16 @@ export class VoiceDirectorService {
         :options.character==='girl'
           ? 'Use a clearly young child female voice, approximately 7 to 10 years old. Keep the voice consistently childlike throughout the entire speech, with a naturally higher pitch, smaller vocal resonance, youthful pronunciation and innocent childlike character. Do not sound like an adult female.'
           :'';
-
+    const childRegionInstruction=
+      (options.character==='boy'||options.character==='girl')&&
+        options.region==='central_vietnam'
+        ? 'The child must speak with a clearly recognizable natural Central Vietnamese accent. Keep Central Vietnamese pronunciation consistently throughout the entire speech. Do not drift toward Northern Vietnamese pronunciation. Do not use a generic standard Vietnamese accent. The child must sound like a real Central Vietnamese child, not an adult imitating a child voice.'
+        :'';
     const instruction=[
       `Speak naturally in ${options.language}.`,
       genderInstruction,
       ageInstruction,
+      childRegionInstruction,
       `Use the vocal character of ${profile.character}.`,
       profile.description,
       region,

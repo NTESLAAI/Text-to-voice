@@ -1,8 +1,8 @@
 const en = {
   translation: {
     app: {
-      title: 'Text to Voice',
-      subtitle: 'Convert text into natural speech',
+      title: 'TEXT-TO-VOICE',
+      subtitle: 'TEXT TO SPEECH',
     },
 
     language: {
@@ -12,7 +12,7 @@ const en = {
 },
 
     tts: {
-      title: 'Text to Voice',
+      title: 'TEXT-TO-VOICE',
       placeholder: 'Enter text to speak...',
       generate: 'Generate Voice',
       generating: 'Generating voice...',

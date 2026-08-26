@@ -59,9 +59,6 @@ export default function TextToVoicePage() {
   const [isLoadingPresets, setIsLoadingPresets]=
     useState(true);
 
-  const [presetError, setPresetError]=
-    useState<string|null>(null);
-
   const [selectedPreset, setSelectedPreset]=useState(
     'central_female_storytelling',
   );
@@ -78,13 +75,18 @@ export default function TextToVoicePage() {
   const [selectedStyle, setSelectedStyle]=
     useState('storytelling');
 
+  const [lastGeneratedFingerprint, setLastGeneratedFingerprint]=
+    useState<string|null>(null);
+
+  const [showRegenerateConfirm, setShowRegenerateConfirm]=
+    useState(false);
+
   const [openFilter, setOpenFilter]=useState<
     'region'|'audience'|'gender'|'style'|null
   >(null);
 
   useEffect(() => {
     setIsLoadingPresets(true);
-    setPresetError(null);
 
     getVoicePresets()
       .then((loadedPresets) => {
@@ -94,7 +96,6 @@ export default function TextToVoicePage() {
         if (loadedPresets.length===0) {
           const message='Unable to load voice presets.';
 
-          setPresetError(message);
           setError(message);
         }
       })
@@ -104,7 +105,6 @@ export default function TextToVoicePage() {
         const message='Unable to load voice presets.';
 
         setPresets([]);
-        setPresetError(message);
         setError(message);
         setIsLoadingPresets(false);
       });
@@ -140,10 +140,6 @@ export default function TextToVoicePage() {
       preset.style===selectedStyle
     );
   });
-
-  const selectedVoicePreset=filteredPresets[0]??null;
-
-  const hasValidPreset=selectedVoicePreset!==null;
 
   useEffect(() => {
     if (filteredPresets.length===0) {
@@ -204,27 +200,21 @@ export default function TextToVoicePage() {
       setIsTextReviewing(false);
     }
   };
+
+  const getGenerationFingerprint=() => {
+    return JSON.stringify({
+      text: text.trim(),
+      language,
+      region: selectedRegion,
+      audience: selectedAudience,
+      gender: selectedGender,
+      style: selectedStyle,
+      speed: selectedSpeed,
+    });
+  };
+
   const handleGenerate=async () => {
     if (!text.trim()||isGenerating||isLoadingPresets) {
-      return;
-    }
-
-    if (presetError||presets.length===0) {
-      setError(
-        presetError??'Unable to load voice presets.',
-      );
-      return;
-    }
-
-    if (!hasValidPreset) {
-      setError('Selected voice preset is unavailable.');
-      return;
-    }
-
-    const selectedVoicePreset=filteredPresets[0]??null;
-
-    if (!selectedVoicePreset) {
-      setError('Selected voice preset is unavailable.');
       return;
     }
 
@@ -232,14 +222,54 @@ export default function TextToVoicePage() {
     setError(null);
 
     try {
+      // Không gửi preset ở đây.
+      // TTS phải sử dụng trực tiếp các lựa chọn hiện tại của người dùng.
+
+      // Nếu có preset phù hợp thì dùng preset.
+      // Nếu không có, tự tạo cấu hình từ các lựa chọn hiện tại.
+      const fallbackCharacter=
+        selectedAudience==='child'
+          ? selectedGender==='male'
+            ? 'boy'
+            :'girl'
+          :selectedGender==='male'
+            ? 'adult_male'
+            :'adult_female';
+
+      const styleSettings={
+        storytelling: {
+          tone: 'neutral',
+          emotion: 'warm',
+        },
+        podcast: {
+          tone: 'neutral',
+          emotion: 'warm',
+        },
+        news: {
+          tone: 'neutral',
+          emotion: 'formal',
+        },
+        lecture: {
+          tone: 'neutral',
+          emotion: 'natural',
+        },
+        cinematic: {
+          tone: 'deep',
+          emotion: 'warm',
+        },
+      } as const;
+
+      const fallbackStyleSettings=
+        styleSettings[
+        selectedStyle as keyof typeof styleSettings
+        ]??styleSettings.storytelling;
+
       const result=await synthesizeSpeech({
         projectId: PROJECT_ID,
         text: text.trim(),
         language,
 
-        preset: selectedVoicePreset.id,
-
-        region: selectedVoicePreset.region as
+        region: selectedRegion as
           |'north_vietnam'
           |'central_vietnam'
           |'south_vietnam'
@@ -247,7 +277,7 @@ export default function TextToVoicePage() {
           |'american_english'
           |'british_english',
 
-        character: selectedVoicePreset.character as
+        character: fallbackCharacter as
           |'young_male'
           |'young_female'
           |'adult_male'
@@ -257,12 +287,12 @@ export default function TextToVoicePage() {
           |'boy'
           |'girl',
 
-        tone: selectedVoicePreset.tone as
+        tone: fallbackStyleSettings.tone as
           |'deep'
           |'neutral'
           |'high',
 
-        emotion: selectedVoicePreset.emotion as
+        emotion: fallbackStyleSettings.emotion as
           |'natural'
           |'happy'
           |'sad'
@@ -274,7 +304,7 @@ export default function TextToVoicePage() {
           |'fearful'
           |'whisper',
 
-        style: selectedVoicePreset.style as
+        style: selectedStyle as
           |'conversation'
           |'storytelling'
           |'night_storytelling'
@@ -285,15 +315,15 @@ export default function TextToVoicePage() {
           |'advertising'
           |'cinematic',
 
-        speed: selectedSpeed,
+        speed:
+          selectedSpeed,
       });
 
       setAudioUrl(result.fileUrl);
-
+      setLastGeneratedFingerprint(
+        getGenerationFingerprint(),
+      );
       setRefreshKey((current) => current+1);
-
-      // Refresh history after generating audio.
-
     } catch (err) {
       console.error(err);
       setError(t('common.error'));
@@ -302,9 +332,23 @@ export default function TextToVoicePage() {
     }
   };
 
+  const handleGenerateClick=() => {
+    const fingerprint=getGenerationFingerprint();
+
+    if (
+      lastGeneratedFingerprint&&
+      fingerprint===lastGeneratedFingerprint
+    ) {
+      setShowRegenerateConfirm(true);
+      return;
+    }
+
+    void handleGenerate();
+  };
+
   return (
     <main
-      className="ttv-textarea"
+      className="ttv-page"
     >
       <header className="ttv-header">
         <h1>{t('tts.title')}</h1>
@@ -719,24 +763,23 @@ export default function TextToVoicePage() {
 
             </div>
 
-            {/* Xử lý & Phát */}
+            {/* 🎙️Tạo giọng đọc */}
             <div className="ttv-bottom-card ttv-play-card">
 
               <div className="ttv-bottom-card-title">
-                Xử lý &amp; Phát
+                🎙️ Tạo giọng đọc
               </div>
 
               <button
                 type="button"
                 className="ttv-play-button"
-                onClick={handleGenerate}
+                onClick={handleGenerateClick}
                 disabled={
                   !text.trim()||
                   isGenerating||
-                  isLoadingPresets||
-                  !hasValidPreset
+                  isLoadingPresets
                 }
-                aria-label="Xử lý và phát"
+                aria-label="Tạo giọng đọc"
               >
                 <span className="ttv-play-waves">
                   <span>)))</span>
@@ -939,7 +982,65 @@ export default function TextToVoicePage() {
           </div>
         </div>
       )}
+      {showRegenerateConfirm&&(
+        <div className="ttv-confirm-overlay">
+          <div className="ttv-confirm-dialog">
 
+            <div className="ttv-confirm-header">
+              <h3>
+                ⚠️ Tạo lại giọng đọc?
+              </h3>
+
+              <button
+                type="button"
+                className="ttv-confirm-close"
+                onClick={() => {
+                  setShowRegenerateConfirm(false);
+                }}
+                aria-label="Đóng"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="ttv-confirm-content">
+              <p>
+                Bạn vừa tạo đoạn âm thanh này với cùng
+                nội dung và cùng cấu hình giọng đọc.
+              </p>
+
+              <p>
+                Tạo lại sẽ gọi AI và có thể sử dụng thêm
+                hạn mức.
+              </p>
+            </div>
+
+            <div className="ttv-confirm-actions">
+              <button
+                type="button"
+                className="ttv-confirm-cancel"
+                onClick={() => {
+                  setShowRegenerateConfirm(false);
+                }}
+              >
+                Hủy
+              </button>
+
+              <button
+                type="button"
+                className="ttv-confirm-ok"
+                onClick={() => {
+                  setShowRegenerateConfirm(false);
+                  void handleGenerate();
+                }}
+              >
+                Tạo lại
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </main>
   );
 }

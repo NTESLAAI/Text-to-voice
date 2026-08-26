@@ -2,7 +2,7 @@ const vi = {
   translation: {
     app: {
       title: 'Text to Voice',
-      subtitle: 'Chuyển văn bản thành giọng nói',
+      subtitle: 'CHUYỂN CHỮ THÀNH GIỌNG NÓI',
     },
 
     language: {
@@ -12,7 +12,7 @@ const vi = {
 },
 
     tts: {
-      title: 'Text to Voice',
+      title: 'TEX-TO-VOICE',
       placeholder: 'Nhập văn bản cần đọc...',
       generate: 'Tạo giọng nói',
       generating: 'Đang tạo giọng nói...',
