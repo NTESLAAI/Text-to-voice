@@ -14,6 +14,26 @@ interface AudioHistoryProps {
   refreshKey?: number;
 }
 
+const HISTORY_PREVIEW_WORDS = 12;
+
+function getTextPreview(value: string): string {
+  const text = value.trim();
+
+  if (!text) {
+    return '';
+  }
+
+  const words = text.split(/\s+/);
+
+  if (words.length <= HISTORY_PREVIEW_WORDS) {
+    return text;
+  }
+
+  return `${words
+    .slice(0, HISTORY_PREVIEW_WORDS)
+    .join(' ')}…`;
+}
+
 export default function AudioHistory({
   projectId,
   refreshKey = 0,
@@ -23,22 +43,37 @@ export default function AudioHistory({
   const [audios, setAudios] = useState<AudioRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const loadAudios = async () => {
-    try {
-      setLoading(true);
-
-      const data = await getProjectAudio(projectId);
-
-      setAudios(data);
-    } catch (error) {
-      console.error('Failed to load audio history:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
+    let cancelled = false;
+
+    const loadAudios = async () => {
+      try {
+        setLoading(true);
+
+        const data = await getProjectAudio(projectId);
+
+        if (!cancelled) {
+          setAudios(data);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error(
+            'Failed to load audio history:',
+            error,
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
     loadAudios();
+
+    return () => {
+      cancelled = true;
+    };
   }, [projectId, refreshKey]);
 
   const handleDelete = async (id: string) => {
@@ -59,7 +94,10 @@ export default function AudioHistory({
         ),
       );
     } catch (error) {
-      console.error('Failed to delete audio:', error);
+      console.error(
+        'Failed to delete audio:',
+        error,
+      );
     }
   };
 
@@ -87,7 +125,7 @@ export default function AudioHistory({
             >
               <div className="audio-history-content">
                 <p className="audio-history-text">
-                  {audio.text}
+                  {getTextPreview(audio.text)}
                 </p>
 
                 <div className="audio-history-meta">
@@ -101,7 +139,8 @@ export default function AudioHistory({
 
                   <span>
                     {t('tts.duration', {
-                      duration: audio.duration.toFixed(2),
+                      duration:
+                        audio.duration.toFixed(2),
                     })}
                   </span>
                 </div>

@@ -2237,71 +2237,52 @@
 
     background:
         /* Các điểm nút */
-        radial-gradient(
-            circle at 18% 18%,
+        radial-gradient(circle at 18% 18%,
             #67e8f9 0 3px,
-            transparent 4px
-        ),
-        radial-gradient(
-            circle at 72% 28%,
+            transparent 4px),
+        radial-gradient(circle at 72% 28%,
             #c084fc 0 3px,
-            transparent 4px
-        ),
-        radial-gradient(
-            circle at 38% 55%,
+            transparent 4px),
+        radial-gradient(circle at 38% 55%,
             #f472b6 0 3px,
-            transparent 4px
-        ),
-        radial-gradient(
-            circle at 82% 72%,
+            transparent 4px),
+        radial-gradient(circle at 82% 72%,
             #67e8f9 0 3px,
-            transparent 4px
-        ),
-        radial-gradient(
-            circle at 25% 88%,
+            transparent 4px),
+        radial-gradient(circle at 25% 88%,
             #c084fc 0 3px,
-            transparent 4px
-        ),
+            transparent 4px),
 
         /* Đường mạch ngang */
-        linear-gradient(
-            90deg,
+        linear-gradient(90deg,
             transparent 0 17%,
             rgba(103, 232, 249, 0.55) 17.2% 17.8%,
             transparent 18% 71%,
             rgba(192, 132, 252, 0.55) 71.2% 71.8%,
-            transparent 72%
-        ),
+            transparent 72%),
 
         /* Đường mạch dọc */
-        linear-gradient(
-            0deg,
+        linear-gradient(0deg,
             transparent 0 27%,
             rgba(236, 72, 153, 0.5) 27.2% 27.8%,
             transparent 28% 70%,
             rgba(103, 232, 249, 0.5) 70.2% 70.8%,
-            transparent 71%
-        ),
+            transparent 71%),
 
         /* Các đoạn mạch ngang phụ */
-        linear-gradient(
-            90deg,
+        linear-gradient(90deg,
             transparent 0 36%,
             rgba(236, 72, 153, 0.38) 36% 36.8%,
-            transparent 36.8% 100%
-        ),
+            transparent 36.8% 100%),
 
         /* Các đoạn mạch dọc phụ */
-        linear-gradient(
-            0deg,
+        linear-gradient(0deg,
             transparent 0 48%,
             rgba(192, 132, 252, 0.4) 48% 48.8%,
-            transparent 48.8% 100%
-        );
+            transparent 48.8% 100%);
 
     filter:
-        drop-shadow(0 0 5px rgba(103, 232, 249, 0.5))
-        drop-shadow(0 0 12px rgba(139, 92, 246, 0.25));
+        drop-shadow(0 0 5px rgba(103, 232, 249, 0.5)) drop-shadow(0 0 12px rgba(139, 92, 246, 0.25));
 }
 
 .ttv-page::before {
@@ -2518,4 +2499,347 @@
 
     text-shadow:
         0 0 8px rgba(255, 255, 255, 0.28);
+}
+
+
+/* =========================================================
+   AUDIO HISTORY
+   Lịch sử âm thanh
+   Dùng đúng các class hiện có trong AudioHistory.tsx
+   ========================================================= */
+
+.audio-history {
+    width: 100%;
+    margin-top: 28px;
+    padding: 20px;
+    box-sizing: border-box;
+
+    border: 1px solid rgba(139, 92, 246, 0.45);
+    border-radius: 18px;
+
+    background:
+        linear-gradient(145deg,
+            rgba(29, 25, 58, 0.96),
+            rgba(20, 17, 43, 0.96));
+
+    box-shadow:
+        0 0 18px rgba(139, 92, 246, 0.12);
+}
+
+.audio-history h2 {
+    margin: 0 0 16px;
+
+    color: #ffffff;
+
+    font-size: 20px;
+    font-weight: 750;
+    line-height: 1.3;
+}
+
+.audio-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+
+    width: 100%;
+}
+
+.audio-history-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+
+    width: 100%;
+    padding: 14px;
+
+    box-sizing: border-box;
+
+    border: 1px solid rgba(139, 92, 246, 0.28);
+    border-radius: 14px;
+
+    background: rgba(255, 255, 255, 0.035);
+}
+
+.audio-history-content {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.audio-history-text {
+    display: block;
+
+    width: 100%;
+    margin: 0 0 7px;
+
+    color: #f5f3ff;
+
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.45;
+
+    /* Không làm vỡ layout khi văn bản rất dài. */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.audio-history-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+
+    margin-bottom: 9px;
+
+    color: rgba(245, 243, 255, 0.58);
+
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.audio-history-item audio {
+    display: block;
+
+    width: 100%;
+    max-width: 100%;
+    height: 40px;
+}
+
+.audio-delete-button {
+    flex: 0 0 auto;
+
+    width: 34px;
+    height: 34px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 0;
+
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    border-radius: 9px;
+
+    background: rgba(139, 92, 246, 0.06);
+    color: #c4b5fd;
+
+    font-size: 16px;
+    line-height: 1;
+
+    cursor: pointer;
+
+    transition:
+        background 0.18s ease,
+        border-color 0.18s ease,
+        transform 0.18s ease;
+}
+
+.audio-delete-button:hover {
+    background: rgba(139, 92, 246, 0.16);
+    border-color: rgba(167, 139, 250, 0.7);
+    transform: translateY(-1px);
+}
+
+.audio-delete-button:active {
+    transform: scale(0.96);
+}
+
+@media (max-width: 767px) {
+    .audio-history {
+        margin-top: 22px;
+        padding: 16px;
+    }
+
+    .audio-history-item {
+        padding: 12px;
+        gap: 9px;
+    }
+
+    .audio-history-text {
+        font-size: 13px;
+    }
+
+    .audio-history-item audio {
+        height: 38px;
+    }
+
+    .audio-delete-button {
+        width: 32px;
+        height: 32px;
+    }
+}
+
+/* =========================================================
+   AUDIO HISTORY - TEXT VISIBILITY FIX
+   ========================================================= */
+
+.audio-history-text {
+    color: #1e1b4b !important;
+    font-size: 14px;
+    font-weight: 650;
+    line-height: 1.45;
+}
+
+.audio-history-meta {
+    color: #64748b !important;
+    font-size: 12px;
+}
+
+.audio-history h2 {
+    color: #172033 !important;
+}
+
+.audio-delete-button {
+    color: #7c3aed !important;
+}
+
+/* =========================================================
+   WORKSPACE - TRANSPARENT
+   Loại bỏ khung trắng mặc định bao quanh vùng làm việc
+   ========================================================= */
+
+.ttv-page>section {
+    width: 100%;
+    box-sizing: border-box;
+
+    background: transparent !important;
+    color: inherit;
+
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* =========================================================
+   AUDIO HISTORY - NEON DARK
+   ========================================================= */
+
+.audio-history {
+    width: 100%;
+    margin-top: 28px;
+    padding: 20px 0 10px;
+
+    box-sizing: border-box;
+
+    background: transparent;
+    color: #ffffff;
+}
+
+.audio-history h2 {
+    margin: 0 0 16px;
+
+    color: #ffffff !important;
+
+    font-size: 22px;
+    font-weight: 750;
+    line-height: 1.3;
+}
+
+.audio-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+
+    width: 100%;
+}
+
+.audio-history-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+
+    width: 100%;
+    padding: 14px;
+
+    box-sizing: border-box;
+
+    border: 1px solid rgba(167, 139, 250, 0.45);
+    border-radius: 16px;
+
+    background:
+        linear-gradient(145deg,
+            rgba(34, 25, 65, 0.72),
+            rgba(20, 14, 45, 0.72));
+
+    box-shadow:
+        0 0 14px rgba(139, 92, 246, 0.10);
+}
+
+.audio-history-content {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.audio-history-text {
+    display: block;
+
+    width: 100%;
+    margin: 0 0 7px;
+
+    color: #ffffff !important;
+
+    font-size: 14px;
+    font-weight: 650;
+    line-height: 1.45;
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.audio-history-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    margin-bottom: 9px;
+
+    color: rgba(255, 255, 255, 0.65) !important;
+
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.audio-history-item audio {
+    display: block;
+
+    width: 100%;
+    max-width: 100%;
+    height: 40px;
+}
+
+.audio-delete-button {
+    flex: 0 0 auto;
+
+    width: 36px;
+    height: 36px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 0;
+
+    border: 1px solid rgba(167, 139, 250, 0.55);
+    border-radius: 10px;
+
+    background: rgba(139, 92, 246, 0.10);
+
+    color: #c4b5fd !important;
+
+    cursor: pointer;
+
+    transition:
+        background 0.18s ease,
+        border-color 0.18s ease,
+        transform 0.18s ease;
+}
+
+.audio-delete-button:hover {
+    background: rgba(139, 92, 246, 0.22);
+    border-color: rgba(216, 180, 254, 0.9);
+    transform: translateY(-1px);
 }
