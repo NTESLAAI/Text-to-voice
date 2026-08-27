@@ -252,16 +252,7 @@ main > section:last-of-type {
     0 8px 24px rgba(15, 23, 42, 0.05);
 }
 
-main > section:last-of-type::before {
-  content: "Audio";
-  display: block;
 
-  margin-bottom: 14px;
-
-  font-size: 14px;
-  font-weight: 700;
-  color: #475569;
-}
 
 audio {
   width: 100%;

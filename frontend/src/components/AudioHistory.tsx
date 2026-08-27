@@ -1,11 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import {
-  deleteAudio,
-  getAudioUrl,
-  getProjectAudio,
-} from '../services/api';
+import { deleteAudio, getAudioUrl, getProjectAudio } from '../services/api';
 
 import type { AudioRecord } from '../services/api';
 

@@ -1,10 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import LanguageSelector from '../components/LanguageSelector';
 import AudioHistory from '../components/AudioHistory';
 import { synthesizeSpeech, getVoicePresets, reviewText } from '../services/api';
 import './TextToVoice.css';
+import iconNam from '../assets/Icon Nam.png';
+import iconNu from '../assets/Icon Nu.png';
+import flagVi from '../assets/Flag-Vi.png';
+import flagEn from '../assets/Flag-En.png';
+import ageIcon from '../assets/Age.png';
+import earthIcon from '../assets/Earth.png';
+import styleIcon from '../assets/Style.png';
+import logo from '../assets/Logo.png';
 
 const PROJECT_ID=import.meta.env.VITE_PROJECT_ID;
 
@@ -351,8 +358,18 @@ export default function TextToVoicePage() {
       className="ttv-page"
     >
       <header className="ttv-header">
-        <h1>{t('tts.title')}</h1>
-        <p>{t('app.subtitle')}</p>
+        <div className="ttv-header-brand">
+          <img
+            src={logo}
+            alt="Logo"
+            className="ttv-header-logo"
+          />
+
+          <div className="ttv-header-text">
+            <h1>{t('tts.title')}</h1>
+            <p>{t('app.subtitle')}</p>
+          </div>
+        </div>
       </header>
 
       <section>
@@ -409,7 +426,14 @@ export default function TextToVoicePage() {
                 }
               >
                 <span className="ttv-filter-label">
-                  🌍 Vùng miền
+                  <span className="ttv-label-icon ttv-earth-icon">
+                    <img
+                      src={earthIcon}
+                      alt=""
+                      aria-hidden="true"
+                    />
+                  </span>
+                  Vùng miền
                 </span>
 
                 <strong className="ttv-filter-value">
@@ -473,7 +497,14 @@ export default function TextToVoicePage() {
                 className="ttv-filter-button"
               >
                 <span className="ttv-filter-label">
-                  👤 Độ tuổi
+                  <span className="ttv-label-icon ttv-age-icon">
+                    <img
+                      src={ageIcon}
+                      alt=""
+                      aria-hidden="true"
+                    />
+                  </span>
+                  Độ tuổi
                 </span>
 
                 <strong className="ttv-filter-value">
@@ -509,58 +540,48 @@ export default function TextToVoicePage() {
                 </div>
               )}
             </div>
-
             {/* Giới tính */}
-            <div className="ttv-filter">
-              <button
-                type="button"
-                onClick={() =>
-                  setOpenFilter(
-                    openFilter==='gender'
-                      ? null
-                      :'gender',
-                  )
-                }
-                className="ttv-filter-button"
-              >
-                <span className="ttv-filter-label">
-                  ⚥ Giới tính
-                </span>
+            <div className="ttv-filter ttv-gender-filter">
+              <span className="ttv-filter-label">
+                Giới tính
+              </span>
 
-                <strong className="ttv-filter-value">
-                  {selectedGender==='female'
-                    ? 'Nữ'
-                    :'Nam'}
-                </strong>
-              </button>
+              <div className="ttv-gender-icons">
 
-              {openFilter==='gender'&&(
-                <div className="ttv-filter-menu">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedGender('female');
-                      setOpenFilter(null);
-                    }}
-                    className="ttv-filter-option"
-                  >
-                    Nữ
-                  </button>
+                {/* NAM */}
+                <button
+                  type="button"
+                  className={`ttv-gender-button ttv-gender-male ${selectedGender==='male'? 'active':''
+                    }`}
+                  onClick={() => setSelectedGender('male')}
+                  aria-label="Chọn Nam"
+                  aria-pressed={selectedGender==='male'}
+                >
+                  <img
+                    src={iconNam}
+                    alt="Nam"
+                    className="ttv-gender-image"
+                  />
+                </button>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedGender('male');
-                      setOpenFilter(null);
-                    }}
-                    className="ttv-filter-option"
-                  >
-                    Nam
-                  </button>
-                </div>
-              )}
+                {/* NỮ */}
+                <button
+                  type="button"
+                  className={`ttv-gender-button ttv-gender-female ${selectedGender==='female'? 'active':''
+                    }`}
+                  onClick={() => setSelectedGender('female')}
+                  aria-label="Chọn Nữ"
+                  aria-pressed={selectedGender==='female'}
+                >
+                  <img
+                    src={iconNu}
+                    alt="Nữ"
+                    className="ttv-gender-image"
+                  />
+                </button>
+
+              </div>
             </div>
-
             {/* Phong cách */}
             <div className="ttv-filter">
               <button
@@ -575,7 +596,14 @@ export default function TextToVoicePage() {
                 className="ttv-filter-button"
               >
                 <span className="ttv-filter-label">
-                  🎭 Phong cách
+                  <span className="ttv-label-icon ttv-style-icon">
+                    <img
+                      src={styleIcon}
+                      alt=""
+                      aria-hidden="true"
+                    />
+                  </span>
+                  Phong cách
                 </span>
 
                 <strong className="ttv-filter-value">
@@ -694,7 +722,8 @@ export default function TextToVoicePage() {
             <div className="ttv-control">
               <div className="ttv-control-header">
                 <span className="ttv-control-label">
-                  ⚡ Tốc độ đọc
+                  <span className="ttv-label-icon">⚡</span>
+                  Tốc độ đọc
                 </span>
 
                 <span className="ttv-control-value">
@@ -735,7 +764,8 @@ export default function TextToVoicePage() {
             <div className="ttv-bottom-card ttv-edit-card">
 
               <div className="ttv-bottom-card-title">
-                ✍️ Sửa câu từ
+                <span className="ttv-label-icon">✍️</span>
+                Sửa câu từ
               </div>
 
               <button
@@ -754,11 +784,42 @@ export default function TextToVoicePage() {
                 🌐 Ngôn ngữ
               </div>
 
-              <div className="ttv-bottom-language">
-                <LanguageSelector
-                  value={language}
-                  onChange={setLanguage}
-                />
+              <div className="ttv-language-selector">
+
+                <button
+                  type="button"
+                  className={`ttv-language-option ${language==='vi'? 'active':''
+                    }`}
+                  onClick={() => setLanguage('vi')}
+                  aria-label="Chọn Tiếng Việt"
+                  aria-pressed={language==='vi'}
+                >
+                  <span className="ttv-language-flag">
+                    <img src={flagVi} alt="Tiếng Việt" />
+                  </span>
+
+                  <span className="ttv-language-name">
+                    Tiếng Việt
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`ttv-language-option ${language==='en'? 'active':''
+                    }`}
+                  onClick={() => setLanguage('en')}
+                  aria-label="Chọn Tiếng Anh"
+                  aria-pressed={language==='en'}
+                >
+                  <span className="ttv-language-flag">
+                    <img src={flagEn} alt="Tiếng Anh" />
+                  </span>
+
+                  <span className="ttv-language-name">
+                    English
+                  </span>
+                </button>
+
               </div>
 
             </div>
@@ -767,7 +828,8 @@ export default function TextToVoicePage() {
             <div className="ttv-bottom-card ttv-play-card">
 
               <div className="ttv-bottom-card-title">
-                🎙️ Tạo giọng đọc
+                <span className="ttv-label-icon">🎙️</span>
+                Tạo giọng đọc
               </div>
 
               <button
