@@ -534,6 +534,55 @@
 }
 
 /* =========================================================
+   TEXT AREA - FUTURISTIC NEON FRAME
+   ========================================================= */
+
+.ttv-textarea {
+    background:
+        /* Góc trên trái */
+        linear-gradient(135deg,
+            #22d3ee 0 3px,
+            transparent 3px) left top / 42px 42px no-repeat,
+
+        /* Góc trên phải */
+        linear-gradient(225deg,
+            #a78bfa 0 3px,
+            transparent 3px) right top / 42px 42px no-repeat,
+
+        /* Góc dưới trái */
+        linear-gradient(45deg,
+            #a78bfa 0 3px,
+            transparent 3px) left bottom / 42px 42px no-repeat,
+
+        /* Góc dưới phải */
+        linear-gradient(315deg,
+            #22d3ee 0 3px,
+            transparent 3px) right bottom / 42px 42px no-repeat,
+
+        /* Nền */
+        linear-gradient(145deg,
+            rgba(18, 18, 48, 0.98),
+            rgba(12, 12, 35, 0.98));
+
+    border: 2px solid transparent;
+    border-radius: 16px;
+
+    box-shadow:
+        inset 0 0 28px rgba(139, 92, 246, 0.08),
+        0 0 14px rgba(139, 92, 246, 0.16),
+        0 0 24px rgba(34, 211, 238, 0.08);
+}
+
+.ttv-textarea:focus {
+    outline: none;
+
+    box-shadow:
+        inset 0 0 30px rgba(139, 92, 246, 0.10),
+        0 0 16px rgba(139, 92, 246, 0.24),
+        0 0 28px rgba(34, 211, 238, 0.14);
+}
+
+/* =========================================================
    BOTTOM CONTROL GRID
    Theo thiết kế TEXT-TO-VOICE
    ========================================================= */
@@ -2563,29 +2612,48 @@
 }
 
 /* =========================================================
-   TEXT AREA
+   TEXT AREA - FUTURISTIC CYAN / PURPLE
    ========================================================= */
 
 .ttv-textarea {
     background:
         linear-gradient(145deg,
-            rgba(14, 10, 34, 0.98),
-            rgba(20, 10, 38, 0.98));
+            rgba(18, 18, 48, 0.98),
+            rgba(12, 12, 35, 0.98));
 
-    border-color: rgba(167, 139, 250, 0.72);
+    border: 2px solid transparent;
+    border-radius: 16px;
+
+    background-image:
+        linear-gradient(145deg,
+            rgba(18, 18, 48, 0.98),
+            rgba(12, 12, 35, 0.98)),
+        linear-gradient(135deg,
+            #c026d3 0%,
+            #8b5cf6 38%,
+            #22d3ee 72%,
+            #60a5fa 100%);
+
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
 
     box-shadow:
-        inset 0 0 28px rgba(139, 92, 246, 0.04),
-        0 0 16px rgba(139, 92, 246, 0.08);
+        inset 0 0 28px rgba(139, 92, 246, 0.08),
+        0 0 14px rgba(139, 92, 246, 0.16),
+        0 0 24px rgba(34, 211, 238, 0.08);
+
+    transition:
+        box-shadow 0.25s ease,
+        filter 0.25s ease;
 }
 
 .ttv-textarea:focus {
-    border-color: #d8b4fe;
+    outline: none;
 
     box-shadow:
-        0 0 0 2px rgba(167, 139, 250, 0.12),
-        0 0 24px rgba(139, 92, 246, 0.22),
-        0 0 38px rgba(236, 72, 153, 0.08);
+        inset 0 0 30px rgba(139, 92, 246, 0.10),
+        0 0 16px rgba(139, 92, 246, 0.24),
+        0 0 28px rgba(34, 211, 238, 0.14);
 }
 
 /* =========================================================
