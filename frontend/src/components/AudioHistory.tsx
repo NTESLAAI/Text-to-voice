@@ -135,14 +135,14 @@ export default function AudioHistory({
             <div className="audio-history-list">
               {audios
                 .slice(0, expanded? audios.length:2)
-                .map((audio) => (
+                .map((audio, index) => (
                   <article
                     key={audio.id}
                     className="audio-history-item"
                   >
                   <div className="audio-history-content">
                     <p className="audio-history-text">
-                      {getTextPreview(audio.text)}
+                      {String(index+1).padStart(2, '0')}. {getTextPreview(audio.text)}
                     </p>
 
                     <div className="audio-history-meta">
