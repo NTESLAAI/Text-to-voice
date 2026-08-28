@@ -173,14 +173,11 @@ export default function TextToVoicePage() {
 
   const handleAutoTextReview=async () => {
     if (!text.trim()) {
-      setTextReviewErrors([]);
-      setTextReviewSuggestion('');
-      setCorrectedText('');
-      setIsTextReviewing(false);
-      setShowTextReview(true);
+      setError('Vui lòng nhập văn bản trước khi sửa câu từ.');
       return;
     }
 
+    setError(null);
     setShowTextReview(true);
     setIsTextReviewing(true);
     setTextReviewErrors([]);
