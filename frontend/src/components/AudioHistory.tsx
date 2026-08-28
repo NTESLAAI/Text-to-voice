@@ -10,18 +10,18 @@ interface AudioHistoryProps {
   refreshKey?: number;
 }
 
-const HISTORY_PREVIEW_WORDS = 12;
+const HISTORY_PREVIEW_WORDS=12;
 
 function getTextPreview(value: string): string {
-  const text = value.trim();
+  const text=value.trim();
 
   if (!text) {
     return '';
   }
 
-  const words = text.split(/\s+/);
+  const words=text.split(/\s+/);
 
-  if (words.length <= HISTORY_PREVIEW_WORDS) {
+  if (words.length<=HISTORY_PREVIEW_WORDS) {
     return text;
   }
 
@@ -32,21 +32,22 @@ function getTextPreview(value: string): string {
 
 export default function AudioHistory({
   projectId,
-  refreshKey = 0,
+  refreshKey=0,
 }: AudioHistoryProps) {
-  const { t } = useTranslation();
+  const { t }=useTranslation();
 
-  const [audios, setAudios] = useState<AudioRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [audios, setAudios]=useState<AudioRecord[]>([]);
+  const [loading, setLoading]=useState(true);
+  const [expanded, setExpanded]=useState(false);
 
   useEffect(() => {
-    let cancelled = false;
+    let cancelled=false;
 
-    const loadAudios = async () => {
+    const loadAudios=async () => {
       try {
         setLoading(true);
 
-        const data = await getProjectAudio(projectId);
+        const data=await getProjectAudio(projectId);
 
         if (!cancelled) {
           setAudios(data);
@@ -68,12 +69,12 @@ export default function AudioHistory({
     loadAudios();
 
     return () => {
-      cancelled = true;
+      cancelled=true;
     };
   }, [projectId, refreshKey]);
 
-  const handleDelete = async (id: string) => {
-    const confirmed = window.confirm(
+  const handleDelete=async (id: string) => {
+    const confirmed=window.confirm(
       t('tts.confirmDelete'),
     );
 
@@ -86,7 +87,7 @@ export default function AudioHistory({
 
       setAudios((current) =>
         current.filter(
-          (audio) => audio.id !== id,
+          (audio) => audio.id!==id,
         ),
       );
     } catch (error) {
@@ -108,60 +109,80 @@ export default function AudioHistory({
 
   return (
     <section className="audio-history">
-      <h2>{t('tts.history')}</h2>
+      <div className="audio-history-header">
+        <h2>
+          {t('tts.history')} ({audios.length})
+        </h2>
 
-      {audios.length === 0 ? (
+        {audios.length>2&&(
+          <button
+            type="button"
+            className="audio-history-toggle"
+            onClick={() => setExpanded((current) => !current)}
+          >
+            {expanded? '▲ Thu gọn':'▼ Xem thêm'}
+          </button>
+        )}
+      </div>
+
+      {audios.length===0? (
         <p>{t('tts.empty')}</p>
-      ) : (
-        <div className="audio-history-list">
-          {audios.map((audio) => (
-            <article
-              key={audio.id}
-              className="audio-history-item"
-            >
-              <div className="audio-history-content">
-                <p className="audio-history-text">
-                  {getTextPreview(audio.text)}
-                </p>
+      ):(
+        <>
+          <div className="audio-history-list">
+            {audios
+              .slice(0, expanded? audios.length:2)
+              .map((audio) => (
+                <article
+                  key={audio.id}
+                  className="audio-history-item"
+                >
+                  <div className="audio-history-content">
+                    <p className="audio-history-text">
+                      {getTextPreview(audio.text)}
+                    </p>
 
-                <div className="audio-history-meta">
-                  <span>
-                    {audio.language === 'vi'
-                      ? t('language.vietnamese')
-                      : t('language.english')}
-                  </span>
+                    <div className="audio-history-meta">
+                      <span>
+                        {audio.language==='vi'
+                          ? t('language.vietnamese')
+                          :t('language.english')}
+                      </span>
 
-                  <span>•</span>
+                      <span>•</span>
 
-                  <span>
-                    {t('tts.duration', {
-                      duration:
-                        audio.duration.toFixed(2),
-                    })}
-                  </span>
-                </div>
+                      <span>
+                        {t('tts.duration', {
+                          duration:
+                            audio.duration.toFixed(2),
+                        })}
+                      </span>
+                    </div>
 
-                <audio
-                  controls
-                  preload="none"
-                  src={getAudioUrl(audio.fileUrl)}
-                />
-              </div>
+                    <audio
+                      controls
+                      preload="none"
+                      src={getAudioUrl(audio.fileUrl)}
+                    />
+                  </div>
 
-              <button
-                type="button"
-                className="audio-delete-button"
-                onClick={() =>
-                  handleDelete(audio.id)
-                }
-                aria-label={t('tts.delete')}
-                title={t('tts.delete')}
-              >
-                🗑
-              </button>
-            </article>
-          ))}
-        </div>
+                  <button
+                    type="button"
+                    className="audio-delete-button"
+                    onClick={() =>
+                      handleDelete(audio.id)
+                    }
+                    aria-label={t('tts.delete')}
+                    title={t('tts.delete')}
+                  >
+                    🗑
+                  </button>
+                </article>
+              ))}
+          </div>
+
+
+        </>
       )}
     </section>
   );

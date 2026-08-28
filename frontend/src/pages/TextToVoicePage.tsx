@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import AudioHistory from '../components/AudioHistory';
 import { synthesizeSpeech, getVoicePresets, reviewText } from '../services/api';
 import './TextToVoice.css';
+import themeFrame from '../assets/Theme.png';
 import iconNam from '../assets/Icon Nam.png';
 import iconNu from '../assets/Icon Nu.png';
 import flagVi from '../assets/Flag-Vi.png';
@@ -375,30 +376,44 @@ export default function TextToVoicePage() {
       <section>
         <div className="ttv-input-area">
 
-          <textarea
-            ref={textAreaRef}
-            className="ttv-textarea"
-            value={text}
-            onChange={(event) => {
-              const textarea=event.currentTarget;
-              const newText=textarea.value;
+          <div className="ttv-textarea-frame">
 
-              setText(newText);
+            <div className="ttv-textarea-scroll-area">
 
-              requestAnimationFrame(() => {
-                if (
-                  document.activeElement===textarea&&
-                  textarea.selectionStart===textarea.value.length
-                ) {
-                  textarea.scrollTop=
-                    textarea.scrollHeight;
-                }
-              });
-            }}
-            placeholder={t('tts.placeholder')}
-            maxLength={5000}
-            rows={8}
-          />
+              <textarea
+                ref={textAreaRef}
+                className="ttv-textarea"
+                value={text}
+                onChange={(event) => {
+                  const textarea=event.currentTarget;
+                  const newText=textarea.value;
+
+                  setText(newText);
+
+                  requestAnimationFrame(() => {
+                    if (
+                      document.activeElement===textarea&&
+                      textarea.selectionStart===textarea.value.length
+                    ) {
+                      textarea.scrollTop=
+                        textarea.scrollHeight-textarea.clientHeight+20;
+                    }
+                  });
+                }}
+                placeholder={t('tts.placeholder')}
+                maxLength={5000}
+                rows={8}
+              />
+
+            </div>
+
+            <img
+              src={themeFrame}
+              alt=""
+              className="ttv-textarea-theme"
+            />
+
+          </div>
 
           <div className="ttv-character-count">
             {text.length} / 5000

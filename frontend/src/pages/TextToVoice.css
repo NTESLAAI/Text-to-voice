@@ -164,7 +164,7 @@
     min-height: 220px;
 
     box-sizing: border-box;
-    padding: 16px;
+    padding: 32px 42px 48px;
 
     border: 1px solid rgba(139, 92, 246, 0.65);
     border-radius: 16px;
@@ -173,7 +173,7 @@
     color: #ffffff;
 
     font-family: inherit;
-    font-size: 16px;
+    font-size: 17px;
     line-height: 1.6;
 
     resize: vertical;
@@ -565,13 +565,21 @@
             rgba(12, 12, 35, 0.98));
 
     border: 2px solid transparent;
-    border-radius: 16px;
-
+    border-radius: 0px;
+    clip-path: polygon(0 14px,
+            14px 0,
+            calc(100% - 14px) 0,
+            100% 14px,
+            100% calc(100% - 14px),
+            calc(100% - 14px) 100%,
+            14px 100%,
+            0 calc(100% - 14px));
     box-shadow:
         inset 0 0 28px rgba(139, 92, 246, 0.08),
         0 0 14px rgba(139, 92, 246, 0.16),
         0 0 24px rgba(34, 211, 238, 0.08);
 }
+
 
 .ttv-textarea:focus {
     outline: none;
@@ -1169,7 +1177,7 @@
     font-size: 13px;
     line-height: 1;
 
-    color: #7f8aa3;
+    color: #c8d7f8;
 
     pointer-events: none;
 }
@@ -2495,88 +2503,6 @@
 }
 
 /* =========================================================
-   MẠCH ĐIỆN TỬ NEON
-   ========================================================= */
-
-.ttv-page::before,
-.ttv-page::after {
-    content: "";
-    position: absolute;
-
-    z-index: -1;
-
-    width: 360px;
-    height: 520px;
-
-    pointer-events: none;
-
-    opacity: 0.82;
-
-    background:
-        /* Các điểm nút */
-        radial-gradient(circle at 18% 18%,
-            #67e8f9 0 3px,
-            transparent 4px),
-        radial-gradient(circle at 72% 28%,
-            #c084fc 0 3px,
-            transparent 4px),
-        radial-gradient(circle at 38% 55%,
-            #f472b6 0 3px,
-            transparent 4px),
-        radial-gradient(circle at 82% 72%,
-            #67e8f9 0 3px,
-            transparent 4px),
-        radial-gradient(circle at 25% 88%,
-            #c084fc 0 3px,
-            transparent 4px),
-
-        /* Đường mạch ngang */
-        linear-gradient(90deg,
-            transparent 0 17%,
-            rgba(103, 232, 249, 0.55) 17.2% 17.8%,
-            transparent 18% 71%,
-            rgba(192, 132, 252, 0.55) 71.2% 71.8%,
-            transparent 72%),
-
-        /* Đường mạch dọc */
-        linear-gradient(0deg,
-            transparent 0 27%,
-            rgba(236, 72, 153, 0.5) 27.2% 27.8%,
-            transparent 28% 70%,
-            rgba(103, 232, 249, 0.5) 70.2% 70.8%,
-            transparent 71%),
-
-        /* Các đoạn mạch ngang phụ */
-        linear-gradient(90deg,
-            transparent 0 36%,
-            rgba(236, 72, 153, 0.38) 36% 36.8%,
-            transparent 36.8% 100%),
-
-        /* Các đoạn mạch dọc phụ */
-        linear-gradient(0deg,
-            transparent 0 48%,
-            rgba(192, 132, 252, 0.4) 48% 48.8%,
-            transparent 48.8% 100%);
-
-    filter:
-        drop-shadow(0 0 5px rgba(103, 232, 249, 0.5)) drop-shadow(0 0 12px rgba(139, 92, 246, 0.25));
-}
-
-.ttv-page::before {
-    top: 90px;
-    left: -185px;
-
-    transform: rotate(-8deg);
-}
-
-.ttv-page::after {
-    right: -185px;
-    bottom: 40px;
-
-    transform: rotate(8deg);
-}
-
-/* =========================================================
    CARD NEON
    ========================================================= */
 
@@ -3173,4 +3099,210 @@
 .ttv-bottom-card-title .ttv-label-icon {
     -webkit-font-smoothing: antialiased;
     text-rendering: geometricPrecision;
+}
+
+/* =========================================================
+   TEXT AREA THEME FRAME
+   ========================================================= */
+
+.ttv-textarea-frame .ttv-textarea {
+    position: relative;
+    z-index: 3;
+
+    background: transparent !important;
+
+    border: none !important;
+    border-radius: 0 !important;
+
+    clip-path: none !important;
+
+    box-shadow: none !important;
+
+    padding-top: 50px;
+    padding-left: 42px;
+    padding-bottom: 50px;
+}
+
+.ttv-textarea-frame::before {
+    content: "";
+
+    position: absolute;
+    top: 0;
+    left: 0;
+
+    width: 100%;
+    height: 28px;
+
+    background: inherit;
+
+    z-index: 4;
+
+    pointer-events: none;
+}
+
+.ttv-textarea-frame::after {
+    content: "";
+
+    position: absolute;
+    left: 0;
+    bottom: 0;
+
+    width: 100%;
+    height: 35px;
+
+    background: inherit;
+
+    z-index: 4;
+
+    pointer-events: none;
+}
+
+.ttv-character-count {
+    position: relative;
+    z-index: 4;
+}
+
+.ttv-textarea-theme {
+    position: absolute;
+
+    top: 0;
+    left: 11px;
+
+    width: calc(100% - 22px);
+    height: 100%;
+
+    object-fit: fill;
+
+    z-index: 5;
+    pointer-events: none;
+}
+
+.ttv-input-area {
+    position: relative;
+}
+
+.ttv-input-area .ttv-character-count {
+    position: absolute;
+
+    right: 50px;
+    bottom: 22px;
+
+    z-index: 4;
+
+    margin: 0;
+}
+
+/* =========================================================
+   TEXTAREA SCROLLBAR
+   ========================================================= */
+
+.ttv-textarea {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(180, 160, 210, 0.65) transparent;
+}
+
+.ttv-textarea::-webkit-scrollbar {
+    width: 8px;
+}
+
+.ttv-textarea::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.ttv-textarea::-webkit-scrollbar-thumb {
+    background: rgba(180, 160, 210, 0.65);
+    border-radius: 4px;
+}
+
+.ttv-textarea::-webkit-scrollbar-thumb:hover {
+    background: rgba(210, 190, 235, 0.85);
+}
+
+/* =========================================================
+   TEXTAREA SCROLL AREA
+   ========================================================= */
+
+.ttv-textarea-frame {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+
+    background: linear-gradient(145deg,
+            rgba(42, 22, 57, 0.98),
+            rgba(45, 24, 70, 0.98));
+}
+
+.ttv-textarea-scroll-area {
+    position: relative;
+
+    width: calc(100% + 36px);
+    padding-right: 36px;
+
+    box-sizing: border-box;
+
+    z-index: 1;
+}
+
+.ttv-textarea-scroll-area .ttv-textarea {
+    width: 100%;
+}
+
+.ttv-textarea-theme {
+    z-index: 5;
+}
+
+.audio-history-toggle {
+    display: block;
+    width: 100%;
+
+    margin-top: 12px;
+    padding: 10px 14px;
+
+    border: none;
+    border-radius: 10px;
+
+    background: rgba(139, 92, 246, 0.10);
+    color: #c084fc;
+
+    font-size: 13px;
+    font-weight: 600;
+
+    cursor: pointer;
+
+    transition:
+        background 0.2s ease,
+        color 0.2s ease;
+}
+
+.audio-history-toggle:hover {
+    background: rgba(139, 92, 246, 0.18);
+    color: #d8b4fe;
+}
+
+.audio-history-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+
+    margin-bottom: 8px;
+}
+
+.audio-history-header h2 {
+    margin: 0;
+}
+
+.audio-history-header .audio-history-toggle {
+    width: auto;
+    margin: 0;
+    padding: 4px 0;
+
+    background: transparent;
+    border: none;
+
+    color: #c084fc;
+    font-size: 14px;
+    font-weight: 600;
+
+    white-space: nowrap;
 }
