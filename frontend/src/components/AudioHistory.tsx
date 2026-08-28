@@ -101,15 +101,18 @@ export default function AudioHistory({
   if (loading) {
     return (
       <section className="audio-history">
-        <h2>{t('tts.history')}</h2>
-        <p>{t('common.loading')}</p>
+        <div className="audio-history-surface">
+          <h2>{t('tts.history')}</h2>
+          <p>{t('common.loading')}</p>
+        </div>
       </section>
     );
   }
 
   return (
     <section className="audio-history">
-      <div className="audio-history-header">
+      <div className="audio-history-surface">
+        <div className="audio-history-header">
         <h2>
           {t('tts.history')} ({audios.length})
         </h2>
@@ -125,18 +128,18 @@ export default function AudioHistory({
         )}
       </div>
 
-      {audios.length===0? (
-        <p>{t('tts.empty')}</p>
-      ):(
-        <>
-          <div className="audio-history-list">
-            {audios
-              .slice(0, expanded? audios.length:2)
-              .map((audio) => (
-                <article
-                  key={audio.id}
-                  className="audio-history-item"
-                >
+        {audios.length===0? (
+          <p>{t('tts.empty')}</p>
+        ):(
+          <>
+            <div className="audio-history-list">
+              {audios
+                .slice(0, expanded? audios.length:2)
+                .map((audio) => (
+                  <article
+                    key={audio.id}
+                    className="audio-history-item"
+                  >
                   <div className="audio-history-content">
                     <p className="audio-history-text">
                       {getTextPreview(audio.text)}
@@ -177,13 +180,14 @@ export default function AudioHistory({
                   >
                     🗑
                   </button>
-                </article>
-              ))}
-          </div>
+                  </article>
+                ))}
+            </div>
 
 
-        </>
-      )}
+          </>
+        )}
+      </div>
     </section>
   );
 }
