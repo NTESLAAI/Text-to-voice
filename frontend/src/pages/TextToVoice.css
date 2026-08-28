@@ -2441,20 +2441,7 @@
     isolation: isolate;
     overflow: hidden;
 
-    background:
-        radial-gradient(circle at 8% 8%,
-            rgba(139, 92, 246, 0.18),
-            transparent 28%),
-        radial-gradient(circle at 92% 12%,
-            rgba(236, 72, 153, 0.14),
-            transparent 26%),
-        radial-gradient(circle at 50% 100%,
-            rgba(124, 58, 237, 0.12),
-            transparent 32%),
-        linear-gradient(135deg,
-            #0c0820 0%,
-            #120a2a 48%,
-            #0b1025 100%);
+    background: #2a1639;
 
     color: #ffffff;
 }
@@ -2693,10 +2680,7 @@
     border: 1px solid rgba(139, 92, 246, 0.45);
     border-radius: 18px;
 
-    background:
-        linear-gradient(145deg,
-            rgba(29, 25, 58, 0.96),
-            rgba(20, 17, 43, 0.96));
+    background: #2a1639;
 
     box-shadow:
         0 0 18px rgba(139, 92, 246, 0.12);
@@ -2881,7 +2865,7 @@
 
     box-sizing: border-box;
 
-    background: transparent;
+    background: #2a1639 !important;
     color: #ffffff;
 }
 
@@ -2892,7 +2876,7 @@
 
     box-sizing: border-box;
 
-    background: #17132f;
+    background: transparent;
 }
 
 .audio-history h2 {
