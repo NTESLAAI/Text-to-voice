@@ -14,6 +14,8 @@ export class AudioService {
   ) {}
 
   async findByProject(projectId: string) {
+    await this.removeProjectAudioExceedingLimit(projectId);
+
     return this.prisma.audio.findMany({
       where: {
         projectId,
@@ -22,6 +24,28 @@ export class AudioService {
         createdAt: 'desc',
       },
     });
+  }
+
+  async removeProjectAudioExceedingLimit(
+    projectId: string,
+    limit = 15,
+  ) {
+    const audiosToRemove = await this.prisma.audio.findMany({
+      where: {
+        projectId,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      skip: limit,
+      select: {
+        id: true,
+      },
+    });
+
+    for (const audio of audiosToRemove) {
+      await this.remove(audio.id);
+    }
   }
 
   async findOne(id: string) {

@@ -7,6 +7,7 @@ import { promises as fs } from 'fs';
 import { join } from 'path';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { AudioService } from '../audio/audio.service';
 import {
   OpenRouterTtsProvider,
   TtsRequest,
@@ -22,6 +23,7 @@ export class TtsService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly audioService: AudioService,
     private readonly ttsProvider: OpenRouterTtsProvider,
   ) { }
 
@@ -118,6 +120,11 @@ export class TtsService {
           duration,
         },
       });
+
+      await this.audioService.removeProjectAudioExceedingLimit(
+        request.projectId,
+      );
+
       return {
       id: audio.id,
       projectId: audio.projectId,
