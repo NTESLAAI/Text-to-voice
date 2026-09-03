@@ -262,6 +262,14 @@ export default function TextToVoicePage() {
           tone: 'deep',
           emotion: 'warm',
         },
+        night_storytelling: {
+          tone: 'neutral',
+          emotion: 'warm',
+        },
+        poetry: {
+          tone: 'neutral',
+          emotion: 'warm',
+        },
       } as const;
 
       const fallbackStyleSettings=
@@ -318,7 +326,8 @@ export default function TextToVoicePage() {
           |'news'
           |'podcast'
           |'advertising'
-          |'cinematic',
+          |'cinematic'
+          |'poetry',
 
         speed:
           selectedSpeed,
@@ -627,6 +636,10 @@ export default function TextToVoicePage() {
                         ? 'Tin tức'
                         :selectedStyle==='lecture'
                           ? 'Giảng bài'
+                          :selectedStyle==='night_storytelling'
+                            ? '🌙 Kể chuyện đêm'
+                            :selectedStyle==='poetry'
+                              ? '🪶 Đọc thơ'
                           :'Điện ảnh'}
                 </strong>
               </button>
@@ -686,6 +699,28 @@ export default function TextToVoicePage() {
                     className="ttv-filter-option"
                   >
                     Điện ảnh
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedStyle('night_storytelling');
+                      setOpenFilter(null);
+                    }}
+                    className="ttv-filter-option"
+                  >
+                    🌙 Kể chuyện đêm
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedStyle('poetry');
+                      setOpenFilter(null);
+                    }}
+                    className="ttv-filter-option"
+                  >
+                    🪶 Đọc thơ
                   </button>
                 </div>
               )}

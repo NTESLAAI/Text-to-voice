@@ -88,6 +88,7 @@ export class SynthesizeSpeechDto {
   'podcast',
   'advertising',
   'cinematic',
+  'poetry',
 ])
 style!: VoiceStyle;
 

@@ -95,7 +95,8 @@ export interface SynthesizeSpeechRequest {
   |'news'
   |'podcast'
   |'advertising'
-  |'cinematic';
+  |'cinematic'
+  |'poetry';
 
   speed: number;
 }

@@ -42,7 +42,8 @@ export type VoiceStyle=
   |'news'
   |'podcast'
   |'advertising'
-  |'cinematic';
+  |'cinematic'
+  |'poetry';
 
 export interface VoiceProfile {
   label: string;
@@ -222,7 +223,9 @@ export const VOICE_STYLES: Record<
   cinematic:
     'Use expressive cinematic narration with dramatic but natural delivery.',
   night_storytelling:
-    'Tell the story in a calm, intimate and warm late-night storytelling style, with gentle pacing, soft pauses and subtle emotional variation.',
+    'Tell the story in a calm, slow, intimate and warm late-night storytelling style, with gentle pacing, soft pauses, a soothing relaxed mood and subtle emotional variation.',
+  poetry:
+    'Read Vietnamese poetry with its natural rhythm, pausing between lines and stanzas. Use expressive phrasing, gentle emphasis and appropriate emotion; do not deliver it with flat prose-like pacing.',
 
   presenter:
     'Use a confident, clear and engaging presenter delivery with natural energy, expressive intonation and well-timed pauses.',
