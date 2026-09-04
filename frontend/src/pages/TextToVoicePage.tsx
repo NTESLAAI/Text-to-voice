@@ -629,18 +629,18 @@ export default function TextToVoicePage() {
 
                 <strong className="ttv-filter-value">
                   {selectedStyle==='storytelling'
-                    ? 'Kể chuyện'
+                    ? '📖 Kể chuyện'
                     :selectedStyle==='podcast'
-                      ? 'Podcast'
+                      ? '🎙️ Podcast'
                       :selectedStyle==='news'
-                        ? 'Tin tức'
+                        ? '📰 Tin tức'
                         :selectedStyle==='lecture'
-                          ? 'Giảng bài'
+                          ? '🧑‍🏫 Giảng bài'
                           :selectedStyle==='night_storytelling'
                             ? '🌙 Kể chuyện đêm'
                             :selectedStyle==='poetry'
                               ? '🪶 Đọc thơ'
-                          :'Điện ảnh'}
+                          :'🎬 Điện ảnh'}
                 </strong>
               </button>
 
@@ -654,7 +654,7 @@ export default function TextToVoicePage() {
                     }}
                     className="ttv-filter-option"
                   >
-                    Kể chuyện
+                    📖 Kể chuyện
                   </button>
 
                   <button
@@ -665,7 +665,7 @@ export default function TextToVoicePage() {
                     }}
                     className="ttv-filter-option"
                   >
-                    Podcast
+                    🎙️ Podcast
                   </button>
 
                   <button
@@ -676,7 +676,7 @@ export default function TextToVoicePage() {
                     }}
                     className="ttv-filter-option"
                   >
-                    Tin tức
+                    📰 Tin tức
                   </button>
 
                   <button
@@ -687,7 +687,7 @@ export default function TextToVoicePage() {
                     }}
                     className="ttv-filter-option"
                   >
-                    Giảng bài
+                    🧑‍🏫 Giảng bài
                   </button>
 
                   <button
@@ -698,7 +698,7 @@ export default function TextToVoicePage() {
                     }}
                     className="ttv-filter-option"
                   >
-                    Điện ảnh
+                    🎬 Điện ảnh
                   </button>
 
                   <button

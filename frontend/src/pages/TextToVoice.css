@@ -3300,3 +3300,199 @@
 
     white-space: nowrap;
 }
+
+/* =========================================================
+   TEXT-TO-VOICE MOBILE LAYOUT
+   ========================================================= */
+
+@media (max-width: 767px) {
+    .ttv-control-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-auto-rows: minmax(146px, auto);
+        gap: 10px;
+    }
+
+    .ttv-textarea-frame .ttv-textarea {
+        height: 245px;
+        min-height: 245px;
+    }
+
+    .ttv-control-grid .ttv-filter,
+    .ttv-control-grid .ttv-control,
+    .ttv-control-grid .ttv-bottom-card {
+        height: 100%;
+        min-height: 146px;
+        max-height: none;
+    }
+
+    .ttv-control-grid .ttv-filter-button {
+        min-height: 146px;
+    }
+
+    .ttv-filter-label,
+    .ttv-bottom-card-title,
+    .ttv-control-label {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+    }
+
+    .ttv-filter-label .ttv-label-icon,
+    .ttv-bottom-card-title .ttv-label-icon,
+    .ttv-control-label .ttv-label-icon {
+        flex: 0 0 auto;
+        margin-right: 0;
+        vertical-align: baseline;
+    }
+
+    .ttv-control {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 12px;
+        padding: 14px 12px;
+    }
+
+    .ttv-control-header {
+        min-width: 0;
+        margin-bottom: 0;
+    }
+
+    .ttv-control-label {
+        min-width: 0;
+        line-height: 1.25;
+        text-align: center;
+    }
+
+    .ttv-control-value {
+        font-size: 16px;
+    }
+
+    .ttv-range-row {
+        gap: 6px;
+    }
+
+    .ttv-language-option {
+        justify-content: center;
+        gap: 8px;
+    }
+
+    .ttv-language-flag {
+        margin-right: 0;
+    }
+
+    .ttv-language-name {
+        flex: 0 1 auto;
+    }
+
+    .ttv-control-grid .ttv-play-card {
+        display: grid;
+        grid-column: 1 / -1;
+        grid-template-columns: minmax(110px, 1fr) minmax(118px, 1fr);
+        align-items: center;
+        gap: 8px;
+        min-height: 118px;
+        padding: 12px 20px;
+    }
+
+    .ttv-play-card .ttv-bottom-card-title {
+        justify-content: flex-start;
+        text-align: left;
+    }
+
+    .ttv-play-button {
+        min-height: 70px;
+    }
+}
+
+@media (max-width: 767px) {
+
+    /* ===== TỐC ĐỘ ĐỌC ===== */
+    .ttv-control:has(input[aria-label="Tốc độ đọc"]) {
+        gap: 8px;
+        padding: 12px 10px;
+    }
+
+    .ttv-control:has(input[aria-label="Tốc độ đọc"]) .ttv-control-header {
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+    }
+
+    .ttv-control:has(input[aria-label="Tốc độ đọc"]) .ttv-control-label {
+        flex-wrap: nowrap;
+        white-space: nowrap;
+        line-height: 1.2;
+    }
+
+    .ttv-control:has(input[aria-label="Tốc độ đọc"]) .ttv-control-value {
+        font-size: 15px;
+        line-height: 1.2;
+    }
+
+    .ttv-control:has(input[aria-label="Tốc độ đọc"]) .ttv-range-row {
+        width: 100%;
+        gap: 5px;
+    }
+
+    .ttv-control:has(input[aria-label="Tốc độ đọc"]) .ttv-range {
+        flex: 1;
+        min-width: 0;
+    }
+
+    /* ===== TẠO GIỌNG ĐỌC ===== */
+    .ttv-control-grid .ttv-play-card {
+        height: 60px;
+        min-height: 60px;
+        max-height: 60px;
+        padding: 3px 10px;
+        align-self: start;
+    }
+
+    .ttv-control-grid .ttv-play-button {
+        min-height: 38px;
+        height: 54px;
+    }
+
+    .ttv-control-grid .ttv-play-circle {
+        width: 48px;
+        height: 48px;
+        font-size: 20px;
+    }
+
+    @media (max-width: 767px) {
+
+        /* ===== THU GỌN KHOẢNG TRỐNG TRƯỚC LỊCH SỬ ===== */
+        .ttv-control-grid {
+            grid-template-rows: repeat(4, minmax(146px, auto)) 60px;
+            grid-auto-rows: unset;
+        }
+
+        /* Nút Tạo giọng đọc */
+        .ttv-control-grid .ttv-play-card {
+            height: 60px;
+            min-height: 60px;
+            max-height: 60px;
+            padding: 3px 10px;
+            align-self: start;
+        }
+
+        .ttv-control-grid .ttv-play-button {
+            height: 54px;
+            min-height: 54px;
+        }
+
+        .ttv-control-grid .ttv-play-circle {
+            width: 48px;
+            height: 48px;
+            font-size: 20px;
+        }
+
+        /* Đưa Lịch sử âm thanh lên gần nút */
+        .ttv-page>section.audio-history {
+            margin-top: 8px !important;
+        }
+    }
+}
