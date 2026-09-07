@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { useTranslation } from 'react-i18next';
 
 import AudioHistory from '../components/AudioHistory';
@@ -87,6 +88,9 @@ export default function TextToVoicePage() {
     useState<string|null>(null);
 
   const [showRegenerateConfirm, setShowRegenerateConfirm]=
+    useState(false);
+
+  const [showEnglishNotice, setShowEnglishNotice]=
     useState(false);
 
   const [openFilter, setOpenFilter]=useState<
@@ -347,6 +351,16 @@ export default function TextToVoicePage() {
   };
 
   const handleGenerateClick=() => {
+    if (Capacitor.getPlatform()==='android') {
+      const scrollPosition=window.scrollY;
+
+      textAreaRef.current?.blur();
+
+      requestAnimationFrame(() => {
+        window.scrollTo(0, scrollPosition);
+      });
+    }
+
     const fingerprint=getGenerationFingerprint();
 
     if (
@@ -854,7 +868,10 @@ export default function TextToVoicePage() {
                   type="button"
                   className={`ttv-language-option ${language==='en'? 'active':''
                     }`}
-                  onClick={() => setLanguage('en')}
+                  onClick={() => {
+                    setLanguage('vi');
+                    setShowEnglishNotice(true);
+                  }}
                   aria-label="Chọn Tiếng Anh"
                   aria-pressed={language==='en'}
                 >
@@ -1147,6 +1164,31 @@ export default function TextToVoicePage() {
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {showEnglishNotice&&(
+        <div className="ttv-confirm-overlay">
+          <div className="ttv-confirm-dialog">
+            <div className="ttv-confirm-content">
+              <p>
+                Tính năng tiếng Anh và các ngôn ngữ khác đang được phát triển. Xin lỗi vì sự bất tiện này!
+              </p>
+            </div>
+
+            <div className="ttv-confirm-actions">
+              <button
+                type="button"
+                className="ttv-confirm-ok"
+                onClick={() => {
+                  setLanguage('vi');
+                  setShowEnglishNotice(false);
+                }}
+              >
+                Đã hiểu
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { Capacitor, CapacitorHttp } from '@capacitor/core';
 
 const API_BASE_URL=import.meta.env.VITE_API_BASE_URL;
 
@@ -128,21 +129,45 @@ export async function synthesizeSpeech(
   try {
     console.log('TTS REQUEST:', request);
 
-    const response=await api.post(
-      '/tts/synthesize',
-      request,
-      {
+    let audioBlob: Blob;
+
+    if (Capacitor.getPlatform()==='android') {
+      const response=await CapacitorHttp.post({
+        url: `${API_BASE_URL}/tts/synthesize`,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        data: request,
         responseType: 'blob',
-      },
-    );
+      });
 
-    console.log(
-      'TTS RESPONSE:',
-      response.status,
-      response.headers,
-    );
+      const binaryString=atob(response.data as string);
+      const bytes=new Uint8Array(binaryString.length);
 
-    const audioBlob=response.data as Blob;
+      for (let i=0;i<binaryString.length;i++) {
+        bytes[i]=binaryString.charCodeAt(i);
+      }
+
+      audioBlob=new Blob([bytes], {
+        type: 'audio/wav',
+      });
+    } else {
+      const response=await api.post(
+        '/tts/synthesize',
+        request,
+        {
+          responseType: 'blob',
+        },
+      );
+
+      console.log(
+        'TTS RESPONSE:',
+        response.status,
+        response.headers,
+      );
+
+      audioBlob=response.data as Blob;
+    }
 
     const audioUrl=URL.createObjectURL(audioBlob);
 
