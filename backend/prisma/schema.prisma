@@ -28,6 +28,7 @@ model Project {
 
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   audios    Audio[]
+  dialogues Dialogue[]
 
   @@index([userId])
 }
@@ -60,4 +61,52 @@ style     String
   project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
+}
+
+model Dialogue {
+  id         String            @id @default(uuid())
+  projectId  String
+  language   String
+  fileUrl    String?
+  format     String            @default("wav")
+  characters Int
+  duration   Float?
+  provider   String?
+  model      String?
+  createdAt  DateTime          @default(now())
+
+  project    Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  speakers   DialogueSpeaker[]
+  turns      DialogueTurn[]
+
+  @@index([projectId])
+}
+
+model DialogueSpeaker {
+  id         String   @id @default(uuid())
+  dialogueId String
+  role       String
+  gender     String
+  age        String
+  character  String
+  region     String
+
+  dialogue   Dialogue @relation(fields: [dialogueId], references: [id], onDelete: Cascade)
+
+  @@unique([dialogueId, role])
+  @@index([dialogueId])
+}
+
+model DialogueTurn {
+  id         String   @id @default(uuid())
+  dialogueId String
+  order      Int
+  speaker    String
+  text       String
+  style      String
+
+  dialogue   Dialogue @relation(fields: [dialogueId], references: [id], onDelete: Cascade)
+
+  @@unique([dialogueId, order])
+  @@index([dialogueId])
 }

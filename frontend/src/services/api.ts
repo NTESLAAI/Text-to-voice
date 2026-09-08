@@ -26,7 +26,35 @@ export interface AudioRecord {
   cost?: number|null;
   createdAt: string;
 }
-
+export interface DialogueRecord {
+  id: string;
+  projectId: string;
+  language: 'vi'|'en';
+  fileUrl: string;
+  format: string;
+  characters: number;
+  duration: number;
+  provider: string;
+  model: string;
+  createdAt: string;
+  speakers: Array<{
+    id: string;
+    dialogueId: string;
+    role: 'A'|'B';
+    gender: 'male'|'female';
+    age: string;
+    character: string;
+    region: string;
+  }>;
+  turns: Array<{
+    id: string;
+    dialogueId: string;
+    order: number;
+    speaker: 'A'|'B';
+    text: string;
+    style: string;
+  }>;
+}
 export interface VoicePreset {
   id: string;
   label: string;
@@ -123,6 +151,31 @@ export interface SynthesizeSpeechResult {
   duration: number;
 }
 
+export interface SynthesizeDialogueRequest {
+  projectId: string;
+  language: 'vi'|'en';
+  speakerA: {
+    gender: 'male'|'female';
+    character: SynthesizeSpeechRequest['character'];
+    region: 'north_vietnam'|'central_vietnam'|'south_vietnam';
+  };
+  speakerB: {
+    gender: 'male'|'female';
+    character: SynthesizeSpeechRequest['character'];
+    region: 'north_vietnam'|'central_vietnam'|'south_vietnam';
+  };
+  turns: Array<{
+    speaker: 'A'|'B';
+    text: string;
+    style: SynthesizeSpeechRequest['style'];
+  }>;
+  speed: number;
+}
+
+export interface SynthesizeDialogueResult {
+  fileUrl: string;
+}
+
 export async function synthesizeSpeech(
   request: SynthesizeSpeechRequest,
 ): Promise<SynthesizeSpeechResult> {
@@ -207,6 +260,48 @@ export async function synthesizeSpeech(
   }
 }
 
+export async function synthesizeDialogue(
+  request: SynthesizeDialogueRequest,
+): Promise<SynthesizeDialogueResult> {
+  let audioBlob: Blob;
+
+  if (Capacitor.getPlatform()==='android') {
+    const response=await CapacitorHttp.post({
+      url: `${API_BASE_URL}/tts/dialogue`,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      data: request,
+      responseType: 'blob',
+    });
+
+    const binaryString=atob(response.data as string);
+    const bytes=new Uint8Array(binaryString.length);
+
+    for (let i=0;i<binaryString.length;i++) {
+      bytes[i]=binaryString.charCodeAt(i);
+    }
+
+    audioBlob=new Blob([bytes], {
+      type: 'audio/wav',
+    });
+  } else {
+    const response=await api.post(
+      '/tts/dialogue',
+      request,
+      {
+        responseType: 'blob',
+      },
+    );
+
+    audioBlob=response.data as Blob;
+  }
+
+  return {
+    fileUrl: URL.createObjectURL(audioBlob),
+  };
+}
+
 export async function getProjectAudio(
   projectId: string,
 ): Promise<AudioRecord[]> {
@@ -216,7 +311,15 @@ export async function getProjectAudio(
 
   return response.data;
 }
+export async function getProjectDialogues(
+  projectId: string,
+): Promise<DialogueRecord[]> {
+  const response=await api.get<DialogueRecord[]>(
+    `/tts/dialogue/project/${projectId}`,
+  );
 
+  return response.data;
+}
 export async function deleteAudio(
   id: string,
 ): Promise<void> {

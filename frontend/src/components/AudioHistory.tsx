@@ -3,9 +3,17 @@ import { Capacitor } from '@capacitor/core';
 import { CapacitorHttp } from '@capacitor/core';
 import { useTranslation } from 'react-i18next';
 
-import { deleteAudio, getAudioUrl, getProjectAudio } from '../services/api';
+import {
+  deleteAudio,
+  getAudioUrl,
+  getProjectAudio,
+  getProjectDialogues,
+} from '../services/api';
 
-import type { AudioRecord } from '../services/api';
+import type {
+  AudioRecord,
+  DialogueRecord,
+} from '../services/api';
 
 interface AudioHistoryProps {
   projectId: string;
@@ -39,9 +47,12 @@ export default function AudioHistory({
   const { t }=useTranslation();
 
   const [audios, setAudios]=useState<AudioRecord[]>([]);
+  const [dialogueUrls, setDialogueUrls]=useState<Record<string, string>>({});
+  const [dialogues, setDialogues]=useState<DialogueRecord[]>([]);
   const [audioUrls, setAudioUrls]=useState<Record<string, string>>({});
   const [loading, setLoading]=useState(true);
   const [expanded, setExpanded]=useState(false);
+  const [activeTab, setActiveTab]=useState<'audio'|'dialogue'>('audio');
 
   useEffect(() => {
     let cancelled=false;
@@ -52,12 +63,14 @@ export default function AudioHistory({
         setLoading(true);
 
         const data=await getProjectAudio(projectId);
+        const dialogueData=await getProjectDialogues(projectId);
 
         if (cancelled) {
           return;
         }
 
         setAudios(data);
+        setDialogues(dialogueData);
 
         const urls: Record<string, string>={};
 
@@ -155,6 +168,63 @@ export default function AudioHistory({
 
         if (!cancelled) {
           setAudioUrls(urls);
+
+          const dialogueUrlsMap: Record<string, string>={};
+
+          await Promise.all(
+            dialogueData.map(async (dialogue) => {
+              try {
+                const dialogueUrl=getAudioUrl(dialogue.fileUrl);
+
+                let blob: Blob;
+
+                if (Capacitor.isNativePlatform()) {
+                  const response=await CapacitorHttp.get({
+                    url: dialogueUrl,
+                    responseType: 'blob',
+                  });
+
+                  const binaryString=atob(response.data);
+                  const bytes=new Uint8Array(binaryString.length);
+
+                  for (let i=0;i<binaryString.length;i++) {
+                    bytes[i]=binaryString.charCodeAt(i);
+                  }
+
+                  blob=new Blob([bytes], {
+                    type: 'audio/wav',
+                  });
+                } else {
+                  const response=await fetch(dialogueUrl);
+
+                  if (!response.ok) {
+                    throw new Error(
+                      `Failed to load dialogue audio: ${response.status}`,
+                    );
+                  }
+
+                  blob=await response.blob();
+                }
+
+                if (cancelled) {
+                  return;
+                }
+
+                const objectUrl=URL.createObjectURL(blob);
+
+                objectUrls.push(objectUrl);
+                dialogueUrlsMap[dialogue.id]=objectUrl;
+              } catch (error) {
+                console.error(
+                  'Failed to load dialogue history audio:',
+                  dialogue.id,
+                  error,
+                );
+              }
+            }),
+          );
+
+          setDialogueUrls(dialogueUrlsMap);
         }
       } catch (error) {
         if (!cancelled) {
@@ -233,88 +303,164 @@ export default function AudioHistory({
     <section className="audio-history">
       <div className="audio-history-surface">
         <div className="audio-history-header">
-          <h2>
-            {t('tts.history')} ({audios.length})
-          </h2>
 
-          {audios.length>2&&(
+          <div className="audio-history-tabs">
             <button
               type="button"
-              className="audio-history-toggle"
-              onClick={() =>
-                setExpanded((current) => !current)
-              }
+              className={activeTab==='audio'? 'active':''}
+              onClick={() => {
+                setActiveTab('audio');
+                setExpanded(false);
+              }}
             >
-              {expanded
-                ? '▲ Thu gọn'
-                :'▼ Xem thêm'}
+              🎙️ Lịch sử âm thanh ({audios.length})
             </button>
-          )}
+
+            <button
+              type="button"
+              className={activeTab==='dialogue'? 'active':''}
+              onClick={() => {
+                setActiveTab('dialogue');
+                setExpanded(false);
+              }}
+            >
+              💬 Lịch sử hội thoại ({dialogues.length})
+            </button>
+          </div>
+
+          {((activeTab==='audio'&&audios.length>2)||
+            (activeTab==='dialogue'&&dialogues.length>2))&&(
+              <button
+                type="button"
+                className="audio-history-toggle"
+                onClick={() =>
+                  setExpanded((current) => !current)
+                }
+              >
+                {expanded? '▲':'▼'}
+              </button>
+            )}
         </div>
 
-        {audios.length===0? (
-          <p>{t('tts.empty')}</p>
-        ):(
-          <div className="audio-history-list">
-            {audios
-              .slice(0, expanded? audios.length:2)
-              .map((audio, index) => (
-                <article
-                  key={audio.id}
-                  className="audio-history-item"
-                >
-                  <div className="audio-history-content">
-                    <p className="audio-history-text">
-                      {String(index+1).padStart(2, '0')}.{' '}
-                      {getTextPreview(audio.text)}
-                    </p>
+        {activeTab==='audio'? (
+          audios.length===0? (
+            <p>{t('tts.empty')}</p>
+          ):(
+            <div className="audio-history-list">
+              {audios
+                .slice(0, expanded? audios.length:2)
+                .map((audio, index) => (
+                  <article
+                    key={audio.id}
+                    className="audio-history-item"
+                  >
+                    <div className="audio-history-content">
+                      <p className="audio-history-text">
+                        {String(index+1).padStart(2, '0')}.{' '}
+                        {getTextPreview(audio.text)}
+                      </p>
 
-                    <div className="audio-history-meta">
-                      <span>
-                        {audio.language==='vi'
-                          ? t('language.vietnamese')
-                          :t('language.english')}
-                      </span>
+                      <div className="audio-history-meta">
+                        <span>
+                          {audio.language==='vi'
+                            ? t('language.vietnamese')
+                            :t('language.english')}
+                        </span>
 
-                      <span>•</span>
+                        <span>•</span>
 
-                      <span>
-                        {t('tts.duration', {
-                          duration:
-                            audio.duration.toFixed(2),
-                        })}
-                      </span>
+                        <span>
+                          {t('tts.duration', {
+                            duration: audio.duration.toFixed(2),
+                          })}
+                        </span>
+                      </div>
+
+                      {audioUrls[audio.id]? (
+                        <audio
+                          controls
+                          preload="metadata"
+                          src={audioUrls[audio.id]}
+                        />
+                      ):(
+                        <audio
+                          controls
+                          preload="none"
+                          src=""
+                        />
+                      )}
                     </div>
 
-                    {audioUrls[audio.id]? (
-                      <audio
-                        controls
-                        preload="metadata"
-                        src={audioUrls[audio.id]}
-                      />
-                    ):(
-                      <audio
-                        controls
-                        preload="none"
-                        src=""
-                      />
-                    )}
-                  </div>
-
-                  <button
-                    type="button"
-                    className="audio-delete-button"
-                    onClick={() =>
-                      handleDelete(audio.id)
-                    }
-                    aria-label={t('tts.delete')}
-                    title={t('tts.delete')}
+                    <button
+                      type="button"
+                      className="audio-delete-button"
+                      onClick={() => handleDelete(audio.id)}
+                      aria-label={t('tts.delete')}
+                      title={t('tts.delete')}
+                    >
+                      🗑
+                    </button>
+                  </article>
+                ))}
+            </div>
+          )
+        ):(
+          dialogues.length===0? (
+            <p>{t('tts.empty')}</p>
+          ):(
+            <div className="audio-history-list">
+              {dialogues
+                .slice(0, expanded? dialogues.length:2)
+                .map((dialogue, index) => (
+                  <article
+                    key={dialogue.id}
+                    className="audio-history-item"
                   >
-                    🗑
-                  </button>
-                </article>
-              ))}
-          </div>
+                    <div className="audio-history-content">
+                      <p className="audio-history-text">
+                        {String(index+1).padStart(2, '0')}. Hội thoại
+                      </p>
+
+                      <div className="audio-history-meta">
+                        <span>Hội thoại</span>
+
+                        <span>•</span>
+
+                        <span>
+                          {t('tts.duration', {
+                            duration: dialogue.duration.toFixed(2),
+                          })}
+                        </span>
+                      </div>
+
+                      {dialogueUrls[dialogue.id]? (
+                        <audio
+                          controls
+                          preload="metadata"
+                          src={dialogueUrls[dialogue.id]}
+                        />
+                      ):(
+                        <audio
+                          controls
+                          preload="none"
+                          src=""
+                        />
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      className="audio-delete-button"
+                      disabled
+                      aria-label={t('tts.delete')}
+                      title="Xóa hội thoại"
+                    >
+                      🗑
+                    </button>
+                  </article>
+                ))}
+            </div>
+          )
         )}
       </div>
     </section>

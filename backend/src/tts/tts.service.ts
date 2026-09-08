@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -13,13 +14,22 @@ import {
   TtsRequest,
 } from './providers/openrouter-tts.provider';
 
-import { VOICE_PRESETS } from './config/voice-profiles';
+import {
+  VOICE_PRESETS,
+  VOICE_PROFILES,
+} from './config/voice-profiles';
+import {
+  DialogueSpeakerDto,
+  SynthesizeDialogueDto,
+} from './dto/synthesize-dialogue.dto';
 
 @Injectable()
 export class TtsService {
   private readonly sampleRate=24000;
   private readonly channels=1;
   private readonly bitsPerSample=16;
+  private readonly dialoguePauseMilliseconds=350;
+  private readonly maxDialogueCharacters=10000;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -126,18 +136,18 @@ export class TtsService {
       );
 
       return {
-      id: audio.id,
-      projectId: audio.projectId,
-      text: audio.text,
-      language: audio.language,
-      voice: audio.voice,
-      speed: audio.speed,
-      provider: audio.provider,
-      model: audio.model,
-      fileUrl: audio.fileUrl,
-      format: audio.format,
-      characters: audio.characters,
-      duration: audio.duration,
+        id: audio.id,
+        projectId: audio.projectId,
+        text: audio.text,
+        language: audio.language,
+        voice: audio.voice,
+        speed: audio.speed,
+        provider: audio.provider,
+        model: audio.model,
+        fileUrl: audio.fileUrl,
+        format: audio.format,
+        characters: audio.characters,
+        duration: audio.duration,
         audio: audioBuffer,
       };
     } catch (error) {
@@ -152,6 +162,196 @@ export class TtsService {
 
       throw error;
     }
+  }
+
+  async synthesizeDialogue(request: SynthesizeDialogueDto) {
+    const project=await this.prisma.project.findUnique({
+      where: {
+        id: request.projectId,
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    const speakerA=this.validateDialogueSpeaker('A', request.speakerA);
+    const speakerB=this.validateDialogueSpeaker('B', request.speakerB);
+    const speakers={
+      A: speakerA,
+      B: speakerB,
+    };
+
+    const characters=request.turns.reduce(
+      (total, turn) => total+turn.text.length,
+      0,
+    );
+
+    if (characters>this.maxDialogueCharacters) {
+      throw new BadRequestException(
+        `Dialogue must not exceed ${this.maxDialogueCharacters} characters`,
+      );
+    }
+
+    const pcmParts: Buffer[]=[];
+    const pause=this.createDialoguePause();
+
+    for (const [index, turn] of request.turns.entries()) {
+      const speaker=speakers[turn.speaker];
+
+      const pcm=await this.ttsProvider.synthesize({
+        projectId: request.projectId,
+        text: turn.text,
+        language: request.language,
+        character: speaker.character,
+        region: speaker.region,
+        tone: 'neutral',
+        emotion: 'natural',
+        style: turn.style,
+        speed: request.speed??1,
+      });
+
+      pcmParts.push(pcm);
+
+      if (index<request.turns.length-1) {
+        pcmParts.push(pause);
+      }
+    }
+
+    const pcm=Buffer.concat(pcmParts);
+    const audioBuffer=this.pcmToWav(pcm);
+    const duration=
+      pcm.length/
+      (this.sampleRate*
+        this.channels*
+        (this.bitsPerSample/8));
+    const fileName=`${randomUUID()}.wav`;
+    const uploadDir=join(
+      process.cwd(),
+      'uploads',
+      'dialogues',
+    );
+    const filePath=join(uploadDir, fileName);
+    const fileUrl=`/uploads/dialogues/${fileName}`;
+
+    await fs.mkdir(uploadDir, {
+      recursive: true,
+    });
+    await fs.writeFile(filePath, audioBuffer);
+
+    try {
+      const dialogue=await this.prisma.dialogue.create({
+        data: {
+          projectId: request.projectId,
+          language: request.language,
+          fileUrl,
+          format: 'wav',
+          characters,
+          duration,
+          provider: 'openrouter',
+          model: 'google/gemini-3.1-flash-tts-preview',
+          speakers: {
+            create: [speakerA, speakerB],
+          },
+          turns: {
+            create: request.turns.map((turn, index) => ({
+              order: index+1,
+              speaker: turn.speaker,
+              text: turn.text,
+              style: turn.style,
+            })),
+          },
+        },
+      });
+
+      return {
+        id: dialogue.id,
+        projectId: dialogue.projectId,
+        fileUrl: dialogue.fileUrl,
+        format: dialogue.format,
+        characters: dialogue.characters,
+        duration: dialogue.duration,
+        audio: audioBuffer,
+      };
+    } catch (error) {
+      try {
+        await fs.unlink(filePath);
+      } catch (cleanupError) {
+        console.error(
+          'Failed to clean up WAV after Dialogue creation failed:',
+          { filePath, cleanupError },
+        );
+      }
+
+      throw error;
+    }
+  }
+  async getDialogueHistory(projectId: string) {
+    const project=await this.prisma.project.findUnique({
+      where: {
+        id: projectId,
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    return this.prisma.dialogue.findMany({
+      where: {
+        projectId,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      include: {
+        speakers: {
+          orderBy: {
+            role: 'asc',
+          },
+        },
+        turns: {
+          orderBy: {
+            order: 'asc',
+          },
+        },
+      },
+    });
+  }
+  private validateDialogueSpeaker(
+    role: 'A'|'B',
+    speaker: DialogueSpeakerDto,
+  ) {
+    const profile=VOICE_PROFILES[speaker.character];
+
+    if (!profile||profile.gender!==speaker.gender) {
+      throw new BadRequestException(
+        `Speaker ${role} gender does not match its character`,
+      );
+    }
+
+    return {
+      role,
+      gender: speaker.gender,
+      age: profile.age,
+      character: speaker.character,
+      region: speaker.region,
+    };
+  }
+
+  private createDialoguePause(): Buffer {
+    const bytesPerMillisecond=
+      this.sampleRate*
+      this.channels*
+      (this.bitsPerSample/8)/
+      1000;
+
+    return Buffer.alloc(
+      Math.round(
+        bytesPerMillisecond*
+        this.dialoguePauseMilliseconds,
+      ),
+    );
   }
 
   private pcmToWav(pcm: Buffer): Buffer {

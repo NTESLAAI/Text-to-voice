@@ -3,6 +3,7 @@ import { Capacitor } from '@capacitor/core';
 import { useTranslation } from 'react-i18next';
 
 import AudioHistory from '../components/AudioHistory';
+import DialogueComposer from '../components/DialogueComposer';
 import { synthesizeSpeech, getVoicePresets, reviewText } from '../services/api';
 import './TextToVoice.css';
 import themeFrame from '../assets/Theme.png';
@@ -946,6 +947,11 @@ export default function TextToVoicePage() {
           </section>
         )
       }
+      <DialogueComposer
+        projectId={PROJECT_ID}
+        language={language}
+        speed={selectedSpeed}
+      />
       <AudioHistory
         projectId={PROJECT_ID}
         refreshKey={refreshKey}
