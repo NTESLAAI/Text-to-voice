@@ -1,0 +1,215 @@
+import { useState } from 'react';
+import { login } from '../services/api';
+import { saveAuth } from '../services/authStorage';
+
+interface LoginPageProps {
+  onLoginSuccess: () => void;
+  onSwitchToRegister: () => void;
+}
+
+function LoginPage({ onLoginSuccess, onSwitchToRegister }: LoginPageProps) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+
+    if (!email.trim() || !password) {
+      setError('Vui lòng nhập đầy đủ thông tin.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const result = await login(email.trim(), password);
+      await saveAuth(result.accessToken, result.user);
+      onLoginSuccess();
+    } catch {
+      setError('Email hoặc mật khẩu không đúng.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '32px 20px',
+        boxSizing: 'border-box',
+      }}
+    >
+      <div
+        style={{
+          width: '100%',
+          maxWidth: '460px',
+          padding: '42px',
+          borderRadius: '22px',
+          boxSizing: 'border-box',
+          background: 'var(--card-bg, #ffffff)',
+          boxShadow: '0 12px 45px rgba(0, 0, 0, 0.12)',
+        }}
+      >
+        <h1
+          style={{
+            margin: '0 0 10px',
+            textAlign: 'center',
+            fontSize: '32px',
+            lineHeight: 1.2,
+          }}
+        >
+          Đăng nhập
+        </h1>
+
+        <p
+          style={{
+            margin: '0 0 34px',
+            textAlign: 'center',
+            opacity: 0.7,
+            fontSize: '15px',
+          }}
+        >
+          Đăng nhập để sử dụng Text-to-Voice
+        </p>
+
+        <form onSubmit={handleSubmit}>
+          <label
+            htmlFor="login-email"
+            style={{
+              display: 'block',
+              marginBottom: '9px',
+              fontSize: '15px',
+              fontWeight: 500,
+            }}
+          >
+            Email
+          </label>
+
+          <input
+            id="login-email"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="Nhập email"
+            autoComplete="email"
+            disabled={loading}
+            style={{
+              width: '100%',
+              height: '48px',
+              boxSizing: 'border-box',
+              padding: '0 15px',
+              marginBottom: '22px',
+              border: '1px solid #d1d5db',
+              borderRadius: '10px',
+              fontSize: '16px',
+              outline: 'none',
+            }}
+          />
+
+          <label
+            htmlFor="login-password"
+            style={{
+              display: 'block',
+              marginBottom: '9px',
+              fontSize: '15px',
+              fontWeight: 500,
+            }}
+          >
+            Mật khẩu
+          </label>
+
+          <input
+            id="login-password"
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="Nhập mật khẩu"
+            autoComplete="current-password"
+            disabled={loading}
+            style={{
+              width: '100%',
+              height: '48px',
+              boxSizing: 'border-box',
+              padding: '0 15px',
+              marginBottom: '22px',
+              border: '1px solid #d1d5db',
+              borderRadius: '10px',
+              fontSize: '16px',
+              outline: 'none',
+            }}
+          />
+
+          {error && (
+            <div
+              role="alert"
+              style={{
+                marginBottom: '18px',
+                padding: '11px 13px',
+                borderRadius: '9px',
+                background: '#fee2e2',
+                color: '#b91c1c',
+                fontSize: '14px',
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: '100%',
+              height: '50px',
+              padding: '0 16px',
+              border: 'none',
+              borderRadius: '10px',
+              fontSize: '16px',
+              fontWeight: 600,
+              cursor: loading ? 'default' : 'pointer',
+            }}
+          >
+            {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
+          </button>
+        </form>
+
+        <div
+          style={{
+            marginTop: '22px',
+            textAlign: 'center',
+            fontSize: '14px',
+            color: '#64748b',
+          }}
+        >
+          Chưa có tài khoản?{' '}
+          <button
+            type="button"
+            onClick={onSwitchToRegister}
+            disabled={loading}
+            style={{
+              border: 'none',
+              background: 'transparent',
+              padding: 0,
+              color: '#4f46e5',
+              fontSize: '14px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Đăng ký
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default LoginPage;

@@ -377,4 +377,31 @@ export async function getProjectUsage(
   return response.data;
 }
 
+export interface AuthUser {
+  id: string;
+  email: string;
+  name?: string|null;
+}
+
+export interface LoginResult {
+  message: string;
+  accessToken: string;
+  user: AuthUser;
+}
+
+export async function login(
+  email: string,
+  password: string,
+): Promise<LoginResult> {
+  const response=await api.post<LoginResult>(
+    '/auth/login',
+    {
+      email,
+      password,
+    },
+  );
+
+  return response.data;
+}
+
 export default api;

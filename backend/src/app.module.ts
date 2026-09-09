@@ -8,6 +8,7 @@ import { ProjectsModule } from './projects/projects.module';
 import { TtsModule } from './tts/tts.module';
 import { AudioModule } from './audio/audio.module';
 import { TextReviewModule } from './text-review/text-review.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { TextReviewModule } from './text-review/text-review.module';
     TtsModule,
     AudioModule,
     TextReviewModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
