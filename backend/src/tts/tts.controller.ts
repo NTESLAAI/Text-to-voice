@@ -28,7 +28,10 @@ export class TtsController {
       }),
     );
   }
-
+  @Get('usage/project/:projectId')
+  async getProjectUsage(@Param('projectId') projectId: string) {
+    return this.ttsService.getProjectUsage(projectId);
+  }
   @Post('synthesize')
   async synthesize(
     @Body() dto: SynthesizeSpeechDto,

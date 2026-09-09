@@ -360,4 +360,21 @@ export async function reviewText(
   return response.data;
 }
 
+export interface ProjectUsage {
+  plan: string;
+  characterLimit: number;
+  usedCharacters: number;
+  remainingCharacters: number;
+}
+
+export async function getProjectUsage(
+  projectId: string,
+): Promise<ProjectUsage> {
+  const response=await api.get<ProjectUsage>(
+    `/tts/usage/project/${projectId}`,
+  );
+
+  return response.data;
+}
+
 export default api;

@@ -65,6 +65,12 @@ export class TtsService {
     if (!project) {
       throw new NotFoundException('Project not found');
     }
+    const characters=request.text.length;
+
+    await this.checkCharacterQuota(
+      project.userId,
+      characters,
+    );
 
     // 2. Sinh PCM từ OpenRouter
     const pcm=await this.ttsProvider.synthesize(ttsRequest);
@@ -73,7 +79,6 @@ export class TtsService {
     const audioBuffer=this.pcmToWav(pcm);
 
     // 4. Tính metadata
-    const characters=request.text.length;
 
     const duration=
       pcm.length/
@@ -135,6 +140,15 @@ export class TtsService {
         request.projectId,
       );
 
+      await this.prisma.usage.create({
+        data: {
+          userId: project.userId,
+          characters,
+          type: 'tts',
+          referenceId: audio.id,
+        },
+      });
+
       return {
         id: audio.id,
         projectId: audio.projectId,
@@ -192,7 +206,10 @@ export class TtsService {
         `Dialogue must not exceed ${this.maxDialogueCharacters} characters`,
       );
     }
-
+    await this.checkCharacterQuota(
+      project.userId,
+      characters,
+    );
     const pcmParts: Buffer[]=[];
     const pause=this.createDialoguePause();
 
@@ -264,6 +281,15 @@ export class TtsService {
         },
       });
 
+      await this.prisma.usage.create({
+        data: {
+          userId: project.userId,
+          characters,
+          type: 'dialogue',
+          referenceId: dialogue.id,
+        },
+      });
+
       return {
         id: dialogue.id,
         projectId: dialogue.projectId,
@@ -318,6 +344,149 @@ export class TtsService {
       },
     });
   }
+
+  async getProjectUsage(projectId: string) {
+    const project=await this.prisma.project.findUnique({
+      where: { id: projectId },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Không tìm thấy project.');
+    }
+
+    const now=new Date();
+
+    const subscription=await this.prisma.subscription.findFirst({
+      where: {
+        userId: project.userId,
+        status: 'active',
+        startedAt: { lte: now },
+        expiresAt: { gt: now },
+      },
+      include: { plan: true },
+      orderBy: { expiresAt: 'desc' },
+    });
+
+    let plan=subscription?.plan??null;
+
+    if (!plan) {
+      plan=await this.prisma.plan.findUnique({
+        where: { code: 'FREE' },
+      });
+    }
+
+    if (!plan||!plan.isActive) {
+      throw new BadRequestException(
+        'Không thể xác định gói sử dụng.',
+      );
+    }
+
+    const startOfMonth=new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      1,
+    );
+
+    const usage=await this.prisma.usage.aggregate({
+      where: {
+        userId: project.userId,
+        createdAt: { gte: startOfMonth, lte: now },
+      },
+      _sum: {
+        characters: true,
+      },
+    });
+
+    const usedCharacters=usage._sum.characters??0;
+
+    return {
+      plan: plan.code,
+      characterLimit: plan.characterLimit,
+      usedCharacters,
+      remainingCharacters: Math.max(
+        plan.characterLimit-usedCharacters,
+        0,
+      ),
+    };
+  }
+
+  private async checkCharacterQuota(
+    userId: string,
+    characters: number,
+  ) {
+    const now=new Date();
+
+    const subscription=await this.prisma.subscription.findFirst({
+      where: {
+        userId,
+        status: 'active',
+        startedAt: {
+          lte: now,
+        },
+        expiresAt: {
+          gt: now,
+        },
+      },
+      include: {
+        plan: true,
+      },
+      orderBy: {
+        expiresAt: 'desc',
+      },
+    });
+
+    let plan=subscription?.plan??null;
+
+    if (!plan) {
+      plan=await this.prisma.plan.findUnique({
+        where: {
+          code: 'FREE',
+        },
+      });
+    }
+
+    if (!plan||!plan.isActive) {
+      throw new BadRequestException(
+        'Không thể xác định gói sử dụng.',
+      );
+    }
+
+    const startOfMonth=new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      1,
+    );
+
+    const usage=await this.prisma.usage.aggregate({
+      where: {
+        userId,
+        createdAt: {
+          gte: startOfMonth,
+          lte: now,
+        },
+      },
+      _sum: {
+        characters: true,
+      },
+    });
+
+    const usedCharacters=usage._sum.characters??0;
+    const remainingCharacters=
+      plan.characterLimit-usedCharacters;
+
+    if (characters>remainingCharacters) {
+      throw new BadRequestException(
+        `Bạn chỉ còn ${Math.max(remainingCharacters, 0).toLocaleString('vi-VN')} ký tự trong tháng.`,
+      );
+    }
+
+    return {
+      plan,
+      usedCharacters,
+      remainingCharacters,
+    };
+  }
+
   private validateDialogueSpeaker(
     role: 'A'|'B',
     speaker: DialogueSpeakerDto,

@@ -4,7 +4,12 @@ import { useTranslation } from 'react-i18next';
 
 import AudioHistory from '../components/AudioHistory';
 import DialogueComposer from '../components/DialogueComposer';
-import { synthesizeSpeech, getVoicePresets, reviewText } from '../services/api';
+import {
+  synthesizeSpeech,
+  getVoicePresets,
+  reviewText,
+  getProjectUsage,
+} from '../services/api';
 import './TextToVoice.css';
 import themeFrame from '../assets/Theme.png';
 import iconNam from '../assets/Icon Nam.png';
@@ -61,7 +66,12 @@ export default function TextToVoicePage() {
     useState('');
 
   const [refreshKey, setRefreshKey]=useState(0);
-
+  const [usage, setUsage]=useState<{
+    plan: string;
+    characterLimit: number;
+    usedCharacters: number;
+    remainingCharacters: number;
+  }|null>(null);
   const [presets, setPresets]=useState<
     Awaited<ReturnType<typeof getVoicePresets>>
   >([]);
@@ -175,6 +185,19 @@ export default function TextToVoicePage() {
       audioRef.current.volume=volume;
     }
   }, [volume, audioUrl]);
+
+  useEffect(() => {
+    async function loadUsage() {
+      try {
+        const data=await getProjectUsage(PROJECT_ID);
+        setUsage(data);
+      } catch (error) {
+        console.error('Không thể tải thông tin hạn mức:', error);
+      }
+    }
+
+    loadUsage();
+  }, []);
 
   const handleAutoTextReview=async () => {
     if (!text.trim()) {
@@ -441,7 +464,11 @@ export default function TextToVoicePage() {
           </div>
 
         </div>
-
+        {usage&&(
+          <div className="ttv-usage-info">
+            Gói {usage.plan} · Còn {usage.remainingCharacters.toLocaleString('vi-VN')} ký tự
+          </div>
+        )}
         <div className="ttv-control-grid">
 
 
@@ -655,7 +682,7 @@ export default function TextToVoicePage() {
                             ? '🌙 Kể chuyện đêm'
                             :selectedStyle==='poetry'
                               ? '🪶 Đọc thơ'
-                          :'🎬 Điện ảnh'}
+                              :'🎬 Điện ảnh'}
                 </strong>
               </button>
 

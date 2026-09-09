@@ -225,6 +225,17 @@
     opacity: 0.65;
 }
 
+.ttv-usage-info {
+    margin-top: -10;
+    margin-bottom: 6px;
+
+    text-align: right;
+
+    font-size: 13px;
+    line-height: 16px;
+    opacity: 0.75;
+}
+
 /* =========================================================
    GENERATE BUTTON
    ========================================================= */
@@ -3866,4 +3877,6 @@
         grid-column: 4;
         grid-row: 1;
     }
+
+
 }
