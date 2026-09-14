@@ -10,27 +10,27 @@ function RegisterPage({
   onRegisterSuccess,
   onSwitchToLogin,
 }: RegisterPageProps) {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [name, setName]=useState('');
+  const [email, setEmail]=useState('');
+  const [password, setPassword]=useState('');
+  const [confirmPassword, setConfirmPassword]=useState('');
+  const [loading, setLoading]=useState(false);
+  const [error, setError]=useState('');
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
 
-    if (!name.trim() || !email.trim() || !password || !confirmPassword) {
+    if (!name.trim()||!email.trim()||!password||!confirmPassword) {
       setError('Vui lòng nhập đầy đủ thông tin.');
       return;
     }
 
-    if (password.length < 6) {
+    if (password.length<6) {
       setError('Mật khẩu phải có ít nhất 6 ký tự.');
       return;
     }
 
-    if (password !== confirmPassword) {
+    if (password!==confirmPassword) {
       setError('Mật khẩu xác nhận không khớp.');
       return;
     }
@@ -39,15 +39,23 @@ function RegisterPage({
     setError('');
 
     try {
-      await api.post('/users', {
+      await api.post('/auth/register', {
         name: name.trim(),
         email: email.trim(),
         password,
       });
 
       onRegisterSuccess();
-    } catch {
-      setError('Không thể đăng ký tài khoản. Email có thể đã được sử dụng.');
+    } catch (error: any) {
+
+      console.error('REGISTER ERROR:', error);
+      console.error('REGISTER ERROR RESPONSE:', error?.response?.data);
+
+      setError(
+        error?.response?.data?.message||
+        'Không thể đăng ký tài khoản. Vui lòng thử lại.',
+      );
+
     } finally {
       setLoading(false);
     }
@@ -231,7 +239,7 @@ function RegisterPage({
             }}
           />
 
-          {error && (
+          {error&&(
             <div
               role="alert"
               style={{
@@ -258,10 +266,10 @@ function RegisterPage({
               borderRadius: '10px',
               fontSize: '16px',
               fontWeight: 600,
-              cursor: loading ? 'default' : 'pointer',
+              cursor: loading? 'default':'pointer',
             }}
           >
-            {loading ? 'Đang đăng ký...' : 'Đăng ký'}
+            {loading? 'Đang đăng ký...':'Đăng ký'}
           </button>
         </form>
 

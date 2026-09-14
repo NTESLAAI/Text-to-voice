@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 
-import { synthesizeDialogue } from '../services/api';
+import { getProjectUsage, synthesizeDialogue } from '../services/api';
+import { countBillableCharacters } from '../utils/characterCount';
 
 type Gender='male'|'female';
 type Character=
@@ -157,10 +158,24 @@ export default function DialogueComposer({
   projectId,
   language,
   speed,
+  usage,
+  onUsageUpdated,
 }: {
   projectId: string;
   language: 'vi'|'en';
   speed: number;
+  usage: {
+    plan: string;
+    characterLimit: number;
+    usedCharacters: number;
+    remainingCharacters: number;
+  }|null;
+  onUsageUpdated: (usage: {
+    plan: string;
+    characterLimit: number;
+    usedCharacters: number;
+    remainingCharacters: number;
+  }) => void;
 }) {
   const [isOpen, setIsOpen]=useState(false);
   const [speakerA, setSpeakerA]=useState<DialogueSpeaker>({
@@ -184,7 +199,31 @@ export default function DialogueComposer({
   const [isGenerating, setIsGenerating]=useState(false);
   const [error, setError]=useState<string|null>(null);
   const [audioUrl, setAudioUrl]=useState<string|null>(null);
+  const [lastGeneratedCharacterCount, setLastGeneratedCharacterCount]=useState(0);
+  const [lastGeneratedFingerprint, setLastGeneratedFingerprint]=
+    useState<string|null>(null);
+
+  const [showRegenerateConfirm, setShowRegenerateConfirm]=
+    useState(false);
   const audioRef=useRef<HTMLAudioElement|null>(null);
+
+  const dialogueCharacterCount=turns.reduce(
+    (total, turn) => total+countBillableCharacters(turn.text, language),
+    0,
+  );
+  const getDialogueGenerationFingerprint=() => {
+    return JSON.stringify({
+      language,
+      speed,
+      speakerA,
+      speakerB,
+      turns: turns.map((turn) => ({
+        speaker: turn.speaker,
+        text: turn.text.trim(),
+        style: turn.style,
+      })),
+    });
+  };
 
   useEffect(() => {
     if (!audioUrl) {
@@ -206,6 +245,35 @@ export default function DialogueComposer({
     id: number,
     update: Partial<Omit<DialogueTurn, 'id'>>,
   ) => {
+    if (typeof update.text==='string'&&usage) {
+      const newTurns=turns.map((turn) => (
+        turn.id===id
+          ? { ...turn, ...update }
+          :turn
+      ));
+
+      const newCharacterCount=newTurns.reduce(
+        (total, turn) =>
+          total+countBillableCharacters(turn.text, language),
+        0,
+      );
+
+      if (
+        newCharacterCount>
+        usage.remainingCharacters+lastGeneratedCharacterCount
+      ) {
+        setError(
+          `Bạn đã sử dụng hết hạn mức còn lại (${Math.max(
+            0,
+            usage.remainingCharacters,
+          ).toLocaleString('vi-VN')} ký tự).`,
+        );
+        return;
+      }
+
+      setError(null);
+    }
+
     setTurns((current) => current.map((turn) => (
       turn.id===id
         ? { ...turn, ...update }
@@ -244,9 +312,11 @@ export default function DialogueComposer({
       text: turn.text.trim(),
       style: turn.style,
     }));
+
     const hasEmptyTurn=cleanedTurns.some((turn) => !turn.text);
+
     const characterCount=cleanedTurns.reduce(
-      (total, turn) => total+turn.text.length,
+      (total, turn) => total+countBillableCharacters(turn.text, language),
       0,
     );
 
@@ -265,6 +335,19 @@ export default function DialogueComposer({
       return;
     }
 
+    if (
+      usage&&
+      characterCount>usage.remainingCharacters
+    ) {
+      setError(
+        `Bạn đã sử dụng hết hạn mức còn lại (${Math.max(
+          0,
+          usage.remainingCharacters,
+        ).toLocaleString('vi-VN')} ký tự).`,
+      );
+      return;
+    }
+
     setIsGenerating(true);
     setError(null);
 
@@ -279,6 +362,21 @@ export default function DialogueComposer({
       });
 
       setAudioUrl(result.fileUrl);
+      const updatedUsage=await getProjectUsage(projectId);
+      onUsageUpdated(updatedUsage);
+      setLastGeneratedCharacterCount(characterCount);
+      setLastGeneratedFingerprint(getDialogueGenerationFingerprint());
+
+      if (usage) {
+        onUsageUpdated({
+          ...usage,
+          usedCharacters: usage.usedCharacters+characterCount,
+          remainingCharacters: Math.max(
+            0,
+            usage.remainingCharacters-characterCount,
+          ),
+        });
+      }
     } catch (error) {
       console.error('DIALOGUE TTS ERROR:', error);
       setError('Không thể tạo hội thoại. Vui lòng thử lại.');
@@ -296,6 +394,7 @@ export default function DialogueComposer({
         aria-expanded={isOpen}
       >
         <span>💬 Tạo hội thoại</span>
+
         <span aria-hidden="true">{isOpen? '−':'+'}</span>
       </button>
 
@@ -405,12 +504,39 @@ export default function DialogueComposer({
           <button
             type="button"
             className="dialogue-generate-button"
-            onClick={() => void handleGenerate()}
+            onClick={() => {
+              const fingerprint=getDialogueGenerationFingerprint();
+
+              if (
+                lastGeneratedFingerprint&&
+                fingerprint===lastGeneratedFingerprint
+              ) {
+                setShowRegenerateConfirm(true);
+                return;
+              }
+
+              void handleGenerate();
+            }}
             disabled={isGenerating}
           >
-            {isGenerating
-              ? 'Đang tạo hội thoại…'
-              :'🎙️ Tạo hội thoại'}
+            {isGenerating? (
+              'Đang tạo hội thoại…'
+            ):(
+              <>
+                <span>🎙️ Tạo hội thoại</span>
+                {usage&&(
+                  <span className="dialogue-generate-usage">
+                    Gói {usage.plan} · Còn{' '}
+                    {Math.max(
+                      0,
+                      usage.remainingCharacters+
+                      lastGeneratedCharacterCount-
+                      dialogueCharacterCount,
+                    ).toLocaleString('vi-VN')} ký tự
+                  </span>
+                )}
+              </>
+            )}
           </button>
 
           {error&&(
@@ -422,6 +548,44 @@ export default function DialogueComposer({
           {audioUrl&&(
             <div className="dialogue-audio-result">
               <audio ref={audioRef} controls src={audioUrl} />
+            </div>
+          )}
+
+          {showRegenerateConfirm&&(
+            <div className="ttv-confirm-overlay">
+              <div className="ttv-confirm-dialog">
+                <div className="ttv-confirm-title">
+                  ⚠️ Tạo lại hội thoại?
+                </div>
+
+                <div className="ttv-confirm-message">
+                  Đoạn hội thoại không thay đổi. Bạn có muốn tiếp tục tạo
+                  hội thoại không?
+                  <br />
+                  Việc tạo lại sẽ sử dụng hạn mức ký tự.
+                </div>
+
+                <div className="ttv-confirm-actions">
+                  <button
+                    type="button"
+                    className="ttv-confirm-cancel"
+                    onClick={() => setShowRegenerateConfirm(false)}
+                  >
+                    Hủy
+                  </button>
+
+                  <button
+                    type="button"
+                    className="ttv-confirm-ok"
+                    onClick={() => {
+                      setShowRegenerateConfirm(false);
+                      void handleGenerate();
+                    }}
+                  >
+                    Tiếp tục tạo
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>

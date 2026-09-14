@@ -9,6 +9,7 @@ import { TtsModule } from './tts/tts.module';
 import { AudioModule } from './audio/audio.module';
 import { TextReviewModule } from './text-review/text-review.module';
 import { AuthModule } from './auth/auth.module';
+import { SubscriptionModule } from './subscription/subscription.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { AuthModule } from './auth/auth.module';
     AudioModule,
     TextReviewModule,
     AuthModule,
+    SubscriptionModule,
   ],
   controllers: [AppController],
   providers: [AppService],

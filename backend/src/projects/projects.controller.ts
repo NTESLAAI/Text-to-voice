@@ -1,9 +1,26 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+
+import { JwtAuthGuard } from '../auth/guards/jwt-auth/jwt-auth.guard';
 import { ProjectsService } from './projects.service';
 
 @Controller('projects')
 export class ProjectsController {
-  constructor(private readonly projectsService: ProjectsService) {}
+  constructor(private readonly projectsService: ProjectsService) { }
+  @UseGuards(JwtAuthGuard)
+  @Get('me')
+  getMyProject(@Req() req: any) {
+    return this.projectsService.getOrCreateForUser(
+      req.user.userId,
+    );
+  }
 
   @Post()
   create(

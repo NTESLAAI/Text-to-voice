@@ -1,5 +1,7 @@
-import axios from 'axios';
+﻿import axios from 'axios';
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
+import { countBillableCharacters } from '../utils/characterCount';
+import { getAuthToken } from './authStorage';
 
 const API_BASE_URL=import.meta.env.VITE_API_BASE_URL;
 
@@ -8,6 +10,16 @@ const api=axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+});
+
+api.interceptors.request.use(async (config) => {
+  const token=await getAuthToken();
+
+  if (token) {
+    config.headers.Authorization=`Bearer ${token}`;
+  }
+
+  return config;
 });
 
 export interface AudioRecord {
@@ -239,7 +251,7 @@ export async function synthesizeSpeech(
       model: 'google/gemini-3.1-flash-tts-preview',
       fileUrl: audioUrl,
       format: 'wav',
-      characters: request.text.length,
+      characters: countBillableCharacters(request.text, request.language),
       duration: 0,
     };
   } catch (error) {
@@ -403,5 +415,8 @@ export async function login(
 
   return response.data;
 }
-
+export async function getMyProject() {
+  const response=await api.get('/projects/me');
+  return response.data;
+}
 export default api;

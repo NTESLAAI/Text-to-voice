@@ -23,13 +23,45 @@ export class UsersService {
       ? await bcrypt.hash(data.password, 12)
       :undefined;
 
-    return this.prisma.user.create({
-      data: {
-        email: data.email,
-        password: hashedPassword,
-        name: data.name,
-      },
-      select: publicUserSelect,
+    return this.prisma.$transaction(async (tx) => {
+      const freePlan=await tx.plan.findUnique({
+        where: {
+          code: 'FREE',
+        },
+      });
+
+      if (!freePlan||!freePlan.isActive) {
+        throw new Error('FREE plan is not available');
+      }
+
+      const now=new Date();
+      const expiresAt=new Date(now);
+      expiresAt.setDate(expiresAt.getDate()+freePlan.durationDays);
+
+      const user=await tx.user.create({
+        data: {
+          email: data.email,
+          password: hashedPassword,
+          name: data.name,
+        },
+        select: publicUserSelect,
+      });
+
+      await tx.subscription.create({
+        data: {
+          userId: user.id,
+          planId: freePlan.id,
+          startedAt: now,
+          expiresAt,
+          status: 'ACTIVE',
+          characterLimit: freePlan.characterLimit,
+          rolloverCharacters: 0,
+          pricePaid: 0,
+          currency: freePlan.currency,
+        },
+      });
+
+      return user;
     });
   }
 

@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class ProjectsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async create(data: {
     name: string;
@@ -16,7 +16,27 @@ export class ProjectsService {
       },
     });
   }
+  async getOrCreateForUser(userId: string) {
+    const existingProject=await this.prisma.project.findFirst({
+      where: {
+        userId,
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
 
+    if (existingProject) {
+      return existingProject;
+    }
+
+    return this.prisma.project.create({
+      data: {
+        name: 'My Project',
+        userId,
+      },
+    });
+  }
   async findAll() {
     return this.prisma.project.findMany({
       orderBy: {

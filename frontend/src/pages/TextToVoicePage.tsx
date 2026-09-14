@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { useTranslation } from 'react-i18next';
 
@@ -9,6 +9,7 @@ import {
   getVoicePresets,
   reviewText,
   getProjectUsage,
+  getMyProject,
 } from '../services/api';
 import './TextToVoice.css';
 import themeFrame from '../assets/Theme.png';
@@ -20,17 +21,18 @@ import ageIcon from '../assets/Age.png';
 import earthIcon from '../assets/Earth.png';
 import styleIcon from '../assets/Style.png';
 import logo from '../assets/Logo.png';
-
-const PROJECT_ID=import.meta.env.VITE_PROJECT_ID;
+import { countBillableCharacters } from '../utils/characterCount';
 
 
 export default function TextToVoicePage() {
+  const [projectId, setProjectId]=useState('');
 
   const { t }=useTranslation();
   const [language, setLanguage]=
     useState<'vi'|'en'>('vi');
 
   const [text, setText]=useState('');
+  const [billedTextCharacters, setBilledTextCharacters]=useState(0);
 
   const textAreaRef=useRef<HTMLTextAreaElement|null>(null);
 
@@ -187,16 +189,23 @@ export default function TextToVoicePage() {
   }, [volume, audioUrl]);
 
   useEffect(() => {
-    async function loadUsage() {
+    async function loadProjectAndUsage() {
       try {
-        const data=await getProjectUsage(PROJECT_ID);
+        const project=await getMyProject();
+
+        setProjectId(project.id);
+
+        const data=await getProjectUsage(project.id);
         setUsage(data);
       } catch (error) {
-        console.error('Không thể tải thông tin hạn mức:', error);
+        console.error(
+          'Không thể tải thông tin dự án và hạn mức:',
+          error,
+        );
       }
     }
 
-    loadUsage();
+    loadProjectAndUsage();
   }, []);
 
   const handleAutoTextReview=async () => {
@@ -305,8 +314,13 @@ export default function TextToVoicePage() {
         selectedStyle as keyof typeof styleSettings
         ]??styleSettings.storytelling;
 
+      if (!projectId) {
+        setError('Chưa xác định được dự án của tài khoản.');
+        return;
+      }
+
       const result=await synthesizeSpeech({
-        projectId: PROJECT_ID,
+        projectId: projectId,
         text: text.trim(),
         language,
 
@@ -362,6 +376,13 @@ export default function TextToVoicePage() {
       });
 
       setAudioUrl(result.fileUrl);
+
+      const updatedUsage=await getProjectUsage(projectId);
+      setUsage(updatedUsage);
+      setBilledTextCharacters(
+        countBillableCharacters(text, language),
+      );
+
       setLastGeneratedFingerprint(
         getGenerationFingerprint(),
       );
@@ -432,6 +453,20 @@ export default function TextToVoicePage() {
                   const textarea=event.currentTarget;
                   const newText=textarea.value;
 
+                  if (usage) {
+                    const newCharacterCount=
+                      countBillableCharacters(newText, language);
+
+                    if (newCharacterCount>usage.remainingCharacters) {
+                      setError(
+                        `Bạn đã sử dụng hết hạn mức còn lại (${usage.remainingCharacters.toLocaleString('vi-VN')} ký tự).`,
+                      );
+                      return;
+                    }
+
+                    setError(null);
+                  }
+
                   setText(newText);
 
                   requestAnimationFrame(() => {
@@ -460,13 +495,18 @@ export default function TextToVoicePage() {
           </div>
 
           <div className="ttv-character-count">
-            {text.length} / 5000
+            {countBillableCharacters(text, language)} / 5000
           </div>
 
         </div>
         {usage&&(
           <div className="ttv-usage-info">
-            Gói {usage.plan} · Còn {usage.remainingCharacters.toLocaleString('vi-VN')} ký tự
+            Gói {usage.plan} · Còn {Math.max(
+              0,
+              usage.remainingCharacters+
+              billedTextCharacters-
+              countBillableCharacters(text, language),
+            ).toLocaleString('vi-VN')} ký tự
           </div>
         )}
         <div className="ttv-control-grid">
@@ -896,10 +936,7 @@ export default function TextToVoicePage() {
                   type="button"
                   className={`ttv-language-option ${language==='en'? 'active':''
                     }`}
-                  onClick={() => {
-                    setLanguage('vi');
-                    setShowEnglishNotice(true);
-                  }}
+                  onClick={() => setLanguage('en')}
                   aria-label="Chọn Tiếng Anh"
                   aria-pressed={language==='en'}
                 >
@@ -975,12 +1012,14 @@ export default function TextToVoicePage() {
         )
       }
       <DialogueComposer
-        projectId={PROJECT_ID}
+        projectId={projectId}
         language={language}
         speed={selectedSpeed}
+        usage={usage}
+        onUsageUpdated={setUsage}
       />
       <AudioHistory
-        projectId={PROJECT_ID}
+        projectId={projectId}
         refreshKey={refreshKey}
       />
 
@@ -1032,8 +1071,8 @@ export default function TextToVoicePage() {
                     </h4>
 
                     <p>
-                      AI không phát hiện lỗi chính tả,
-                      dấu câu hoặc cách diễn đạt cần chỉnh sửa.
+                      AI không phát hiện lỗi chính tả, dấu câu
+                      hoặc cách diễn đạt cần chỉnh sửa.
                     </p>
                   </div>
                 ):(

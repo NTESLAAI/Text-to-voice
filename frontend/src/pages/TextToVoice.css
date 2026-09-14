@@ -3710,9 +3710,19 @@
 .dialogue-add-turn,
 .dialogue-remove-turn,
 .dialogue-generate-button {
+
     border: 1px solid rgba(167, 139, 250, 0.65);
+
     color: #ffffff;
+
     font-weight: 700;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
 }
 
 .dialogue-add-turn {

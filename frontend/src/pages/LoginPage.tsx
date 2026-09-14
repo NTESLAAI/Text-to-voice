@@ -8,15 +8,15 @@ interface LoginPageProps {
 }
 
 function LoginPage({ onLoginSuccess, onSwitchToRegister }: LoginPageProps) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [email, setEmail]=useState('');
+  const [password, setPassword]=useState('');
+  const [loading, setLoading]=useState(false);
+  const [error, setError]=useState('');
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
 
-    if (!email.trim() || !password) {
+    if (!email.trim()||!password) {
       setError('Vui lòng nhập đầy đủ thông tin.');
       return;
     }
@@ -25,16 +25,25 @@ function LoginPage({ onLoginSuccess, onSwitchToRegister }: LoginPageProps) {
     setError('');
 
     try {
-      const result = await login(email.trim(), password);
+      const result=await login(email.trim(), password);
+      console.log('LOGIN RESULT:', result);
+
       await saveAuth(result.accessToken, result.user);
+      console.log('AUTH SAVED');
+
       onLoginSuccess();
-    } catch {
-      setError('Email hoặc mật khẩu không đúng.');
+      console.log('LOGIN SUCCESS CALLBACK');
+    } catch (error) {
+
+      console.error('LOGIN ERROR:', error);
+      setError('Đăng nhập thất bại. Vui lòng thử lại.');
+
     } finally {
+
       setLoading(false);
+
     }
   }
-
   return (
     <div
       style={{
@@ -147,7 +156,7 @@ function LoginPage({ onLoginSuccess, onSwitchToRegister }: LoginPageProps) {
             }}
           />
 
-          {error && (
+          {error&&(
             <div
               role="alert"
               style={{
@@ -174,10 +183,10 @@ function LoginPage({ onLoginSuccess, onSwitchToRegister }: LoginPageProps) {
               borderRadius: '10px',
               fontSize: '16px',
               fontWeight: 600,
-              cursor: loading ? 'default' : 'pointer',
+              cursor: loading? 'default':'pointer',
             }}
           >
-            {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
+            {loading? 'Đang đăng nhập...':'Đăng nhập'}
           </button>
         </form>
 

@@ -1,4 +1,4 @@
-import {
+﻿import {
   BadRequestException,
   Injectable,
   NotFoundException,
@@ -8,6 +8,7 @@ import { promises as fs } from 'fs';
 import { join } from 'path';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { characterCountRules } from './character-count';
 import { AudioService } from '../audio/audio.service';
 import {
   OpenRouterTtsProvider,
@@ -30,6 +31,36 @@ export class TtsService {
   private readonly bitsPerSample=16;
   private readonly dialoguePauseMilliseconds=350;
   private readonly maxDialogueCharacters=10000;
+  private countBillableCharacters(
+    text: string,
+    language: string,
+  ): number {
+    const normalizedText=text.normalize('NFC');
+    const rule=characterCountRules[language];
+
+    let spokenText=normalizedText;
+
+    if (rule?.expandAbbreviations) {
+      const abbreviations=Object.entries(rule.expandAbbreviations)
+        .sort(([a], [b]) => b.length-a.length);
+
+      for (const [abbreviation, expansion] of abbreviations) {
+        const escaped=abbreviation.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+        spokenText=spokenText.replace(
+          new RegExp(
+            `(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`,
+            'giu',
+          ),
+          expansion,
+        );
+      }
+    }
+
+    return [...spokenText].filter(
+      (char) => /[\p{L}\p{N}]/u.test(char),
+    ).length;
+  }
 
   constructor(
     private readonly prisma: PrismaService,
@@ -55,7 +86,7 @@ export class TtsService {
       }
       :request;
 
-    // 1. Kiểm tra Project
+    // 1. Kiá»ƒm tra Project
     const project=await this.prisma.project.findUnique({
       where: {
         id: request.projectId,
@@ -65,20 +96,23 @@ export class TtsService {
     if (!project) {
       throw new NotFoundException('Project not found');
     }
-    const characters=request.text.length;
+    const characters=this.countBillableCharacters(
+      request.text,
+      request.language,
+    );
 
-    await this.checkCharacterQuota(
+    const quota=await this.checkCharacterQuota(
       project.userId,
       characters,
     );
 
-    // 2. Sinh PCM từ OpenRouter
+    // 2. Sinh PCM tá»« OpenRouter
     const pcm=await this.ttsProvider.synthesize(ttsRequest);
 
-    // 3. Chuyển PCM → WAV
+    // 3. Chuyá»ƒn PCM â†’ WAV
     const audioBuffer=this.pcmToWav(pcm);
 
-    // 4. Tính metadata
+    // 4. TÃ­nh metadata
 
     const duration=
       pcm.length/
@@ -86,7 +120,7 @@ export class TtsService {
         this.channels*
         (this.bitsPerSample/8));
 
-    // 5. Tạo tên file duy nhất
+    // 5. Táº¡o tÃªn file duy nháº¥t
     const fileName=`${randomUUID()}.wav`;
 
     const uploadDir=join(
@@ -100,21 +134,21 @@ export class TtsService {
       fileName,
     );
 
-    // 6. Đảm bảo thư mục tồn tại
+    // 6. Äáº£m báº£o thÆ° má»¥c tá»“n táº¡i
     await fs.mkdir(uploadDir, {
       recursive: true,
     });
 
-    // 7. Lưu file WAV
+    // 7. LÆ°u file WAV
     await fs.writeFile(
       filePath,
       audioBuffer,
     );
 
-    // 8. URL tương đối để frontend sử dụng
+    // 8. URL tÆ°Æ¡ng Ä‘á»‘i Ä‘á»ƒ frontend sá»­ dá»¥ng
     const fileUrl=`/uploads/audio/${fileName}`;
 
-    // 9. Lưu metadata vào PostgreSQL
+    // 9. LÆ°u metadata vÃ o PostgreSQL
     try {
       const audio=await this.prisma.audio.create({
         data: {
@@ -143,6 +177,7 @@ export class TtsService {
       await this.prisma.usage.create({
         data: {
           userId: project.userId,
+          subscriptionId: quota.subscription.id,
           characters,
           type: 'tts',
           referenceId: audio.id,
@@ -197,7 +232,10 @@ export class TtsService {
     };
 
     const characters=request.turns.reduce(
-      (total, turn) => total+turn.text.length,
+      (total, turn) => total+this.countBillableCharacters(
+        turn.text,
+        request.language,
+      ),
       0,
     );
 
@@ -206,7 +244,7 @@ export class TtsService {
         `Dialogue must not exceed ${this.maxDialogueCharacters} characters`,
       );
     }
-    await this.checkCharacterQuota(
+    const quota=await this.checkCharacterQuota(
       project.userId,
       characters,
     );
@@ -284,6 +322,7 @@ export class TtsService {
       await this.prisma.usage.create({
         data: {
           userId: project.userId,
+          subscriptionId: quota.subscription.id,
           characters,
           type: 'dialogue',
           referenceId: dialogue.id,
@@ -351,7 +390,7 @@ export class TtsService {
     });
 
     if (!project) {
-      throw new NotFoundException('Không tìm thấy project.');
+      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y project.');
     }
 
     const now=new Date();
@@ -359,7 +398,7 @@ export class TtsService {
     const subscription=await this.prisma.subscription.findFirst({
       where: {
         userId: project.userId,
-        status: 'active',
+        status: 'ACTIVE',
         startedAt: { lte: now },
         expiresAt: { gt: now },
       },
@@ -367,30 +406,22 @@ export class TtsService {
       orderBy: { expiresAt: 'desc' },
     });
 
-    let plan=subscription?.plan??null;
-
-    if (!plan) {
-      plan=await this.prisma.plan.findUnique({
-        where: { code: 'FREE' },
-      });
-    }
-
-    if (!plan||!plan.isActive) {
+    if (!subscription) {
       throw new BadRequestException(
-        'Không thể xác định gói sử dụng.',
+        'TÃ i khoáº£n chÆ°a cÃ³ gÃ³i sá»­ dá»¥ng Ä‘ang hoáº¡t Ä‘á»™ng.',
       );
     }
 
-    const startOfMonth=new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      1,
-    );
+    if (!subscription.plan.isActive) {
+      throw new BadRequestException(
+        'GÃ³i sá»­ dá»¥ng hiá»‡n khÃ´ng cÃ²n hoáº¡t Ä‘á»™ng.',
+      );
+    }
 
     const usage=await this.prisma.usage.aggregate({
       where: {
         userId: project.userId,
-        createdAt: { gte: startOfMonth, lte: now },
+        subscriptionId: subscription.id,
       },
       _sum: {
         characters: true,
@@ -399,12 +430,19 @@ export class TtsService {
 
     const usedCharacters=usage._sum.characters??0;
 
+    const characterLimit=subscription.characterLimit;
+    const rolloverCharacters=subscription.rolloverCharacters;
+
+    const totalQuota=characterLimit+rolloverCharacters;
+
     return {
-      plan: plan.code,
-      characterLimit: plan.characterLimit,
+      plan: subscription.plan.code,
+      characterLimit,
+      rolloverCharacters,
+      totalQuota,
       usedCharacters,
       remainingCharacters: Math.max(
-        plan.characterLimit-usedCharacters,
+        totalQuota-usedCharacters,
         0,
       ),
     };
@@ -419,7 +457,7 @@ export class TtsService {
     const subscription=await this.prisma.subscription.findFirst({
       where: {
         userId,
-        status: 'active',
+        status: 'ACTIVE',
         startedAt: {
           lte: now,
         },
@@ -435,35 +473,22 @@ export class TtsService {
       },
     });
 
-    let plan=subscription?.plan??null;
-
-    if (!plan) {
-      plan=await this.prisma.plan.findUnique({
-        where: {
-          code: 'FREE',
-        },
-      });
-    }
-
-    if (!plan||!plan.isActive) {
+    if (!subscription) {
       throw new BadRequestException(
-        'Không thể xác định gói sử dụng.',
+        'TÃ i khoáº£n chÆ°a cÃ³ gÃ³i sá»­ dá»¥ng Ä‘ang hoáº¡t Ä‘á»™ng.',
       );
     }
 
-    const startOfMonth=new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      1,
-    );
+    if (!subscription.plan.isActive) {
+      throw new BadRequestException(
+        'GÃ³i sá»­ dá»¥ng hiá»‡n khÃ´ng cÃ²n hoáº¡t Ä‘á»™ng.',
+      );
+    }
 
     const usage=await this.prisma.usage.aggregate({
       where: {
         userId,
-        createdAt: {
-          gte: startOfMonth,
-          lte: now,
-        },
+        subscriptionId: subscription.id,
       },
       _sum: {
         characters: true,
@@ -471,17 +496,29 @@ export class TtsService {
     });
 
     const usedCharacters=usage._sum.characters??0;
-    const remainingCharacters=
-      plan.characterLimit-usedCharacters;
+
+    const characterLimit=subscription.characterLimit;
+    const rolloverCharacters=subscription.rolloverCharacters;
+
+    const totalQuota=characterLimit+rolloverCharacters;
+
+    const remainingCharacters=totalQuota-usedCharacters;
 
     if (characters>remainingCharacters) {
       throw new BadRequestException(
-        `Bạn chỉ còn ${Math.max(remainingCharacters, 0).toLocaleString('vi-VN')} ký tự trong tháng.`,
+        `Báº¡n chá»‰ cÃ²n ${Math.max(
+          remainingCharacters,
+          0,
+        ).toLocaleString('vi-VN')} kÃ½ tá»± trong chu ká»³ sá»­ dá»¥ng.`,
       );
     }
 
     return {
-      plan,
+      subscription,
+      plan: subscription.plan,
+      characterLimit,
+      rolloverCharacters,
+      totalQuota,
       usedCharacters,
       remainingCharacters,
     };
