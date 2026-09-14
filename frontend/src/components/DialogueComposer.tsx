@@ -367,16 +367,6 @@ export default function DialogueComposer({
       setLastGeneratedCharacterCount(characterCount);
       setLastGeneratedFingerprint(getDialogueGenerationFingerprint());
 
-      if (usage) {
-        onUsageUpdated({
-          ...usage,
-          usedCharacters: usage.usedCharacters+characterCount,
-          remainingCharacters: Math.max(
-            0,
-            usage.remainingCharacters-characterCount,
-          ),
-        });
-      }
     } catch (error) {
       console.error('DIALOGUE TTS ERROR:', error);
       setError('Không thể tạo hội thoại. Vui lòng thử lại.');
