@@ -1,50 +1,44 @@
 import { useState } from "react";
-import { login } from "../services/api";
-import { saveAuth } from "../services/authStorage";
+import { forgotPassword } from "../services/api";
 
-interface LoginPageProps {
-  onLoginSuccess: () => void;
-  onSwitchToRegister: () => void;
-  onSwitchToForgotPassword: () => void;
+interface ForgotPasswordPageProps {
+  onSwitchToLogin: () => void;
 }
 
-function LoginPage({
-  onLoginSuccess,
-  onSwitchToRegister,
-  onSwitchToForgotPassword,
-}: LoginPageProps) {
+function ForgotPasswordPage({ onSwitchToLogin }: ForgotPasswordPageProps) {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
 
-    if (!email.trim() || !password) {
-      setError("Vui lòng nhập đầy đủ thông tin.");
+    if (!email.trim()) {
+      setError("Vui lòng nhập email.");
       return;
     }
 
     setLoading(true);
     setError("");
+    setMessage("");
 
     try {
-      const result = await login(email.trim(), password);
-      console.log("LOGIN RESULT:", result);
+      const result = await forgotPassword(email.trim());
 
-      await saveAuth(result.accessToken, result.user);
-      console.log("AUTH SAVED");
+      setMessage(
+        "Nếu email tồn tại trong hệ thống, yêu cầu đặt lại mật khẩu đã được tạo.",
+      );
 
-      onLoginSuccess();
-      console.log("LOGIN SUCCESS CALLBACK");
+      console.log("FORGOT PASSWORD RESULT:", result);
     } catch (error) {
-      console.error("LOGIN ERROR:", error);
-      setError("Đăng nhập thất bại. Vui lòng thử lại.");
+      console.error("FORGOT PASSWORD ERROR:", error);
+      setError("Không thể gửi yêu cầu. Vui lòng thử lại.");
     } finally {
       setLoading(false);
     }
   }
+
   return (
     <div
       style={{
@@ -76,23 +70,23 @@ function LoginPage({
             lineHeight: 1.2,
           }}
         >
-          Đăng nhập
+          Quên mật khẩu
         </h1>
 
         <p
           style={{
-            margin: "0 0 34px",
+            margin: "0 0 30px",
             textAlign: "center",
             opacity: 0.7,
             fontSize: "15px",
           }}
         >
-          Đăng nhập để sử dụng Text-to-Voice
+          Nhập email để yêu cầu đặt lại mật khẩu
         </p>
 
         <form onSubmit={handleSubmit}>
           <label
-            htmlFor="login-email"
+            htmlFor="forgot-password-email"
             style={{
               display: "block",
               marginBottom: "9px",
@@ -104,7 +98,7 @@ function LoginPage({
           </label>
 
           <input
-            id="login-email"
+            id="forgot-password-email"
             type="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
@@ -116,40 +110,7 @@ function LoginPage({
               height: "48px",
               boxSizing: "border-box",
               padding: "0 15px",
-              marginBottom: "22px",
-              border: "1px solid #d1d5db",
-              borderRadius: "10px",
-              fontSize: "16px",
-              outline: "none",
-            }}
-          />
-
-          <label
-            htmlFor="login-password"
-            style={{
-              display: "block",
-              marginBottom: "9px",
-              fontSize: "15px",
-              fontWeight: 500,
-            }}
-          >
-            Mật khẩu
-          </label>
-
-          <input
-            id="login-password"
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="Nhập mật khẩu"
-            autoComplete="current-password"
-            disabled={loading}
-            style={{
-              width: "100%",
-              height: "48px",
-              boxSizing: "border-box",
-              padding: "0 15px",
-              marginBottom: "22px",
+              marginBottom: "20px",
               border: "1px solid #d1d5db",
               borderRadius: "10px",
               fontSize: "16px",
@@ -173,6 +134,22 @@ function LoginPage({
             </div>
           )}
 
+          {message && (
+            <div
+              role="status"
+              style={{
+                marginBottom: "18px",
+                padding: "11px 13px",
+                borderRadius: "9px",
+                background: "#dcfce7",
+                color: "#166534",
+                fontSize: "14px",
+              }}
+            >
+              {message}
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={loading}
@@ -187,31 +164,9 @@ function LoginPage({
               cursor: loading ? "default" : "pointer",
             }}
           >
-            {loading ? "Đang đăng nhập..." : "Đăng nhập"}
+            {loading ? "Đang gửi..." : "Gửi yêu cầu"}
           </button>
         </form>
-        <div
-          style={{
-            marginTop: "4px",
-            textAlign: "right",
-          }}
-        >
-          <button
-            type="button"
-            onClick={onSwitchToForgotPassword}
-            disabled={loading}
-            style={{
-              border: "none",
-              background: "transparent",
-              padding: 0,
-              color: "#4f46e5",
-              fontSize: "14px",
-              cursor: "pointer",
-            }}
-          >
-            Quên mật khẩu?
-          </button>
-        </div>
 
         <div
           style={{
@@ -221,10 +176,10 @@ function LoginPage({
             color: "#64748b",
           }}
         >
-          Chưa có tài khoản?{" "}
+          Nhớ mật khẩu?{" "}
           <button
             type="button"
-            onClick={onSwitchToRegister}
+            onClick={onSwitchToLogin}
             disabled={loading}
             style={{
               border: "none",
@@ -236,7 +191,7 @@ function LoginPage({
               cursor: "pointer",
             }}
           >
-            Đăng ký
+            Đăng nhập
           </button>
         </div>
       </div>
@@ -244,4 +199,4 @@ function LoginPage({
   );
 }
 
-export default LoginPage;
+export default ForgotPasswordPage;

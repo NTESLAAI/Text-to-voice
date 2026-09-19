@@ -1,28 +1,32 @@
 import { useState } from "react";
-import { login } from "../services/api";
-import { saveAuth } from "../services/authStorage";
+import { resetPassword } from "../services/api";
 
-interface LoginPageProps {
-  onLoginSuccess: () => void;
-  onSwitchToRegister: () => void;
-  onSwitchToForgotPassword: () => void;
+interface ResetPasswordPageProps {
+  token: string;
+  onResetSuccess: () => void;
 }
 
-function LoginPage({
-  onLoginSuccess,
-  onSwitchToRegister,
-  onSwitchToForgotPassword,
-}: LoginPageProps) {
-  const [email, setEmail] = useState("");
+function ResetPasswordPage({ token, onResetSuccess }: ResetPasswordPageProps) {
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
 
-    if (!email.trim() || !password) {
+    if (!password || !confirmPassword) {
       setError("Vui lòng nhập đầy đủ thông tin.");
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("Mật khẩu phải có ít nhất 6 ký tự.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Mật khẩu xác nhận không khớp.");
       return;
     }
 
@@ -30,21 +34,24 @@ function LoginPage({
     setError("");
 
     try {
-      const result = await login(email.trim(), password);
-      console.log("LOGIN RESULT:", result);
+      const result = await resetPassword(token, password);
 
-      await saveAuth(result.accessToken, result.user);
-      console.log("AUTH SAVED");
+      console.log("RESET PASSWORD RESULT:", result);
 
-      onLoginSuccess();
-      console.log("LOGIN SUCCESS CALLBACK");
-    } catch (error) {
-      console.error("LOGIN ERROR:", error);
-      setError("Đăng nhập thất bại. Vui lòng thử lại.");
+      onResetSuccess();
+    } catch (error: any) {
+      console.error("RESET PASSWORD ERROR:", error);
+      console.error("RESET PASSWORD ERROR RESPONSE:", error?.response?.data);
+
+      setError(
+        error?.response?.data?.message ||
+          "Không thể đặt lại mật khẩu. Vui lòng thử lại.",
+      );
     } finally {
       setLoading(false);
     }
   }
+
   return (
     <div
       style={{
@@ -76,23 +83,23 @@ function LoginPage({
             lineHeight: 1.2,
           }}
         >
-          Đăng nhập
+          Đặt lại mật khẩu
         </h1>
 
         <p
           style={{
-            margin: "0 0 34px",
+            margin: "0 0 30px",
             textAlign: "center",
             opacity: 0.7,
             fontSize: "15px",
           }}
         >
-          Đăng nhập để sử dụng Text-to-Voice
+          Nhập mật khẩu mới cho tài khoản của bạn
         </p>
 
         <form onSubmit={handleSubmit}>
           <label
-            htmlFor="login-email"
+            htmlFor="reset-password"
             style={{
               display: "block",
               marginBottom: "9px",
@@ -100,23 +107,23 @@ function LoginPage({
               fontWeight: 500,
             }}
           >
-            Email
+            Mật khẩu mới
           </label>
 
           <input
-            id="login-email"
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="Nhập email"
-            autoComplete="email"
+            id="reset-password"
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="Nhập mật khẩu mới"
+            autoComplete="new-password"
             disabled={loading}
             style={{
               width: "100%",
               height: "48px",
               boxSizing: "border-box",
               padding: "0 15px",
-              marginBottom: "22px",
+              marginBottom: "18px",
               border: "1px solid #d1d5db",
               borderRadius: "10px",
               fontSize: "16px",
@@ -125,7 +132,7 @@ function LoginPage({
           />
 
           <label
-            htmlFor="login-password"
+            htmlFor="reset-confirm-password"
             style={{
               display: "block",
               marginBottom: "9px",
@@ -133,23 +140,23 @@ function LoginPage({
               fontWeight: 500,
             }}
           >
-            Mật khẩu
+            Xác nhận mật khẩu
           </label>
 
           <input
-            id="login-password"
+            id="reset-confirm-password"
             type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="Nhập mật khẩu"
-            autoComplete="current-password"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            placeholder="Nhập lại mật khẩu mới"
+            autoComplete="new-password"
             disabled={loading}
             style={{
               width: "100%",
               height: "48px",
               boxSizing: "border-box",
               padding: "0 15px",
-              marginBottom: "22px",
+              marginBottom: "20px",
               border: "1px solid #d1d5db",
               borderRadius: "10px",
               fontSize: "16px",
@@ -187,61 +194,12 @@ function LoginPage({
               cursor: loading ? "default" : "pointer",
             }}
           >
-            {loading ? "Đang đăng nhập..." : "Đăng nhập"}
+            {loading ? "Đang cập nhật..." : "Đặt lại mật khẩu"}
           </button>
         </form>
-        <div
-          style={{
-            marginTop: "4px",
-            textAlign: "right",
-          }}
-        >
-          <button
-            type="button"
-            onClick={onSwitchToForgotPassword}
-            disabled={loading}
-            style={{
-              border: "none",
-              background: "transparent",
-              padding: 0,
-              color: "#4f46e5",
-              fontSize: "14px",
-              cursor: "pointer",
-            }}
-          >
-            Quên mật khẩu?
-          </button>
-        </div>
-
-        <div
-          style={{
-            marginTop: "22px",
-            textAlign: "center",
-            fontSize: "14px",
-            color: "#64748b",
-          }}
-        >
-          Chưa có tài khoản?{" "}
-          <button
-            type="button"
-            onClick={onSwitchToRegister}
-            disabled={loading}
-            style={{
-              border: "none",
-              background: "transparent",
-              padding: 0,
-              color: "#4f46e5",
-              fontSize: "14px",
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            Đăng ký
-          </button>
-        </div>
       </div>
     </div>
   );
 }
 
-export default LoginPage;
+export default ResetPasswordPage;

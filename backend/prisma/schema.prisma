@@ -1,6 +1,6 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
   moduleFormat = "cjs"
 }
 
@@ -9,56 +9,56 @@ datasource db {
 }
 
 model User {
-  id            String         @id @default(uuid())
-  email         String         @unique
-  password      String?
-  name          String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String?
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  projects      Project[]
-  subscriptions Subscription[]
-  usages        Usage[]
+  projects            Project[]
+  subscriptions       Subscription[]
+  usages              Usage[]
   passwordResetTokens PasswordResetToken[]
 }
 
 model Plan {
-  id             String         @id @default(uuid())
-  code           String         @unique
+  id             String  @id @default(uuid())
+  code           String  @unique
   name           String
   price          Float
-  currency       String         @default("VND")
+  currency       String  @default("VND")
   durationDays   Int
   characterLimit Int
-  isActive       Boolean        @default(true)
+  isActive       Boolean @default(true)
 
-  subscriptions  Subscription[]
+  subscriptions Subscription[]
 
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Subscription {
-  id                  String   @id @default(uuid())
-  userId              String
-  planId              String
+  id     String @id @default(uuid())
+  userId String
+  planId String
 
-  startedAt           DateTime
-  expiresAt           DateTime
-  status              String
+  startedAt DateTime
+  expiresAt DateTime
+  status    String
 
-  characterLimit      Int
-  rolloverCharacters  Int      @default(0)
+  characterLimit     Int
+  rolloverCharacters Int @default(0)
 
-  pricePaid           Float?
-  currency            String   @default("VND")
+  pricePaid Float?
+  currency  String @default("VND")
 
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  plan                Plan     @relation(fields: [planId], references: [id])
-  usages              Usage[]
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan   Plan    @relation(fields: [planId], references: [id])
+  usages Usage[]
 
   @@index([userId])
   @@index([planId])
@@ -66,18 +66,18 @@ model Subscription {
 }
 
 model Usage {
-  id              String        @id @default(uuid())
-  userId          String
-  subscriptionId  String?
+  id             String  @id @default(uuid())
+  userId         String
+  subscriptionId String?
 
-  characters      Int
-  type            String
-  referenceId     String?
+  characters  Int
+  type        String
+  referenceId String?
 
-  createdAt       DateTime      @default(now())
+  createdAt DateTime @default(now())
 
-  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
 
   @@index([userId])
   @@index([subscriptionId])
@@ -91,7 +91,7 @@ model Project {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   audios    Audio[]
   dialogues Dialogue[]
 
@@ -99,56 +99,56 @@ model Project {
 }
 
 model Audio {
-  id           String   @id @default(uuid())
-  projectId    String
+  id        String @id @default(uuid())
+  projectId String
 
-  text         String
-  language     String
+  text     String
+  language String
 
-  voice        String
+  voice     String
   character String
-tone      String
-emotion   String
-style     String
-  speed        Float    @default(1.0)
+  tone      String
+  emotion   String
+  style     String
+  speed     Float  @default(1.0)
 
-  provider     String?
-  model        String?
-  fileUrl      String?
-  format       String   @default("wav")
+  provider String?
+  model    String?
+  fileUrl  String?
+  format   String  @default("wav")
 
-  characters   Int
-  duration     Float?
-  cost         Float?
+  characters Int
+  duration   Float?
+  cost       Float?
 
-  createdAt    DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
 }
 
 model Dialogue {
-  id         String            @id @default(uuid())
+  id         String   @id @default(uuid())
   projectId  String
   language   String
   fileUrl    String?
-  format     String            @default("wav")
+  format     String   @default("wav")
   characters Int
   duration   Float?
   provider   String?
   model      String?
-  createdAt  DateTime          @default(now())
+  createdAt  DateTime @default(now())
 
-  project    Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  speakers   DialogueSpeaker[]
-  turns      DialogueTurn[]
+  project  Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  speakers DialogueSpeaker[]
+  turns    DialogueTurn[]
 
   @@index([projectId])
 }
 
 model DialogueSpeaker {
-  id         String   @id @default(uuid())
+  id         String @id @default(uuid())
   dialogueId String
   role       String
   gender     String
@@ -156,25 +156,26 @@ model DialogueSpeaker {
   character  String
   region     String
 
-  dialogue   Dialogue @relation(fields: [dialogueId], references: [id], onDelete: Cascade)
+  dialogue Dialogue @relation(fields: [dialogueId], references: [id], onDelete: Cascade)
 
   @@unique([dialogueId, role])
   @@index([dialogueId])
 }
 
 model DialogueTurn {
-  id         String   @id @default(uuid())
+  id         String @id @default(uuid())
   dialogueId String
   order      Int
   speaker    String
   text       String
   style      String
 
-  dialogue   Dialogue @relation(fields: [dialogueId], references: [id], onDelete: Cascade)
+  dialogue Dialogue @relation(fields: [dialogueId], references: [id], onDelete: Cascade)
 
   @@unique([dialogueId, order])
   @@index([dialogueId])
 }
+
 model PasswordResetToken {
   id        String    @id @default(uuid())
   userId    String
@@ -183,7 +184,7 @@ model PasswordResetToken {
   usedAt    DateTime?
   createdAt DateTime  @default(now())
 
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expiresAt])
