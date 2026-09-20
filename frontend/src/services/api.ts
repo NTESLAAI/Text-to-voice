@@ -349,6 +349,8 @@ export async function reviewText(text: string): Promise<TextReviewResult> {
 export interface ProjectUsage {
   plan: string;
   characterLimit: number;
+  rolloverCharacters: number;
+  totalQuota: number;
   usedCharacters: number;
   remainingCharacters: number;
 }
@@ -359,6 +361,12 @@ export async function getProjectUsage(
   const response = await api.get<ProjectUsage>(
     `/tts/usage/project/${projectId}`,
   );
+
+  return response.data;
+}
+
+export async function getMyUsage(): Promise<ProjectUsage> {
+  const response = await api.get<ProjectUsage>("/tts/usage/me");
 
   return response.data;
 }
@@ -383,6 +391,42 @@ export async function login(
     email,
     password,
   });
+
+  return response.data;
+}
+export interface MyProfile {
+  id: string;
+  email: string;
+  name?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function getMyProfile(): Promise<MyProfile> {
+  const response = await api.get<MyProfile>("/users/me");
+
+  return response.data;
+}
+
+export interface MySubscription {
+  id: string;
+  plan: {
+    code: string;
+    name: string;
+    price: number;
+    currency: string;
+  };
+  startedAt: string;
+  expiresAt: string;
+  status: string;
+  characterLimit: number;
+  rolloverCharacters: number;
+  pricePaid?: number | null;
+  currency: string;
+}
+
+export async function getMySubscription(): Promise<MySubscription> {
+  const response = await api.get<MySubscription>("/subscription/me");
 
   return response.data;
 }

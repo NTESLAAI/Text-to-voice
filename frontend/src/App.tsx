@@ -7,6 +7,7 @@ import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import AccountBar from "./components/AccountBar";
 import { getAuthToken } from "./services/authStorage";
+import AccountPage from "./pages/AccountPage";
 
 function App() {
   const [checkingAuth, setCheckingAuth] = useState(true);
@@ -14,6 +15,7 @@ function App() {
   const [showRegister, setShowRegister] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetToken, setResetToken] = useState("");
+  const [showAccount, setShowAccount] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -85,8 +87,16 @@ function App() {
 
   return (
     <>
-      <AccountBar onLogout={() => setIsAuthenticated(false)} />
-      <TextToVoicePage />
+      <AccountBar
+        onLogout={() => setIsAuthenticated(false)}
+        onAccount={() => setShowAccount(true)}
+      />
+
+      {showAccount ? (
+        <AccountPage onBack={() => setShowAccount(false)} />
+      ) : (
+        <TextToVoicePage />
+      )}
     </>
   );
 }

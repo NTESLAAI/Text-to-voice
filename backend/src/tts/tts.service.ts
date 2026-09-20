@@ -15,10 +15,7 @@ import {
   TtsRequest,
 } from './providers/openrouter-tts.provider';
 
-import {
-  VOICE_PRESETS,
-  VOICE_PROFILES,
-} from './config/voice-profiles';
+import { VOICE_PRESETS, VOICE_PROFILES } from './config/voice-profiles';
 import {
   DialogueSpeakerDto,
   SynthesizeDialogueDto,
@@ -26,68 +23,58 @@ import {
 
 @Injectable()
 export class TtsService {
-  private readonly sampleRate=24000;
-  private readonly channels=1;
-  private readonly bitsPerSample=16;
-  private readonly dialoguePauseMilliseconds=350;
-  private readonly maxDialogueCharacters=10000;
-  private countBillableCharacters(
-    text: string,
-    language: string,
-  ): number {
-    const normalizedText=text.normalize('NFC');
-    const rule=characterCountRules[language];
+  private readonly sampleRate = 24000;
+  private readonly channels = 1;
+  private readonly bitsPerSample = 16;
+  private readonly dialoguePauseMilliseconds = 350;
+  private readonly maxDialogueCharacters = 10000;
+  private countBillableCharacters(text: string, language: string): number {
+    const normalizedText = text.normalize('NFC');
+    const rule = characterCountRules[language];
 
-    let spokenText=normalizedText;
+    let spokenText = normalizedText;
 
     if (rule?.expandAbbreviations) {
-      const abbreviations=Object.entries(rule.expandAbbreviations)
-        .sort(([a], [b]) => b.length-a.length);
+      const abbreviations = Object.entries(rule.expandAbbreviations).sort(
+        ([a], [b]) => b.length - a.length,
+      );
 
       for (const [abbreviation, expansion] of abbreviations) {
-        const escaped=abbreviation.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const escaped = abbreviation.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-        spokenText=spokenText.replace(
-          new RegExp(
-            `(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`,
-            'giu',
-          ),
+        spokenText = spokenText.replace(
+          new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'giu'),
           expansion,
         );
       }
     }
 
-    return [...spokenText].filter(
-      (char) => /[\p{L}\p{N}]/u.test(char),
-    ).length;
+    return [...spokenText].filter((char) => /[\p{L}\p{N}]/u.test(char)).length;
   }
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly audioService: AudioService,
     private readonly ttsProvider: OpenRouterTtsProvider,
-  ) { }
+  ) {}
 
   async synthesize(request: TtsRequest) {
+    const preset = request.preset ? VOICE_PRESETS[request.preset] : null;
 
-    const preset=request.preset
-      ? VOICE_PRESETS[request.preset]
-      :null;
-
-    const ttsRequest: TtsRequest=preset
+    const ttsRequest: TtsRequest = preset
       ? {
-        ...request,
-        region: preset.region,
-        character: preset.character,
-        tone: preset.tone,
-        emotion: preset.emotion,
-        style: preset.style,
-        speed: request.speed,
-      }
-      :request;
+          ...request,
+          region: preset.region,
+          character: preset.character,
+          tone: preset.tone,
+          emotion: preset.emotion,
+          style: preset.style,
+          speed: request.speed,
+        }
+      : request;
 
     // 1. Kiá»ƒm tra Project
-    const project=await this.prisma.project.findUnique({
+    const project = await this.prisma.project.findUnique({
       where: {
         id: request.projectId,
       },
@@ -96,43 +83,30 @@ export class TtsService {
     if (!project) {
       throw new NotFoundException('Project not found');
     }
-    const characters=this.countBillableCharacters(
+    const characters = this.countBillableCharacters(
       request.text,
       request.language,
     );
 
-    const quota=await this.checkCharacterQuota(
-      project.userId,
-      characters,
-    );
+    const quota = await this.checkCharacterQuota(project.userId, characters);
 
     // 2. Sinh PCM tá»« OpenRouter
-    const pcm=await this.ttsProvider.synthesize(ttsRequest);
+    const pcm = await this.ttsProvider.synthesize(ttsRequest);
 
     // 3. Chuyá»ƒn PCM â†’ WAV
-    const audioBuffer=this.pcmToWav(pcm);
+    const audioBuffer = this.pcmToWav(pcm);
 
     // 4. TÃ­nh metadata
 
-    const duration=
-      pcm.length/
-      (this.sampleRate*
-        this.channels*
-        (this.bitsPerSample/8));
+    const duration =
+      pcm.length / (this.sampleRate * this.channels * (this.bitsPerSample / 8));
 
     // 5. Táº¡o tÃªn file duy nháº¥t
-    const fileName=`${randomUUID()}.wav`;
+    const fileName = `${randomUUID()}.wav`;
 
-    const uploadDir=join(
-      process.cwd(),
-      'uploads',
-      'audio',
-    );
+    const uploadDir = join(process.cwd(), 'uploads', 'audio');
 
-    const filePath=join(
-      uploadDir,
-      fileName,
-    );
+    const filePath = join(uploadDir, fileName);
 
     // 6. Äáº£m báº£o thÆ° má»¥c tá»“n táº¡i
     await fs.mkdir(uploadDir, {
@@ -140,17 +114,14 @@ export class TtsService {
     });
 
     // 7. LÆ°u file WAV
-    await fs.writeFile(
-      filePath,
-      audioBuffer,
-    );
+    await fs.writeFile(filePath, audioBuffer);
 
     // 8. URL tÆ°Æ¡ng Ä‘á»‘i Ä‘á»ƒ frontend sá»­ dá»¥ng
-    const fileUrl=`/uploads/audio/${fileName}`;
+    const fileUrl = `/uploads/audio/${fileName}`;
 
     // 9. LÆ°u metadata vÃ o PostgreSQL
     try {
-      const audio=await this.prisma.audio.create({
+      const audio = await this.prisma.audio.create({
         data: {
           projectId: request.projectId,
           text: request.text,
@@ -214,7 +185,7 @@ export class TtsService {
   }
 
   async synthesizeDialogue(request: SynthesizeDialogueDto) {
-    const project=await this.prisma.project.findUnique({
+    const project = await this.prisma.project.findUnique({
       where: {
         id: request.projectId,
       },
@@ -224,37 +195,32 @@ export class TtsService {
       throw new NotFoundException('Project not found');
     }
 
-    const speakerA=this.validateDialogueSpeaker('A', request.speakerA);
-    const speakerB=this.validateDialogueSpeaker('B', request.speakerB);
-    const speakers={
+    const speakerA = this.validateDialogueSpeaker('A', request.speakerA);
+    const speakerB = this.validateDialogueSpeaker('B', request.speakerB);
+    const speakers = {
       A: speakerA,
       B: speakerB,
     };
 
-    const characters=request.turns.reduce(
-      (total, turn) => total+this.countBillableCharacters(
-        turn.text,
-        request.language,
-      ),
+    const characters = request.turns.reduce(
+      (total, turn) =>
+        total + this.countBillableCharacters(turn.text, request.language),
       0,
     );
 
-    if (characters>this.maxDialogueCharacters) {
+    if (characters > this.maxDialogueCharacters) {
       throw new BadRequestException(
         `Dialogue must not exceed ${this.maxDialogueCharacters} characters`,
       );
     }
-    const quota=await this.checkCharacterQuota(
-      project.userId,
-      characters,
-    );
-    const pcmParts: Buffer[]=[];
-    const pause=this.createDialoguePause();
+    const quota = await this.checkCharacterQuota(project.userId, characters);
+    const pcmParts: Buffer[] = [];
+    const pause = this.createDialoguePause();
 
     for (const [index, turn] of request.turns.entries()) {
-      const speaker=speakers[turn.speaker];
+      const speaker = speakers[turn.speaker];
 
-      const pcm=await this.ttsProvider.synthesize({
+      const pcm = await this.ttsProvider.synthesize({
         projectId: request.projectId,
         text: turn.text,
         language: request.language,
@@ -263,31 +229,24 @@ export class TtsService {
         tone: 'neutral',
         emotion: 'natural',
         style: turn.style,
-        speed: request.speed??1,
+        speed: request.speed ?? 1,
       });
 
       pcmParts.push(pcm);
 
-      if (index<request.turns.length-1) {
+      if (index < request.turns.length - 1) {
         pcmParts.push(pause);
       }
     }
 
-    const pcm=Buffer.concat(pcmParts);
-    const audioBuffer=this.pcmToWav(pcm);
-    const duration=
-      pcm.length/
-      (this.sampleRate*
-        this.channels*
-        (this.bitsPerSample/8));
-    const fileName=`${randomUUID()}.wav`;
-    const uploadDir=join(
-      process.cwd(),
-      'uploads',
-      'dialogues',
-    );
-    const filePath=join(uploadDir, fileName);
-    const fileUrl=`/uploads/dialogues/${fileName}`;
+    const pcm = Buffer.concat(pcmParts);
+    const audioBuffer = this.pcmToWav(pcm);
+    const duration =
+      pcm.length / (this.sampleRate * this.channels * (this.bitsPerSample / 8));
+    const fileName = `${randomUUID()}.wav`;
+    const uploadDir = join(process.cwd(), 'uploads', 'dialogues');
+    const filePath = join(uploadDir, fileName);
+    const fileUrl = `/uploads/dialogues/${fileName}`;
 
     await fs.mkdir(uploadDir, {
       recursive: true,
@@ -295,7 +254,7 @@ export class TtsService {
     await fs.writeFile(filePath, audioBuffer);
 
     try {
-      const dialogue=await this.prisma.dialogue.create({
+      const dialogue = await this.prisma.dialogue.create({
         data: {
           projectId: request.projectId,
           language: request.language,
@@ -310,7 +269,7 @@ export class TtsService {
           },
           turns: {
             create: request.turns.map((turn, index) => ({
-              order: index+1,
+              order: index + 1,
               speaker: turn.speaker,
               text: turn.text,
               style: turn.style,
@@ -352,7 +311,7 @@ export class TtsService {
     }
   }
   async getDialogueHistory(projectId: string) {
-    const project=await this.prisma.project.findUnique({
+    const project = await this.prisma.project.findUnique({
       where: {
         id: projectId,
       },
@@ -385,7 +344,7 @@ export class TtsService {
   }
 
   async getProjectUsage(projectId: string) {
-    const project=await this.prisma.project.findUnique({
+    const project = await this.prisma.project.findUnique({
       where: { id: projectId },
     });
 
@@ -393,9 +352,9 @@ export class TtsService {
       throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y project.');
     }
 
-    const now=new Date();
+    const now = new Date();
 
-    const subscription=await this.prisma.subscription.findFirst({
+    const subscription = await this.prisma.subscription.findFirst({
       where: {
         userId: project.userId,
         status: 'ACTIVE',
@@ -418,7 +377,7 @@ export class TtsService {
       );
     }
 
-    const usage=await this.prisma.usage.aggregate({
+    const usage = await this.prisma.usage.aggregate({
       where: {
         userId: project.userId,
         subscriptionId: subscription.id,
@@ -428,12 +387,12 @@ export class TtsService {
       },
     });
 
-    const usedCharacters=usage._sum.characters??0;
+    const usedCharacters = usage._sum.characters ?? 0;
 
-    const characterLimit=subscription.characterLimit;
-    const rolloverCharacters=subscription.rolloverCharacters;
+    const characterLimit = subscription.characterLimit;
+    const rolloverCharacters = subscription.rolloverCharacters;
 
-    const totalQuota=characterLimit+rolloverCharacters;
+    const totalQuota = characterLimit + rolloverCharacters;
 
     return {
       plan: subscription.plan.code,
@@ -441,20 +400,63 @@ export class TtsService {
       rolloverCharacters,
       totalQuota,
       usedCharacters,
-      remainingCharacters: Math.max(
-        totalQuota-usedCharacters,
-        0,
-      ),
+      remainingCharacters: Math.max(totalQuota - usedCharacters, 0),
+    };
+  }
+  async getMyUsage(userId: string) {
+    const now = new Date();
+
+    const subscription = await this.prisma.subscription.findFirst({
+      where: {
+        userId,
+        status: 'ACTIVE',
+        startedAt: { lte: now },
+        expiresAt: { gt: now },
+      },
+      include: { plan: true },
+      orderBy: { expiresAt: 'desc' },
+    });
+
+    if (!subscription) {
+      throw new BadRequestException(
+        'Tài khoản chưa có gói sử dụng đang hoạt động.',
+      );
+    }
+
+    if (!subscription.plan.isActive) {
+      throw new BadRequestException('Gói sử dụng hiện không còn hoạt động.');
+    }
+
+    const usage = await this.prisma.usage.aggregate({
+      where: {
+        userId,
+        subscriptionId: subscription.id,
+      },
+      _sum: {
+        characters: true,
+      },
+    });
+
+    const usedCharacters = usage._sum.characters ?? 0;
+
+    const characterLimit = subscription.characterLimit;
+    const rolloverCharacters = subscription.rolloverCharacters;
+    const totalQuota = characterLimit + rolloverCharacters;
+
+    return {
+      plan: subscription.plan.code,
+      characterLimit,
+      rolloverCharacters,
+      totalQuota,
+      usedCharacters,
+      remainingCharacters: Math.max(totalQuota - usedCharacters, 0),
     };
   }
 
-  private async checkCharacterQuota(
-    userId: string,
-    characters: number,
-  ) {
-    const now=new Date();
+  private async checkCharacterQuota(userId: string, characters: number) {
+    const now = new Date();
 
-    const subscription=await this.prisma.subscription.findFirst({
+    const subscription = await this.prisma.subscription.findFirst({
       where: {
         userId,
         status: 'ACTIVE',
@@ -485,7 +487,7 @@ export class TtsService {
       );
     }
 
-    const usage=await this.prisma.usage.aggregate({
+    const usage = await this.prisma.usage.aggregate({
       where: {
         userId,
         subscriptionId: subscription.id,
@@ -495,21 +497,20 @@ export class TtsService {
       },
     });
 
-    const usedCharacters=usage._sum.characters??0;
+    const usedCharacters = usage._sum.characters ?? 0;
 
-    const characterLimit=subscription.characterLimit;
-    const rolloverCharacters=subscription.rolloverCharacters;
+    const characterLimit = subscription.characterLimit;
+    const rolloverCharacters = subscription.rolloverCharacters;
 
-    const totalQuota=characterLimit+rolloverCharacters;
+    const totalQuota = characterLimit + rolloverCharacters;
 
-    const remainingCharacters=totalQuota-usedCharacters;
+    const remainingCharacters = totalQuota - usedCharacters;
 
-    if (characters>remainingCharacters) {
+    if (characters > remainingCharacters) {
       throw new BadRequestException(
-        `Báº¡n chá»‰ cÃ²n ${Math.max(
-          remainingCharacters,
-          0,
-        ).toLocaleString('vi-VN')} kÃ½ tá»± trong chu ká»³ sá»­ dá»¥ng.`,
+        `Báº¡n chá»‰ cÃ²n ${Math.max(remainingCharacters, 0).toLocaleString(
+          'vi-VN',
+        )} kÃ½ tá»± trong chu ká»³ sá»­ dá»¥ng.`,
       );
     }
 
@@ -525,12 +526,12 @@ export class TtsService {
   }
 
   private validateDialogueSpeaker(
-    role: 'A'|'B',
+    role: 'A' | 'B',
     speaker: DialogueSpeakerDto,
   ) {
-    const profile=VOICE_PROFILES[speaker.character];
+    const profile = VOICE_PROFILES[speaker.character];
 
-    if (!profile||profile.gender!==speaker.gender) {
+    if (!profile || profile.gender !== speaker.gender) {
       throw new BadRequestException(
         `Speaker ${role} gender does not match its character`,
       );
@@ -546,34 +547,23 @@ export class TtsService {
   }
 
   private createDialoguePause(): Buffer {
-    const bytesPerMillisecond=
-      this.sampleRate*
-      this.channels*
-      (this.bitsPerSample/8)/
-      1000;
+    const bytesPerMillisecond =
+      (this.sampleRate * this.channels * (this.bitsPerSample / 8)) / 1000;
 
     return Buffer.alloc(
-      Math.round(
-        bytesPerMillisecond*
-        this.dialoguePauseMilliseconds,
-      ),
+      Math.round(bytesPerMillisecond * this.dialoguePauseMilliseconds),
     );
   }
 
   private pcmToWav(pcm: Buffer): Buffer {
-    const byteRate=
-      this.sampleRate*
-      this.channels*
-      this.bitsPerSample/8;
+    const byteRate = (this.sampleRate * this.channels * this.bitsPerSample) / 8;
 
-    const blockAlign=
-      this.channels*
-      this.bitsPerSample/8;
+    const blockAlign = (this.channels * this.bitsPerSample) / 8;
 
-    const header=Buffer.alloc(44);
+    const header = Buffer.alloc(44);
 
     header.write('RIFF', 0);
-    header.writeUInt32LE(36+pcm.length, 4);
+    header.writeUInt32LE(36 + pcm.length, 4);
     header.write('WAVE', 8);
 
     header.write('fmt ', 12);
@@ -588,9 +578,6 @@ export class TtsService {
     header.write('data', 36);
     header.writeUInt32LE(pcm.length, 40);
 
-    return Buffer.concat([
-      header,
-      pcm,
-    ]);
+    return Buffer.concat([header, pcm]);
   }
 }

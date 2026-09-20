@@ -1,11 +1,16 @@
-﻿import { useEffect, useState } from 'react';
-import { clearAuth, getAuthUser, type StoredUser } from '../services/authStorage';
+﻿import { useEffect, useState } from "react";
+import {
+  clearAuth,
+  getAuthUser,
+  type StoredUser,
+} from "../services/authStorage";
 
 interface AccountBarProps {
   onLogout: () => void;
+  onAccount: () => void;
 }
 
-function AccountBar({ onLogout }: AccountBarProps) {
+function AccountBar({ onLogout, onAccount }: AccountBarProps) {
   const [user, setUser] = useState<StoredUser | null>(null);
 
   useEffect(() => {
@@ -20,45 +25,60 @@ function AccountBar({ onLogout }: AccountBarProps) {
   return (
     <div
       style={{
-        position: 'fixed',
-        top: '16px',
-        right: '20px',
+        position: "fixed",
+        top: "16px",
+        right: "20px",
         zIndex: 1000,
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px',
-        padding: '8px 10px 8px 14px',
-        borderRadius: '999px',
-        background: 'rgba(255, 255, 255, 0.95)',
-        border: '1px solid #e7eaf0',
-        boxShadow: '0 4px 16px rgba(15, 23, 42, 0.08)',
+        display: "flex",
+        alignItems: "center",
+        gap: "10px",
+        padding: "8px 10px 8px 14px",
+        borderRadius: "999px",
+        background: "rgba(255, 255, 255, 0.95)",
+        border: "1px solid #e7eaf0",
+        boxShadow: "0 4px 16px rgba(15, 23, 42, 0.08)",
       }}
     >
       <span
         style={{
-          maxWidth: '220px',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          fontSize: '14px',
-          color: '#475569',
+          maxWidth: "220px",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          fontSize: "14px",
+          color: "#475569",
         }}
       >
-        {user?.name || user?.email || 'Tài khoản'}
+        {user?.name || user?.email || "Tài khoản"}
       </span>
-
+      <button
+        type="button"
+        onClick={onAccount}
+        style={{
+          border: "none",
+          borderRadius: "999px",
+          padding: "8px 14px",
+          background: "#eef2ff",
+          color: "#3730a3",
+          fontSize: "13px",
+          fontWeight: 600,
+          cursor: "pointer",
+        }}
+      >
+        Tài khoản
+      </button>
       <button
         type="button"
         onClick={handleLogout}
         style={{
-          border: 'none',
-          borderRadius: '999px',
-          padding: '8px 14px',
-          background: '#f1f5f9',
-          color: '#334155',
-          fontSize: '13px',
+          border: "none",
+          borderRadius: "999px",
+          padding: "8px 14px",
+          background: "#f1f5f9",
+          color: "#334155",
+          fontSize: "13px",
           fontWeight: 600,
-          cursor: 'pointer',
+          cursor: "pointer",
         }}
       >
         Đăng xuất
