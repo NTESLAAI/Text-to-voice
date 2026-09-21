@@ -40,7 +40,7 @@ function LoginPage({
       console.log("LOGIN SUCCESS CALLBACK");
     } catch (error) {
       console.error("LOGIN ERROR:", error);
-      setError("Đăng nhập thất bại. Vui lòng thử lại.");
+      setError("Email hoặc mật khẩu không đúng. Vui lòng kiểm tra lại.");
     } finally {
       setLoading(false);
     }

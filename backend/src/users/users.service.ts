@@ -1,6 +1,6 @@
-import * as bcrypt from "bcrypt";
-import { Injectable } from "@nestjs/common";
-import { PrismaService } from "../prisma/prisma.service";
+import * as bcrypt from 'bcrypt';
+import { BadRequestException, Injectable } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 
 const publicUserSelect = {
   id: true,
@@ -22,12 +22,12 @@ export class UsersService {
     return this.prisma.$transaction(async (tx) => {
       const freePlan = await tx.plan.findUnique({
         where: {
-          code: "FREE",
+          code: 'FREE',
         },
       });
 
       if (!freePlan || !freePlan.isActive) {
-        throw new Error("FREE plan is not available");
+        throw new Error('FREE plan is not available');
       }
 
       const now = new Date();
@@ -49,7 +49,7 @@ export class UsersService {
           planId: freePlan.id,
           startedAt: now,
           expiresAt,
-          status: "ACTIVE",
+          status: 'ACTIVE',
           characterLimit: freePlan.characterLimit,
           rolloverCharacters: 0,
           pricePaid: 0,
@@ -72,11 +72,55 @@ export class UsersService {
       },
     });
   }
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        password: true,
+      },
+    });
+
+    if (!user || !user.password) {
+      throw new Error('Không thể đổi mật khẩu cho tài khoản này');
+    }
+
+    const isCurrentPasswordValid = await bcrypt.compare(
+      currentPassword,
+      user.password,
+    );
+
+    if (!isCurrentPasswordValid) {
+      throw new BadRequestException('Mật khẩu hiện tại không chính xác');
+    }
+    const isSamePassword = await bcrypt.compare(newPassword, user.password);
+
+    if (isSamePassword) {
+      throw new BadRequestException('Mật khẩu mới phải khác mật khẩu hiện tại');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        password: hashedPassword,
+      },
+    });
+
+    return {
+      message: 'Đổi mật khẩu thành công',
+    };
+  }
 
   async findAll() {
     return this.prisma.user.findMany({
       orderBy: {
-        createdAt: "desc",
+        createdAt: 'desc',
       },
       select: publicUserSelect,
     });

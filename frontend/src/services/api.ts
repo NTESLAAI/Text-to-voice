@@ -424,7 +424,20 @@ export interface MySubscription {
   pricePaid?: number | null;
   currency: string;
 }
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<{ message: string }> {
+  const response = await api.post<{ message: string }>(
+    "/users/change-password",
+    {
+      currentPassword,
+      newPassword,
+    },
+  );
 
+  return response.data;
+}
 export async function getMySubscription(): Promise<MySubscription> {
   const response = await api.get<MySubscription>("/subscription/me");
 

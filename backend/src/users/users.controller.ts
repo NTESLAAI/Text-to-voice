@@ -2,10 +2,11 @@ import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth/jwt-auth.guard';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) { }
+  constructor(private readonly usersService: UsersService) {}
 
   @Post()
   create(
@@ -25,11 +26,20 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard)
-
   @UseGuards(JwtAuthGuard)
   @Get('me')
   findMe(@Req() req: any) {
     return this.usersService.findOne(req.user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('change-password')
+  changePassword(@Req() req: any, @Body() dto: ChangePasswordDto) {
+    return this.usersService.changePassword(
+      req.user.userId,
+      dto.currentPassword,
+      dto.newPassword,
+    );
   }
 
   @Get(':id')
