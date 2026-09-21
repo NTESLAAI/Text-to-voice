@@ -17,6 +17,8 @@ function LoginPage({
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const canLogin = email.trim().length > 0 && password.length > 0;
+  const [showPassword, setShowPassword] = useState(false);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -136,26 +138,54 @@ function LoginPage({
             Mật khẩu
           </label>
 
-          <input
-            id="login-password"
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="Nhập mật khẩu"
-            autoComplete="current-password"
-            disabled={loading}
+          <div
             style={{
-              width: "100%",
-              height: "48px",
-              boxSizing: "border-box",
-              padding: "0 15px",
+              position: "relative",
               marginBottom: "22px",
-              border: "1px solid #d1d5db",
-              borderRadius: "10px",
-              fontSize: "16px",
-              outline: "none",
             }}
-          />
+          >
+            <input
+              id="login-password"
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Nhập mật khẩu"
+              autoComplete="current-password"
+              disabled={loading}
+              style={{
+                width: "100%",
+                height: "48px",
+                boxSizing: "border-box",
+                padding: "0 44px 0 15px",
+                marginBottom: 0,
+                border: "1px solid #d1d5db",
+                borderRadius: "10px",
+                fontSize: "16px",
+                outline: "none",
+              }}
+            />
+
+            <button
+              type="button"
+              onClick={() => setShowPassword((value) => !value)}
+              disabled={loading}
+              style={{
+                position: "absolute",
+                right: "10px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                border: "none",
+                background: "transparent",
+                padding: 0,
+                color: "#2563eb",
+                fontSize: "14px",
+                fontWeight: 600,
+                cursor: loading ? "default" : "pointer",
+              }}
+            >
+              {showPassword ? "Ẩn" : "Hiện"}
+            </button>
+          </div>
 
           {error && (
             <div
@@ -175,7 +205,7 @@ function LoginPage({
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !canLogin}
             style={{
               width: "100%",
               height: "50px",
@@ -184,7 +214,9 @@ function LoginPage({
               borderRadius: "10px",
               fontSize: "16px",
               fontWeight: 600,
-              cursor: loading ? "default" : "pointer",
+              background: loading || !canLogin ? "#cbd5e1" : "#4f46e5",
+              color: "#ffffff",
+              cursor: loading || !canLogin ? "default" : "pointer",
             }}
           >
             {loading ? "Đang đăng nhập..." : "Đăng nhập"}
