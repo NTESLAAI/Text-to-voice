@@ -12,8 +12,9 @@ export class RegisterDto {
 
   @IsString()
   @MinLength(6)
-  @Matches(/^(?=.*[A-Z])(?=.*\d).+$/, {
-    message: 'Mật khẩu phải có ít nhất 6 ký tự, 1 chữ hoa và 1 chữ số.',
+  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/, {
+    message:
+      'Mật khẩu phải có ít nhất 6 ký tự, 1 chữ hoa, 1 chữ thường và 1 chữ số.',
   })
   password!: string;
 
