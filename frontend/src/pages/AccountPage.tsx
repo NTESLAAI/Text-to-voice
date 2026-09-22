@@ -83,7 +83,7 @@ function AccountPage({ onBack }: AccountPageProps) {
 
     if (!isNewPasswordValid) {
       setPasswordError(
-        "Mật khẩu phải có ít nhất 6 ký tự, 1 chữ hoa và 1 chữ số.",
+        "Mật khẩu phải có ít nhất 6 ký tự, 1 chữ hoa, 1 chữ thường và 1 chữ số.",
       );
       return;
     }
