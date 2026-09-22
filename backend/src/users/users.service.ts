@@ -72,6 +72,18 @@ export class UsersService {
       },
     });
   }
+  async checkEmailExists(email: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const user = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: { id: true },
+    });
+
+    return {
+      exists: !!user,
+    };
+  }
   async changePassword(
     userId: string,
     currentPassword: string,

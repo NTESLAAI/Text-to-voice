@@ -1,5 +1,5 @@
 ﻿import { useState } from "react";
-import api from "../services/api";
+import api, { checkEmailExists } from "../services/api";
 
 interface RegisterPageProps {
   onRegisterSuccess: () => void;
@@ -18,6 +18,8 @@ function RegisterPage({
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [emailExists, setEmailExists] = useState<boolean | null>(null);
+  const [checkingEmail, setCheckingEmail] = useState(false);
 
   const hasMinLength = password.length >= 6;
   const hasUppercase = /[A-Z]/.test(password);
@@ -28,12 +30,36 @@ function RegisterPage({
     hasMinLength && hasUppercase && hasLowercase && hasNumber;
 
   const isPasswordMatch = password.length > 0 && password === confirmPassword;
+  const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
   const canRegister =
     name.trim().length > 0 &&
-    email.trim().length > 0 &&
+    isEmailValid &&
+    emailExists === false &&
+    !checkingEmail &&
     isPasswordValid &&
     isPasswordMatch;
+
+  async function handleEmailBlur() {
+    const normalizedEmail = email.trim();
+
+    if (!isEmailValid) {
+      setEmailExists(null);
+      return;
+    }
+
+    setCheckingEmail(true);
+
+    try {
+      const result = await checkEmailExists(normalizedEmail);
+      setEmailExists(result.exists);
+    } catch (error) {
+      console.error("CHECK EMAIL ERROR:", error);
+      setEmailExists(null);
+    } finally {
+      setCheckingEmail(false);
+    }
+  }
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
 
@@ -173,7 +199,11 @@ function RegisterPage({
             id="register-email"
             type="email"
             value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            onChange={(event) => {
+              setEmail(event.target.value);
+              setEmailExists(null);
+            }}
+            onBlur={handleEmailBlur}
             placeholder="Nhập email"
             autoComplete="email"
             disabled={loading}
@@ -189,7 +219,46 @@ function RegisterPage({
               outline: "none",
             }}
           />
+          {checkingEmail && (
+            <div
+              style={{
+                marginTop: "-10px",
+                marginBottom: "18px",
+                fontSize: "13px",
+                color: "#64748b",
+              }}
+            >
+              Đang kiểm tra email...
+            </div>
+          )}
 
+          {!checkingEmail && emailExists === true && (
+            <div
+              style={{
+                marginTop: "-10px",
+                marginBottom: "18px",
+                fontSize: "13px",
+                fontWeight: 600,
+                color: "#dc2626",
+              }}
+            >
+              ✕ Email này đã được đăng ký. Vui lòng nhập email khác.
+            </div>
+          )}
+
+          {!checkingEmail && emailExists === false && (
+            <div
+              style={{
+                marginTop: "-10px",
+                marginBottom: "18px",
+                fontSize: "13px",
+                fontWeight: 600,
+                color: "#16a34a",
+              }}
+            >
+              ✓ Email có thể sử dụng.
+            </div>
+          )}
           <label
             htmlFor="register-password"
             style={{

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth/jwt-auth.guard';
@@ -41,7 +41,10 @@ export class UsersController {
       dto.newPassword,
     );
   }
-
+  @Get('check-email')
+  checkEmail(@Query('email') email: string) {
+    return this.usersService.checkEmailExists(email);
+  }
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);

@@ -394,6 +394,16 @@ export async function login(
 
   return response.data;
 }
+export async function checkEmailExists(
+  email: string,
+): Promise<{ exists: boolean }> {
+  const response = await api.get<{ exists: boolean }>("/users/check-email", {
+    params: { email: email.trim() },
+  });
+
+  return response.data;
+}
+
 export interface MyProfile {
   id: string;
   email: string;
