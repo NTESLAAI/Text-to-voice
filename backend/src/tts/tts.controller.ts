@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -74,5 +75,13 @@ export class TtsController {
   @Get('dialogue/project/:projectId')
   async getDialogueHistory(@Param('projectId') projectId: string) {
     return this.ttsService.getDialogueHistory(projectId);
+  }
+  @Delete('dialogue/:id')
+  async deleteDialogue(@Param('id') id: string) {
+    await this.ttsService.deleteDialogue(id);
+
+    return {
+      success: true,
+    };
   }
 }

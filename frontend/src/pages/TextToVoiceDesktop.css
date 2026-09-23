@@ -1,0 +1,1188 @@
+/* =========================================================
+   N.TESLA.AI — DESKTOP / WEB UI
+   Chỉ áp dụng từ 768px trở lên.
+   Mobile giữ nguyên TextToVoice.css.
+   ========================================================= */
+
+@media (min-width: 768px) {
+  /* -------------------------------------------------------
+     WEB SHELL
+     ------------------------------------------------------- */
+
+  body {
+    background: #ffffff;
+    color: #1f2937;
+  }
+
+  .ttv-web-shell {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 250px minmax(0, 1fr);
+    background: #ffffff;
+  }
+
+  .ttv-web-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 250px;
+    box-sizing: border-box;
+
+    display: flex;
+    flex-direction: column;
+
+    padding: 18px 14px;
+
+    background: #f7f7f8;
+    border-right: 1px solid #e5e7eb;
+  }
+
+  .ttv-web-sidebar-brand {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 10px 18px;
+
+    color: #111827;
+  }
+
+  .ttv-web-sidebar-brand strong {
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  .ttv-web-sidebar-brand span {
+    font-size: 12px;
+    color: #6b7280;
+  }
+
+  .ttv-web-sidebar-account {
+    margin-top: auto;
+  }
+
+  .ttv-web-main {
+    grid-column: 2;
+    min-width: 0;
+    min-height: 100vh;
+
+    background: #ffffff;
+  }
+  .ttv-web-main .ttv-web-history-player-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+  }
+
+  .ttv-web-main .ttv-web-history-player-row audio {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .ttv-web-main .ttv-web-history-delete-button {
+    flex: 0 0 auto;
+    width: 44px;
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    color: #6b7280;
+    font-size: 18px;
+    cursor: pointer;
+  }
+
+  .ttv-web-main .ttv-web-history-delete-button:hover {
+    background: #f3f4f6;
+    color: #374151;
+  }
+
+  /* -------------------------------------------------------
+     MAIN PAGE
+     ------------------------------------------------------- */
+
+  .ttv-web-main .ttv-page {
+    width: 100%;
+    max-width: 1040px;
+
+    min-height: 100vh;
+
+    margin: 0 auto;
+    padding: 34px 42px 70px;
+
+    box-sizing: border-box;
+
+    background: #ffffff !important;
+    color: #1f2937;
+  }
+
+  .ttv-web-main .ttv-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    margin-bottom: 28px;
+
+    text-align: center;
+  }
+
+  .ttv-web-main .ttv-header-brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .ttv-web-main .ttv-header-logo {
+    width: 54px;
+    height: 54px;
+
+    object-fit: contain;
+
+    opacity: 1;
+    filter: none;
+  }
+
+  .ttv-web-main .ttv-header-text {
+    text-align: left;
+  }
+
+  .ttv-web-main .ttv-header h1 {
+    margin: 0;
+
+    color: #111827;
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.2;
+
+    text-shadow: none;
+  }
+
+  .ttv-web-main .ttv-header p {
+    margin: 4px 0 0;
+
+    color: #6b7280;
+    font-size: 14px;
+    font-weight: 400;
+
+    text-shadow: none;
+    opacity: 1;
+  }
+
+  /* -------------------------------------------------------
+     INPUT AREA
+     ------------------------------------------------------- */
+
+  .ttv-web-main .ttv-input-area {
+    width: 100%;
+    margin: 0;
+  }
+
+  .ttv-web-main .ttv-textarea-frame {
+    position: relative;
+
+    width: 100%;
+    min-height: 260px;
+
+    overflow: hidden;
+
+    background: #ffffff !important;
+    border: 1px solid #d9d9e3;
+    border-radius: 16px;
+
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.04),
+      0 8px 24px rgba(0, 0, 0, 0.04);
+  }
+
+  .ttv-web-main .ttv-textarea-scroll-area {
+    width: 100%;
+    padding: 0;
+  }
+
+  .ttv-web-main .ttv-textarea-frame .ttv-textarea {
+    display: block;
+
+    width: 100%;
+    min-height: 260px;
+    height: 260px;
+
+    padding: 20px 20px 46px;
+
+    box-sizing: border-box;
+
+    background: #ffffff !important;
+    background-image: none !important;
+
+    border: 0 !important;
+    border-radius: 16px !important;
+
+    color: #111827 !important;
+    -webkit-text-fill-color: #111827 !important;
+
+    font-size: 16px;
+    line-height: 1.65;
+
+    resize: vertical;
+    outline: none;
+
+    box-shadow: none !important;
+  }
+
+  .ttv-web-main .ttv-textarea::placeholder {
+    color: #9ca3af !important;
+    -webkit-text-fill-color: #9ca3af !important;
+    opacity: 1;
+  }
+
+  .ttv-web-main .ttv-textarea:focus {
+    border: 0 !important;
+
+    background: #ffffff !important;
+
+    box-shadow: none !important;
+    outline: none;
+  }
+
+  .ttv-web-main .ttv-textarea-theme {
+    display: none !important;
+  }
+
+  .ttv-web-main .ttv-character-count {
+    position: absolute;
+
+    right: 18px;
+    bottom: 12px;
+
+    margin: 0;
+
+    color: #9ca3af;
+
+    font-size: 12px;
+    font-weight: 400;
+
+    opacity: 1;
+  }
+
+  .ttv-web-main .ttv-usage-info {
+    margin: 8px 4px 20px;
+
+    color: #6b7280;
+
+    font-size: 12px;
+    line-height: 1.4;
+
+    text-align: right;
+
+    opacity: 1;
+  }
+
+  /* -------------------------------------------------------
+     CONTROL GRID
+     ------------------------------------------------------- */
+
+  .ttv-web-main .ttv-control-grid {
+    display: grid;
+
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+
+    gap: 12px;
+
+    width: 100%;
+  }
+
+  .ttv-web-main .ttv-control-grid .ttv-filter-grid,
+  .ttv-web-main .ttv-control-grid .ttv-controls,
+  .ttv-web-main .ttv-control-grid .ttv-bottom-grid {
+    display: contents;
+  }
+
+  /* -------------------------------------------------------
+     COMMON CARDS
+     ------------------------------------------------------- */
+
+  .ttv-web-main .ttv-filter-button,
+  .ttv-web-main .ttv-control,
+  .ttv-web-main .ttv-bottom-card,
+  .ttv-web-main .ttv-gender-filter {
+    box-sizing: border-box;
+
+    background: #ffffff !important;
+
+    border: 1px solid #e5e7eb !important;
+    border-radius: 12px;
+
+    color: #1f2937;
+
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.03),
+      0 4px 12px rgba(0, 0, 0, 0.03);
+
+    transition:
+      border-color 0.18s ease,
+      box-shadow 0.18s ease,
+      background 0.18s ease;
+  }
+
+  .ttv-web-main .ttv-filter-button:hover,
+  .ttv-web-main .ttv-control:hover,
+  .ttv-web-main .ttv-bottom-card:hover,
+  .ttv-web-main .ttv-gender-filter:hover {
+    background: #ffffff !important;
+
+    border-color: #d1d5db !important;
+
+    box-shadow:
+      0 2px 6px rgba(0, 0, 0, 0.04),
+      0 8px 20px rgba(0, 0, 0, 0.04);
+  }
+
+  /* -------------------------------------------------------
+     FILTER CARDS
+     ------------------------------------------------------- */
+
+  .ttv-web-main .ttv-filter {
+    position: relative;
+    min-width: 0;
+  }
+
+  .ttv-web-main .ttv-filter-button {
+    width: 100%;
+    min-height: 112px;
+
+    padding: 16px;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    text-align: center;
+
+    cursor: pointer;
+  }
+
+  .ttv-web-main .ttv-filter-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    gap: 7px;
+
+    margin-bottom: 8px;
+
+    color: #374151 !important;
+
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .ttv-web-main .ttv-filter-value {
+    color: #111827 !important;
+
+    font-size: 16px;
+    font-weight: 650;
+    line-height: 1.3;
+  }
+
+  .ttv-web-main .ttv-label-icon {
+    margin-right: 0;
+    opacity: 1;
+    filter: none;
+  }
+
+  .ttv-web-main .ttv-age-icon,
+  .ttv-web-main .ttv-earth-icon,
+  .ttv-web-main .ttv-style-icon {
+    opacity: 1 !important;
+    filter: none !important;
+  }
+
+  .ttv-web-main .ttv-age-icon img {
+    opacity: 1 !important;
+    filter: hue-rotate(55deg) saturate(3) brightness(0.9) !important;
+    image-rendering: auto;
+  }
+
+  .ttv-web-main .ttv-earth-icon img,
+  .ttv-web-main .ttv-style-icon img {
+    opacity: 1 !important;
+    filter: none !important;
+    image-rendering: auto;
+  }
+
+  /* -------------------------------------------------------
+     FILTER MENU
+     ------------------------------------------------------- */
+
+  .ttv-web-main .ttv-filter-menu {
+    z-index: 1000;
+
+    background: #ffffff !important;
+
+    border: 1px solid #e5e7eb !important;
+    border-radius: 10px;
+
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  }
+
+  .ttv-web-main .ttv-filter-option {
+    padding: 11px 13px;
+
+    background: transparent !important;
+
+    color: #374151 !important;
+
+    font-size: 14px;
+  }
+
+  .ttv-web-main .ttv-filter-option:hover {
+    background: #f3f4f6 !important;
+    color: #111827 !important;
+  }
+
+  /* -------------------------------------------------------
+     GENDER
+     ------------------------------------------------------- */
+
+  .ttv-web-main .ttv-gender-filter {
+    min-height: 112px;
+
+    padding: 14px;
+  }
+
+  .ttv-web-main .ttv-gender-filter > .ttv-filter-label {
+    margin-bottom: 6px;
+  }
+
+  .ttv-web-main .ttv-gender-icons {
+    gap: 26px;
+    margin-top: 2px;
+  }
+
+  .ttv-web-main .ttv-gender-button {
+    width: 70px;
+    height: 68px;
+
+    opacity: 1 !important;
+
+    background: transparent !important;
+    filter: none !important;
+
+    border-radius: 10px;
+  }
+
+  .ttv-web-main .ttv-gender-image {
+    height: 56px;
+    max-width: 50px;
+
+    opacity: 0.68 !important;
+    filter: brightness(0) !important;
+  }
+
+  .ttv-web-main .ttv-gender-button.active {
+    background: #f3f4f6 !important;
+    transform: none;
+    filter: none !important;
+  }
+
+  .ttv-web-main .ttv-gender-button.active .ttv-gender-image {
+    filter: brightness(0) saturate(100%) invert(45%) sepia(82%) saturate(2100%)
+      hue-rotate(300deg) brightness(100%) contrast(100%) !important;
+    opacity: 1 !important;
+  }
+
+  /* -------------------------------------------------------
+     VOLUME / SPEED
+     ------------------------------------------------------- */
+
+  .ttv-web-main .ttv-control {
+    min-height: 112px;
+
+    padding: 16px;
+  }
+
+  .ttv-web-main .ttv-control-header {
+    margin-bottom: 16px;
+  }
+
+  .ttv-web-main .ttv-control-label {
+    color: #374151 !important;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .ttv-web-main .ttv-control-value {
+    color: #111827 !important;
+    font-size: 14px;
+    font-weight: 650;
+  }
+
+  .ttv-web-main .ttv-range-text {
+    color: #374151 !important;
+    font-weight: 500;
+  }
+
+  .ttv-web-main .ttv-range {
+    accent-color: #6b7280;
+  }
+
+  .ttv-web-main .ttv-range::-webkit-slider-runnable-track {
+    background: #e5e7eb;
+  }
+
+  .ttv-web-main .ttv-range::-webkit-slider-thumb {
+    background: #374151;
+
+    border-color: #ffffff;
+
+    box-shadow: none;
+  }
+
+  .ttv-web-main .ttv-range::-moz-range-track {
+    background: #e5e7eb;
+  }
+
+  .ttv-web-main .ttv-range::-moz-range-thumb {
+    background: #374151;
+
+    border-color: #ffffff;
+
+    box-shadow: none;
+  }
+
+  /* -------------------------------------------------------
+     BOTTOM CARDS
+     ------------------------------------------------------- */
+
+  .ttv-web-main .ttv-bottom-card {
+    min-height: 112px;
+
+    padding: 16px;
+  }
+
+  .ttv-web-main .ttv-bottom-card-title {
+    color: #374151 !important;
+
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .ttv-web-main .ttv-edit-button {
+    min-height: 40px;
+
+    padding: 8px 14px;
+
+    background: #f3f4f6 !important;
+
+    border: 1px solid #e5e7eb !important;
+    border-radius: 8px;
+
+    color: #374151 !important;
+
+    font-size: 13px;
+    font-weight: 600;
+
+    box-shadow: none !important;
+  }
+
+  .ttv-web-main .ttv-edit-button:hover {
+    background: #e5e7eb !important;
+    transform: none;
+  }
+
+  /* -------------------------------------------------------
+     LANGUAGE
+     ------------------------------------------------------- */
+
+  .ttv-web-main .ttv-language-card {
+    border-color: #e5e7eb !important;
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.03),
+      0 4px 12px rgba(0, 0, 0, 0.03);
+  }
+
+  .ttv-web-main .ttv-language-selector {
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .ttv-web-main .ttv-language-option {
+    min-height: 36px;
+
+    padding: 5px 10px;
+
+    background: transparent !important;
+
+    border: 1px solid transparent;
+
+    color: #6b7280 !important;
+
+    border-radius: 8px;
+  }
+
+  .ttv-web-main .ttv-language-option.active {
+    background: #f3f4f6 !important;
+    border-color: #e5e7eb;
+
+    color: #111827 !important;
+  }
+
+  .ttv-web-main .ttv-language-option:hover {
+    background: #f9fafb !important;
+  }
+
+  .ttv-web-main .ttv-language-flag img {
+    opacity: 1 !important;
+    filter: none !important;
+  }
+
+  /* -------------------------------------------------------
+     CREATE VOICE CARD
+     ------------------------------------------------------- */
+
+  .ttv-web-main .ttv-control-grid .ttv-play-card {
+    display: flex;
+
+    align-items: center;
+    justify-content: space-between;
+
+    gap: 16px;
+
+    min-height: 112px;
+
+    padding: 16px;
+
+    box-sizing: border-box;
+
+    background: #ffffff !important;
+
+    border-color: #e5e7eb !important;
+  }
+
+  .ttv-web-main .ttv-play-card .ttv-bottom-card-title {
+    justify-content: flex-start;
+    text-align: left;
+
+    font-size: 15px;
+    color: #111827 !important;
+  }
+
+  .ttv-web-main .ttv-play-button {
+    min-height: 64px;
+
+    background: #f9fafb !important;
+
+    border: 1px solid #e5e7eb !important;
+    border-radius: 12px;
+
+    gap: 10px;
+
+    box-shadow: none !important;
+    opacity: 1 !important;
+  }
+  .ttv-web-main .ttv-play-button:disabled {
+    opacity: 1 !important;
+  }
+
+  .ttv-web-main .ttv-play-circle {
+    width: 52px;
+    height: 52px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    background-color: transparent !important;
+    background-image: url("../assets/Play.png") !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    background-size: contain !important;
+
+    border: 0 !important;
+    border-radius: 0 !important;
+
+    color: transparent !important;
+    font-size: 0 !important;
+    line-height: 0;
+
+    box-shadow: none !important;
+    opacity: 1 !important;
+    transform: none;
+  }
+
+  .ttv-web-main .ttv-play-waves {
+    color: #3f75d3 !important;
+  }
+
+  .ttv-web-main .ttv-play-button:hover:not(:disabled) {
+    background: #f3f4f6 !important;
+  }
+
+  /* -------------------------------------------------------
+     AUDIO RESULT
+     ------------------------------------------------------- */
+
+  .ttv-web-main .ttv-audio-section {
+    margin-top: 18px;
+
+    padding: 12px;
+
+    background: #f9fafb;
+
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+  }
+
+  .ttv-web-main .ttv-audio {
+    width: 100%;
+  }
+
+  /* -------------------------------------------------------
+     ERROR
+     ------------------------------------------------------- */
+
+  .ttv-web-main [role="alert"] {
+    color: #b91c1c;
+  }
+
+  /* -------------------------------------------------------
+     DIALOGUE
+     ------------------------------------------------------- */
+
+  .ttv-web-main .dialogue-composer {
+    margin-top: 18px;
+
+    background: #ffffff !important;
+
+    border: 1px solid #e5e7eb !important;
+    border-radius: 12px !important;
+
+    box-shadow: none !important;
+  }
+
+  .ttv-web-main .dialogue-composer-toggle {
+    background: #ffffff !important;
+    color: #374151 !important;
+
+    border: 1px solid #e5e7eb !important;
+    border-radius: 12px !important;
+  }
+
+  .ttv-web-main .dialogue-composer-toggle > span:last-child {
+    color: #6b7280 !important;
+  }
+
+  .ttv-web-main .dialogue-composer-description {
+    color: #6b7280 !important;
+  }
+
+  .ttv-web-main .dialogue-speaker-card,
+  .ttv-web-main .dialogue-turn {
+    background: #fafafa !important;
+
+    border: 1px solid #e5e7eb !important;
+  }
+
+  .ttv-web-main .dialogue-speaker-card legend,
+  .ttv-web-main .dialogue-turns-header h2 {
+    color: #111827 !important;
+  }
+
+  .ttv-web-main .dialogue-field > span {
+    color: #6b7280 !important;
+  }
+
+  .ttv-web-main .dialogue-field select,
+  .ttv-web-main .dialogue-field textarea {
+    background: #ffffff !important;
+
+    border: 1px solid #d1d5db !important;
+
+    color: #111827 !important;
+  }
+
+  .ttv-web-main .dialogue-add-turn {
+    background: #f3f4f6 !important;
+
+    color: #374151 !important;
+
+    border-color: #e5e7eb !important;
+  }
+
+  .ttv-web-main .dialogue-generate-button {
+    background: #f3f4f6 !important;
+    border-color: #d1d5db !important;
+    color: #374151 !important;
+  }
+
+  /* -------------------------------------------------------
+     AUDIO HISTORY
+     ------------------------------------------------------- */
+
+  .ttv-web-main .audio-history {
+    margin-top: 22px;
+
+    padding: 16px;
+
+    background: #ffffff !important;
+
+    border: 1px solid #e5e7eb !important;
+    border-radius: 12px;
+
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.03),
+      0 4px 12px rgba(0, 0, 0, 0.03);
+  }
+
+  .ttv-web-main .audio-history h2 {
+    color: #111827 !important;
+  }
+
+  .ttv-web-main .audio-history-item {
+    background: #fafafa !important;
+
+    border: 1px solid #e5e7eb !important;
+  }
+
+  .ttv-web-main .audio-history-text {
+    color: #374151 !important;
+  }
+
+  .ttv-web-main .audio-history-meta {
+    color: #9ca3af !important;
+  }
+
+  .ttv-web-main .audio-delete-button {
+    background: #ffffff !important;
+
+    border-color: #e5e7eb !important;
+
+    color: #6b7280 !important;
+  }
+
+  .ttv-web-main .audio-delete-button:hover {
+    background: #f3f4f6 !important;
+  }
+
+  /* -------------------------------------------------------
+   ACCOUNT AREA
+   ------------------------------------------------------- */
+
+  .ttv-web-sidebar {
+    z-index: 100;
+  }
+
+  .ttv-web-sidebar-account {
+    position: relative;
+    z-index: 101;
+    pointer-events: auto;
+  }
+
+  .ttv-web-sidebar-account > div {
+    position: relative !important;
+    width: 100%;
+    box-sizing: border-box;
+    pointer-events: auto;
+  }
+
+  .ttv-web-sidebar-account > div > button {
+    width: 100%;
+    pointer-events: auto;
+    cursor: pointer;
+  }
+
+  /* Account menu */
+  .ttv-web-sidebar-account > div > div {
+    pointer-events: auto;
+  }
+
+  /* -------------------------------------------------------
+     MOBILE SAFETY
+     ------------------------------------------------------- */
+
+  /* -------------------------------------------------------
+     SIDEBAR NAVIGATION
+     ------------------------------------------------------- */
+
+  .ttv-web-sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+  }
+
+  .ttv-web-sidebar-section-title {
+    padding: 8px 10px 6px;
+    color: #9ca3af;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+
+  .ttv-web-sidebar-nav-item {
+    width: 100%;
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    box-sizing: border-box;
+    background: transparent;
+    border: 0;
+    border-radius: 8px;
+    color: #374151;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .ttv-web-sidebar-nav-item:hover {
+    background: #ececef;
+    color: #111827;
+  }
+
+  .ttv-web-sidebar-nav-item > span:first-child {
+    width: 20px;
+    flex: 0 0 20px;
+    text-align: center;
+    font-size: 16px;
+  }
+
+  /* -------------------------------------------------------
+     TẠO HỘI THOẠI — CLEAN LAYOUT
+     ------------------------------------------------------- */
+
+  .ttv-web-main .dialogue-composer {
+    margin-top: 18px !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 12px !important;
+    box-shadow: none !important;
+    overflow: hidden;
+  }
+
+  .ttv-web-main .dialogue-composer-toggle {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 64px;
+    box-sizing: border-box;
+    padding: 14px 18px !important;
+    background: #ffffff !important;
+    background-image: none !important;
+    color: #374151 !important;
+    border: 0 !important;
+    border-radius: 12px !important;
+    font-size: 18px;
+    font-weight: 700;
+    text-align: left;
+    box-shadow: none !important;
+    opacity: 1 !important;
+    appearance: none !important;
+    -webkit-appearance: none !important;
+  }
+
+  .ttv-web-main .dialogue-composer-toggle:hover {
+    background: #f9fafb !important;
+  }
+
+  .ttv-web-main .dialogue-composer-toggle > span:last-child {
+    color: #6b7280 !important;
+  }
+
+  /* -------------------------------------------------------
+     LỊCH SỬ — CLEAN LAYOUT
+     ------------------------------------------------------- */
+
+  .ttv-web-main .audio-history {
+    margin-top: 22px !important;
+    padding: 14px !important;
+    background: #ffffff !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 12px !important;
+    box-shadow: none !important;
+    box-sizing: border-box;
+  }
+
+  .ttv-web-main .audio-history-tabs {
+    display: flex;
+    width: 100%;
+    height: 48px;
+    margin: 0 0 12px !important;
+    padding: 0;
+    box-sizing: border-box;
+    gap: 0;
+  }
+
+  .ttv-web-main .audio-history-tabs button {
+    flex: 1 1 50%;
+    width: 50%;
+    height: 48px;
+    min-height: 48px;
+    box-sizing: border-box;
+    padding: 0 14px !important;
+    background: #ffffff !important;
+    color: #374151 !important;
+    border: 1px solid #e5e7eb !important;
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1;
+    box-shadow: none !important;
+  }
+
+  .ttv-web-main .audio-history-tabs button:first-child {
+    border-radius: 8px 0 0 8px !important;
+  }
+
+  .ttv-web-main .audio-history-tabs button:last-child {
+    border-radius: 0 8px 8px 0 !important;
+  }
+
+  .ttv-web-main .audio-history-tabs button.active {
+    background: #f3f4f6 !important;
+    color: #111827 !important;
+    border-color: #9ca3af !important;
+    font-weight: 700;
+  }
+
+  .ttv-web-main .audio-history-tabs button:hover {
+    background: #f9fafb !important;
+  }
+
+  .ttv-web-main .audio-history-item {
+    margin: 0 !important;
+    padding: 16px !important;
+    background: #fafafa !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 12px !important;
+    box-shadow: none !important;
+  }
+
+  .ttv-web-main .audio-history-text {
+    color: #374151 !important;
+  }
+
+  .ttv-web-main .audio-history-meta {
+    color: #9ca3af !important;
+  }
+}
+/* =========================================================
+   WEB SIDEBAR — HISTORY LIST
+   ========================================================= */
+
+@media (min-width: 768px) {
+  .ttv-web-sidebar-history {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .ttv-web-sidebar-history .ttv-web-sidebar-nav-item {
+    position: relative;
+  }
+
+  .ttv-web-sidebar-nav-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ttv-web-sidebar-nav-arrow {
+    flex: 0 0 auto;
+    color: #9ca3af;
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  .ttv-web-sidebar-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    max-height: 280px;
+    overflow-y: auto;
+
+    margin: 0 0 4px;
+    padding: 2px 0 4px 30px;
+  }
+
+  .ttv-web-sidebar-history-list::-webkit-scrollbar {
+    width: 5px;
+  }
+
+  .ttv-web-sidebar-history-list::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .ttv-web-sidebar-history-list::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 4px;
+  }
+
+  .ttv-web-sidebar-history-item {
+    width: 100%;
+    min-height: 38px;
+
+    display: block;
+
+    padding: 8px 10px;
+
+    box-sizing: border-box;
+
+    background: transparent;
+    border: 0;
+    border-radius: 7px;
+
+    color: #4b5563;
+
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 1.35;
+
+    text-align: left;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    cursor: pointer;
+  }
+
+  .ttv-web-sidebar-history-item:hover {
+    background: #ececef;
+    color: #111827;
+  }
+
+  .ttv-web-sidebar-history-item.active {
+    background: #e5e7eb;
+    color: #111827;
+    font-weight: 600;
+  }
+
+  .ttv-web-sidebar-history-empty {
+    padding: 8px 10px;
+
+    color: #9ca3af;
+
+    font-size: 12px;
+    line-height: 1.4;
+  }
+}
+/* =========================================================
+   DESKTOP - ẨN LỊCH SỬ TRONG MÀN HÌNH LÀM VIỆC
+   Lịch sử được hiển thị ở Sidebar
+   ========================================================= */
+
+@media (min-width: 768px) {
+  .ttv-web-main .audio-history {
+    display: none !important;
+  }
+}

@@ -62,6 +62,23 @@ function ForgotPasswordPage({ onSwitchToLogin }: ForgotPasswordPageProps) {
           boxShadow: "0 12px 45px rgba(0, 0, 0, 0.12)",
         }}
       >
+        <button
+          type="button"
+          onClick={onSwitchToLogin}
+          style={{
+            border: "none",
+            background: "transparent",
+            padding: 0,
+            marginBottom: "18px",
+            color: "#4f46e5",
+            fontSize: "14px",
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          ← Quay lại đăng nhập
+        </button>
+
         <h1
           style={{
             margin: "0 0 10px",

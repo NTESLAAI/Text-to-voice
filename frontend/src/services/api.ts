@@ -319,6 +319,10 @@ export async function deleteAudio(id: string): Promise<void> {
   await api.delete(`/audio/${id}`);
 }
 
+export async function deleteDialogue(id: string): Promise<void> {
+  await api.delete(`/tts/dialogue/${id}`);
+}
+
 export function getAudioUrl(fileUrl: string): string {
   if (
     fileUrl.startsWith("http://") ||

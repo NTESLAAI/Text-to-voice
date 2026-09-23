@@ -1,113 +1,109 @@
-﻿import { useEffect, useRef, useState } from 'react';
-import { Capacitor } from '@capacitor/core';
-import { useTranslation } from 'react-i18next';
+﻿import { useEffect, useRef, useState } from "react";
+import { Capacitor } from "@capacitor/core";
+import { useTranslation } from "react-i18next";
 
-import AudioHistory from '../components/AudioHistory';
-import DialogueComposer from '../components/DialogueComposer';
+import AudioHistory from "../components/AudioHistory";
+import DialogueComposer from "../components/DialogueComposer";
 import {
   synthesizeSpeech,
   getVoicePresets,
   reviewText,
   getProjectUsage,
   getMyProject,
-} from '../services/api';
-import './TextToVoice.css';
-import themeFrame from '../assets/Theme.png';
-import iconNam from '../assets/Icon Nam.png';
-import iconNu from '../assets/Icon Nu.png';
-import flagVi from '../assets/Flag-Vi.png';
-import flagEn from '../assets/Flag-En.png';
-import ageIcon from '../assets/Age.png';
-import earthIcon from '../assets/Earth.png';
-import styleIcon from '../assets/Style.png';
-import logo from '../assets/Logo.png';
-import { countBillableCharacters } from '../utils/characterCount';
+} from "../services/api";
+import "./TextToVoice.css";
+import "./TextToVoiceDesktop.css";
+import themeFrame from "../assets/Theme.png";
+import iconNam from "../assets/Icon Nam.png";
+import iconNu from "../assets/Icon Nu.png";
+import flagVi from "../assets/Flag-Vi.png";
+import flagEn from "../assets/Flag-En.png";
+import ageIcon from "../assets/Age.png";
+import earthIcon from "../assets/Earth.png";
+import styleIcon from "../assets/Style.png";
+import logo from "../assets/Logo.png";
+import { countBillableCharacters } from "../utils/characterCount";
+import soundIcon from "../assets/Sound.png";
+import playIcon from "../assets/Play.png";
 
+interface TextToVoicePageProps {
+  onProjectIdReady?: (projectId: string) => void;
+}
 
-export default function TextToVoicePage() {
-  const [projectId, setProjectId]=useState('');
+export default function TextToVoicePage({
+  onProjectIdReady,
+}: TextToVoicePageProps) {
+  const [projectId, setProjectId] = useState("");
 
-  const { t }=useTranslation();
-  const [language, setLanguage]=
-    useState<'vi'|'en'>('vi');
+  const { t } = useTranslation();
+  const [language, setLanguage] = useState<"vi" | "en">("vi");
 
-  const [text, setText]=useState('');
-  const [billedTextCharacters, setBilledTextCharacters]=useState(0);
+  const [text, setText] = useState("");
+  const [billedTextCharacters, setBilledTextCharacters] = useState(0);
 
-  const textAreaRef=useRef<HTMLTextAreaElement|null>(null);
+  const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const audioRef=useRef<HTMLAudioElement|null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const [volume, setVolume]=useState(1);
+  const [volume, setVolume] = useState(1);
 
-  const [selectedSpeed, setSelectedSpeed]=
-    useState(1);
+  const [selectedSpeed, setSelectedSpeed] = useState(1);
 
-  const [audioUrl, setAudioUrl]=
-    useState<string|null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
 
-  const [isGenerating, setIsGenerating]=
-    useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
-  const [error, setError]=
-    useState<string|null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const [showTextReview, setShowTextReview]=
-    useState(false);
+  const [showTextReview, setShowTextReview] = useState(false);
 
-  const [isTextReviewing, setIsTextReviewing]=
-    useState(false);
+  const [isTextReviewing, setIsTextReviewing] = useState(false);
 
-  const [textReviewErrors, setTextReviewErrors]=
-    useState<string[]>([]);
+  const [textReviewErrors, setTextReviewErrors] = useState<string[]>([]);
 
-  const [textReviewSuggestion, setTextReviewSuggestion]=
-    useState('');
+  const [textReviewSuggestion, setTextReviewSuggestion] = useState("");
 
-  const [correctedText, setCorrectedText]=
-    useState('');
+  const [correctedText, setCorrectedText] = useState("");
 
-  const [refreshKey, setRefreshKey]=useState(0);
-  const [usage, setUsage]=useState<{
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [usage, setUsage] = useState<{
     plan: string;
     characterLimit: number;
     usedCharacters: number;
     remainingCharacters: number;
-  }|null>(null);
-  const [presets, setPresets]=useState<
+  } | null>(null);
+  const [presets, setPresets] = useState<
     Awaited<ReturnType<typeof getVoicePresets>>
   >([]);
 
-  const [isLoadingPresets, setIsLoadingPresets]=
-    useState(true);
+  const [isLoadingPresets, setIsLoadingPresets] = useState(true);
 
-  const [selectedPreset, setSelectedPreset]=useState(
-    'central_female_storytelling',
+  const [selectedPreset, setSelectedPreset] = useState(
+    "central_female_storytelling",
   );
 
-  const [selectedRegion, setSelectedRegion]=
-    useState('north_vietnam');
+  const [selectedRegion, setSelectedRegion] = useState("north_vietnam");
 
-  const [selectedAudience, setSelectedAudience]=
-    useState<'adult'|'child'>('adult');
+  const [selectedAudience, setSelectedAudience] = useState<"adult" | "child">(
+    "adult",
+  );
 
-  const [selectedGender, setSelectedGender]=
-    useState<'male'|'female'>('female');
+  const [selectedGender, setSelectedGender] = useState<"male" | "female">(
+    "female",
+  );
 
-  const [selectedStyle, setSelectedStyle]=
-    useState('storytelling');
+  const [selectedStyle, setSelectedStyle] = useState("storytelling");
 
-  const [lastGeneratedFingerprint, setLastGeneratedFingerprint]=
-    useState<string|null>(null);
+  const [lastGeneratedFingerprint, setLastGeneratedFingerprint] = useState<
+    string | null
+  >(null);
 
-  const [showRegenerateConfirm, setShowRegenerateConfirm]=
-    useState(false);
+  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
 
-  const [showEnglishNotice, setShowEnglishNotice]=
-    useState(false);
+  const [showEnglishNotice, setShowEnglishNotice] = useState(false);
 
-  const [openFilter, setOpenFilter]=useState<
-    'region'|'audience'|'gender'|'style'|null
+  const [openFilter, setOpenFilter] = useState<
+    "region" | "audience" | "gender" | "style" | null
   >(null);
 
   useEffect(() => {
@@ -118,16 +114,16 @@ export default function TextToVoicePage() {
         setPresets(loadedPresets);
         setIsLoadingPresets(false);
 
-        if (loadedPresets.length===0) {
-          const message='Unable to load voice presets.';
+        if (loadedPresets.length === 0) {
+          const message = "Unable to load voice presets.";
 
           setError(message);
         }
       })
       .catch((error) => {
-        console.error('Failed to load voice presets:', error);
+        console.error("Failed to load voice presets:", error);
 
-        const message='Unable to load voice presets.';
+        const message = "Unable to load voice presets.";
 
         setPresets([]);
         setError(message);
@@ -135,82 +131,68 @@ export default function TextToVoicePage() {
       });
   }, []);
 
-  const filteredPresets=presets.filter((preset) => {
-    const isChild=
-      preset.character==='boy'||
-      preset.character==='girl';
+  const filteredPresets = presets.filter((preset) => {
+    const isChild = preset.character === "boy" || preset.character === "girl";
 
-    const isMale=
-      preset.character==='adult_male'||
-      preset.character==='boy';
+    const isMale =
+      preset.character === "adult_male" || preset.character === "boy";
 
-    const isFemale=
-      preset.character==='adult_female'||
-      preset.character==='girl';
+    const isFemale =
+      preset.character === "adult_female" || preset.character === "girl";
 
-    const audienceMatches=
-      selectedAudience==='child'
-        ? isChild
-        :!isChild;
+    const audienceMatches = selectedAudience === "child" ? isChild : !isChild;
 
-    const genderMatches=
-      selectedGender==='male'
-        ? isMale
-        :isFemale;
+    const genderMatches = selectedGender === "male" ? isMale : isFemale;
 
     return (
-      preset.region===selectedRegion&&
-      audienceMatches&&
-      genderMatches&&
-      preset.style===selectedStyle
+      preset.region === selectedRegion &&
+      audienceMatches &&
+      genderMatches &&
+      preset.style === selectedStyle
     );
   });
 
   useEffect(() => {
-    if (filteredPresets.length===0) {
+    if (filteredPresets.length === 0) {
       return;
     }
 
-    const currentPresetExists=filteredPresets.some(
-      (preset) => preset.id===selectedPreset,
+    const currentPresetExists = filteredPresets.some(
+      (preset) => preset.id === selectedPreset,
     );
 
     if (!currentPresetExists) {
       setSelectedPreset(filteredPresets[0].id);
     }
-  }, [
-    filteredPresets,
-  ]);
+  }, [filteredPresets]);
 
   useEffect(() => {
     if (audioRef.current) {
-      audioRef.current.volume=volume;
+      audioRef.current.volume = volume;
     }
   }, [volume, audioUrl]);
 
   useEffect(() => {
     async function loadProjectAndUsage() {
       try {
-        const project=await getMyProject();
+        const project = await getMyProject();
 
         setProjectId(project.id);
+        onProjectIdReady?.(project.id);
 
-        const data=await getProjectUsage(project.id);
+        const data = await getProjectUsage(project.id);
         setUsage(data);
       } catch (error) {
-        console.error(
-          'Không thể tải thông tin dự án và hạn mức:',
-          error,
-        );
+        console.error("Không thể tải thông tin dự án và hạn mức:", error);
       }
     }
 
     loadProjectAndUsage();
   }, []);
 
-  const handleAutoTextReview=async () => {
+  const handleAutoTextReview = async () => {
     if (!text.trim()) {
-      setError('Vui lòng nhập văn bản trước khi sửa câu từ.');
+      setError("Vui lòng nhập văn bản trước khi sửa câu từ.");
       return;
     }
 
@@ -218,32 +200,27 @@ export default function TextToVoicePage() {
     setShowTextReview(true);
     setIsTextReviewing(true);
     setTextReviewErrors([]);
-    setTextReviewSuggestion('');
-    setCorrectedText('');
+    setTextReviewSuggestion("");
+    setCorrectedText("");
 
     try {
-      const response=await reviewText(text);
+      const response = await reviewText(text);
 
       setTextReviewErrors(response.errors);
       setTextReviewSuggestion(response.suggestion);
       setCorrectedText(response.correctedText);
     } catch (error) {
-      console.error(
-        'TEXT REVIEW ERROR:',
-        error,
-      );
+      console.error("TEXT REVIEW ERROR:", error);
 
-      setTextReviewErrors([
-        'Không thể kiểm tra văn bản. Vui lòng thử lại.',
-      ]);
-      setTextReviewSuggestion('');
-      setCorrectedText('');
+      setTextReviewErrors(["Không thể kiểm tra văn bản. Vui lòng thử lại."]);
+      setTextReviewSuggestion("");
+      setCorrectedText("");
     } finally {
       setIsTextReviewing(false);
     }
   };
 
-  const getGenerationFingerprint=() => {
+  const getGenerationFingerprint = () => {
     return JSON.stringify({
       text: text.trim(),
       language,
@@ -255,8 +232,8 @@ export default function TextToVoicePage() {
     });
   };
 
-  const handleGenerate=async () => {
-    if (!text.trim()||isGenerating||isLoadingPresets) {
+  const handleGenerate = async () => {
+    if (!text.trim() || isGenerating || isLoadingPresets) {
       return;
     }
 
@@ -269,135 +246,126 @@ export default function TextToVoicePage() {
 
       // Nếu có preset phù hợp thì dùng preset.
       // Nếu không có, tự tạo cấu hình từ các lựa chọn hiện tại.
-      const fallbackCharacter=
-        selectedAudience==='child'
-          ? selectedGender==='male'
-            ? 'boy'
-            :'girl'
-          :selectedGender==='male'
-            ? 'adult_male'
-            :'adult_female';
+      const fallbackCharacter =
+        selectedAudience === "child"
+          ? selectedGender === "male"
+            ? "boy"
+            : "girl"
+          : selectedGender === "male"
+            ? "adult_male"
+            : "adult_female";
 
-      const styleSettings={
+      const styleSettings = {
         storytelling: {
-          tone: 'neutral',
-          emotion: 'warm',
+          tone: "neutral",
+          emotion: "warm",
         },
         podcast: {
-          tone: 'neutral',
-          emotion: 'warm',
+          tone: "neutral",
+          emotion: "warm",
         },
         news: {
-          tone: 'neutral',
-          emotion: 'formal',
+          tone: "neutral",
+          emotion: "formal",
         },
         lecture: {
-          tone: 'neutral',
-          emotion: 'natural',
+          tone: "neutral",
+          emotion: "natural",
         },
         cinematic: {
-          tone: 'deep',
-          emotion: 'warm',
+          tone: "deep",
+          emotion: "warm",
         },
         night_storytelling: {
-          tone: 'neutral',
-          emotion: 'warm',
+          tone: "neutral",
+          emotion: "warm",
         },
         poetry: {
-          tone: 'neutral',
-          emotion: 'warm',
+          tone: "neutral",
+          emotion: "warm",
         },
       } as const;
 
-      const fallbackStyleSettings=
-        styleSettings[
-        selectedStyle as keyof typeof styleSettings
-        ]??styleSettings.storytelling;
+      const fallbackStyleSettings =
+        styleSettings[selectedStyle as keyof typeof styleSettings] ??
+        styleSettings.storytelling;
 
       if (!projectId) {
-        setError('Chưa xác định được dự án của tài khoản.');
+        setError("Chưa xác định được dự án của tài khoản.");
         return;
       }
 
-      const result=await synthesizeSpeech({
+      const result = await synthesizeSpeech({
         projectId: projectId,
         text: text.trim(),
         language,
 
         region: selectedRegion as
-          |'north_vietnam'
-          |'central_vietnam'
-          |'south_vietnam'
-          |'standard_vietnamese'
-          |'american_english'
-          |'british_english',
+          | "north_vietnam"
+          | "central_vietnam"
+          | "south_vietnam"
+          | "standard_vietnamese"
+          | "american_english"
+          | "british_english",
 
         character: fallbackCharacter as
-          |'young_male'
-          |'young_female'
-          |'adult_male'
-          |'adult_female'
-          |'elderly_male'
-          |'elderly_female'
-          |'boy'
-          |'girl',
+          | "young_male"
+          | "young_female"
+          | "adult_male"
+          | "adult_female"
+          | "elderly_male"
+          | "elderly_female"
+          | "boy"
+          | "girl",
 
-        tone: fallbackStyleSettings.tone as
-          |'deep'
-          |'neutral'
-          |'high',
+        tone: fallbackStyleSettings.tone as "deep" | "neutral" | "high",
 
         emotion: fallbackStyleSettings.emotion as
-          |'natural'
-          |'happy'
-          |'sad'
-          |'warm'
-          |'excited'
-          |'formal'
-          |'angry'
-          |'worried'
-          |'fearful'
-          |'whisper',
+          | "natural"
+          | "happy"
+          | "sad"
+          | "warm"
+          | "excited"
+          | "formal"
+          | "angry"
+          | "worried"
+          | "fearful"
+          | "whisper",
 
         style: selectedStyle as
-          |'conversation'
-          |'storytelling'
-          |'night_storytelling'
-          |'presenter'
-          |'lecture'
-          |'news'
-          |'podcast'
-          |'advertising'
-          |'cinematic'
-          |'poetry',
+          | "conversation"
+          | "storytelling"
+          | "night_storytelling"
+          | "presenter"
+          | "lecture"
+          | "news"
+          | "podcast"
+          | "advertising"
+          | "cinematic"
+          | "poetry",
 
-        speed:
-          selectedSpeed,
+        speed: selectedSpeed,
       });
 
       setAudioUrl(result.fileUrl);
 
-      const updatedUsage=await getProjectUsage(projectId);
+      const updatedUsage = await getProjectUsage(projectId);
       setUsage(updatedUsage);
-      setBilledTextCharacters(
-        countBillableCharacters(text, language),
-      );
+      setBilledTextCharacters(countBillableCharacters(text, language));
 
-      setLastGeneratedFingerprint(
-        getGenerationFingerprint(),
-      );
-      setRefreshKey((current) => current+1);
+      setLastGeneratedFingerprint(getGenerationFingerprint());
+      setRefreshKey((current) => current + 1);
     } catch (err) {
       console.error(err);
-      setError(t('common.error'));
+      setError(t("common.error"));
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const handleGenerateClick=() => {
-    if (Capacitor.getPlatform()==='android') {
-      const scrollPosition=window.scrollY;
+  const handleGenerateClick = () => {
+    if (Capacitor.getPlatform() === "android") {
+      const scrollPosition = window.scrollY;
 
       textAreaRef.current?.blur();
 
@@ -406,12 +374,9 @@ export default function TextToVoicePage() {
       });
     }
 
-    const fingerprint=getGenerationFingerprint();
+    const fingerprint = getGenerationFingerprint();
 
-    if (
-      lastGeneratedFingerprint&&
-      fingerprint===lastGeneratedFingerprint
-    ) {
+    if (lastGeneratedFingerprint && fingerprint === lastGeneratedFingerprint) {
       setShowRegenerateConfirm(true);
       return;
     }
@@ -420,46 +385,39 @@ export default function TextToVoicePage() {
   };
 
   return (
-    <main
-      className="ttv-page"
-    >
+    <main className="ttv-page">
       <header className="ttv-header">
         <div className="ttv-header-brand">
-          <img
-            src={logo}
-            alt="Logo"
-            className="ttv-header-logo"
-          />
+          <img src={logo} alt="Logo" className="ttv-header-logo" />
 
           <div className="ttv-header-text">
-            <h1>{t('tts.title')}</h1>
-            <p>{t('app.subtitle')}</p>
+            <h1>{t("tts.title")}</h1>
+            <p>{t("app.subtitle")}</p>
           </div>
         </div>
       </header>
 
       <section>
         <div className="ttv-input-area">
-
           <div className="ttv-textarea-frame">
-
             <div className="ttv-textarea-scroll-area">
-
               <textarea
                 ref={textAreaRef}
                 className="ttv-textarea"
                 value={text}
                 onChange={(event) => {
-                  const textarea=event.currentTarget;
-                  const newText=textarea.value;
+                  const textarea = event.currentTarget;
+                  const newText = textarea.value;
 
                   if (usage) {
-                    const newCharacterCount=
-                      countBillableCharacters(newText, language);
+                    const newCharacterCount = countBillableCharacters(
+                      newText,
+                      language,
+                    );
 
-                    if (newCharacterCount>usage.remainingCharacters) {
+                    if (newCharacterCount > usage.remainingCharacters) {
                       setError(
-                        `Bạn đã sử dụng hết hạn mức còn lại (${usage.remainingCharacters.toLocaleString('vi-VN')} ký tự).`,
+                        `Bạn đã sử dụng hết hạn mức còn lại (${usage.remainingCharacters.toLocaleString("vi-VN")} ký tự).`,
                       );
                       return;
                     }
@@ -471,89 +429,72 @@ export default function TextToVoicePage() {
 
                   requestAnimationFrame(() => {
                     if (
-                      document.activeElement===textarea&&
-                      textarea.selectionStart===textarea.value.length
+                      document.activeElement === textarea &&
+                      textarea.selectionStart === textarea.value.length
                     ) {
-                      textarea.scrollTop=
-                        textarea.scrollHeight-textarea.clientHeight+20;
+                      textarea.scrollTop =
+                        textarea.scrollHeight - textarea.clientHeight + 20;
                     }
                   });
                 }}
-                placeholder={t('tts.placeholder')}
+                placeholder={t("tts.placeholder")}
                 maxLength={5000}
                 rows={8}
               />
-
             </div>
 
-            <img
-              src={themeFrame}
-              alt=""
-              className="ttv-textarea-theme"
-            />
-
+            <img src={themeFrame} alt="" className="ttv-textarea-theme" />
           </div>
 
           <div className="ttv-character-count">
             {countBillableCharacters(text, language)} / 5000
           </div>
-
         </div>
-        {usage&&(
+        {usage && (
           <div className="ttv-usage-info">
-            Gói {usage.plan} · Còn {Math.max(
+            Gói {usage.plan} · Còn{" "}
+            {Math.max(
               0,
-              usage.remainingCharacters+
-              billedTextCharacters-
-              countBillableCharacters(text, language),
-            ).toLocaleString('vi-VN')} ký tự
+              usage.remainingCharacters +
+                billedTextCharacters -
+                countBillableCharacters(text, language),
+            ).toLocaleString("vi-VN")}{" "}
+            ký tự
           </div>
         )}
         <div className="ttv-control-grid">
-
-
-
           <div className="ttv-filter-grid">
-
             {/* Vùng miền */}
             <div className="ttv-filter">
               <button
                 type="button"
                 className="ttv-filter-button"
                 onClick={() =>
-                  setOpenFilter(
-                    openFilter==='region'
-                      ? null
-                      :'region',
-                  )
+                  setOpenFilter(openFilter === "region" ? null : "region")
                 }
               >
                 <span className="ttv-filter-label">
                   <span className="ttv-label-icon ttv-earth-icon">
-                    <img
-                      src={earthIcon}
-                      alt=""
-                      aria-hidden="true"
-                    />
+                    <img src={earthIcon} alt="" aria-hidden="true" />
                   </span>
                   Vùng miền
                 </span>
 
                 <strong className="ttv-filter-value">
-                  {selectedRegion==='north_vietnam'
-                    ? 'Miền Bắc'
-                    :selectedRegion==='central_vietnam'
-                      ? 'Miền Trung'
-                      :'Miền Nam'}
+                  {selectedRegion === "north_vietnam"
+                    ? "Miền Bắc"
+                    : selectedRegion === "central_vietnam"
+                      ? "Miền Trung"
+                      : "Miền Nam"}
                 </strong>
               </button>
 
-              {openFilter==='region'&&(
+              {openFilter === "region" && (
                 <div className="ttv-filter-menu">
                   <button
                     type="button"
                     onClick={() => {
-                      setSelectedRegion('north_vietnam');
+                      setSelectedRegion("north_vietnam");
                       setOpenFilter(null);
                     }}
                     className="ttv-filter-option"
@@ -564,7 +505,7 @@ export default function TextToVoicePage() {
                   <button
                     type="button"
                     onClick={() => {
-                      setSelectedRegion('central_vietnam');
+                      setSelectedRegion("central_vietnam");
                       setOpenFilter(null);
                     }}
                     className="ttv-filter-option"
@@ -575,7 +516,7 @@ export default function TextToVoicePage() {
                   <button
                     type="button"
                     onClick={() => {
-                      setSelectedRegion('south_vietnam');
+                      setSelectedRegion("south_vietnam");
                       setOpenFilter(null);
                     }}
                     className="ttv-filter-option"
@@ -591,38 +532,28 @@ export default function TextToVoicePage() {
               <button
                 type="button"
                 onClick={() =>
-                  setOpenFilter(
-                    openFilter==='audience'
-                      ? null
-                      :'audience',
-                  )
+                  setOpenFilter(openFilter === "audience" ? null : "audience")
                 }
                 className="ttv-filter-button"
               >
                 <span className="ttv-filter-label">
                   <span className="ttv-label-icon ttv-age-icon">
-                    <img
-                      src={ageIcon}
-                      alt=""
-                      aria-hidden="true"
-                    />
+                    <img src={ageIcon} alt="" aria-hidden="true" />
                   </span>
                   Độ tuổi
                 </span>
 
                 <strong className="ttv-filter-value">
-                  {selectedAudience==='child'
-                    ? 'Trẻ em'
-                    :'Người lớn'}
+                  {selectedAudience === "child" ? "Trẻ em" : "Người lớn"}
                 </strong>
               </button>
 
-              {openFilter==='audience'&&(
+              {openFilter === "audience" && (
                 <div className="ttv-filter-menu">
                   <button
                     type="button"
                     onClick={() => {
-                      setSelectedAudience('child');
+                      setSelectedAudience("child");
                       setOpenFilter(null);
                     }}
                     className="ttv-filter-option"
@@ -633,7 +564,7 @@ export default function TextToVoicePage() {
                   <button
                     type="button"
                     onClick={() => {
-                      setSelectedAudience('adult');
+                      setSelectedAudience("adult");
                       setOpenFilter(null);
                     }}
                     className="ttv-filter-option"
@@ -645,44 +576,34 @@ export default function TextToVoicePage() {
             </div>
             {/* Giới tính */}
             <div className="ttv-filter ttv-gender-filter">
-              <span className="ttv-filter-label">
-                Giới tính
-              </span>
+              <span className="ttv-filter-label">Giới tính</span>
 
               <div className="ttv-gender-icons">
-
                 {/* NAM */}
                 <button
                   type="button"
-                  className={`ttv-gender-button ttv-gender-male ${selectedGender==='male'? 'active':''
-                    }`}
-                  onClick={() => setSelectedGender('male')}
+                  className={`ttv-gender-button ttv-gender-male ${
+                    selectedGender === "male" ? "active" : ""
+                  }`}
+                  onClick={() => setSelectedGender("male")}
                   aria-label="Chọn Nam"
-                  aria-pressed={selectedGender==='male'}
+                  aria-pressed={selectedGender === "male"}
                 >
-                  <img
-                    src={iconNam}
-                    alt="Nam"
-                    className="ttv-gender-image"
-                  />
+                  <img src={iconNam} alt="Nam" className="ttv-gender-image" />
                 </button>
 
                 {/* NỮ */}
                 <button
                   type="button"
-                  className={`ttv-gender-button ttv-gender-female ${selectedGender==='female'? 'active':''
-                    }`}
-                  onClick={() => setSelectedGender('female')}
+                  className={`ttv-gender-button ttv-gender-female ${
+                    selectedGender === "female" ? "active" : ""
+                  }`}
+                  onClick={() => setSelectedGender("female")}
                   aria-label="Chọn Nữ"
-                  aria-pressed={selectedGender==='female'}
+                  aria-pressed={selectedGender === "female"}
                 >
-                  <img
-                    src={iconNu}
-                    alt="Nữ"
-                    className="ttv-gender-image"
-                  />
+                  <img src={iconNu} alt="Nữ" className="ttv-gender-image" />
                 </button>
-
               </div>
             </div>
             {/* Phong cách */}
@@ -690,48 +611,40 @@ export default function TextToVoicePage() {
               <button
                 type="button"
                 onClick={() =>
-                  setOpenFilter(
-                    openFilter==='style'
-                      ? null
-                      :'style',
-                  )
+                  setOpenFilter(openFilter === "style" ? null : "style")
                 }
                 className="ttv-filter-button"
               >
                 <span className="ttv-filter-label">
                   <span className="ttv-label-icon ttv-style-icon">
-                    <img
-                      src={styleIcon}
-                      alt=""
-                      aria-hidden="true"
-                    />
+                    <img src={styleIcon} alt="" aria-hidden="true" />
                   </span>
                   Phong cách
                 </span>
 
                 <strong className="ttv-filter-value">
-                  {selectedStyle==='storytelling'
-                    ? '📖 Kể chuyện'
-                    :selectedStyle==='podcast'
-                      ? '🎙️ Podcast'
-                      :selectedStyle==='news'
-                        ? '📰 Tin tức'
-                        :selectedStyle==='lecture'
-                          ? '🧑‍🏫 Giảng bài'
-                          :selectedStyle==='night_storytelling'
-                            ? '🌙 Kể chuyện đêm'
-                            :selectedStyle==='poetry'
-                              ? '🪶 Đọc thơ'
-                              :'🎬 Điện ảnh'}
+                  {selectedStyle === "storytelling"
+                    ? "📖 Kể chuyện"
+                    : selectedStyle === "podcast"
+                      ? "🎙️ Podcast"
+                      : selectedStyle === "news"
+                        ? "📰 Tin tức"
+                        : selectedStyle === "lecture"
+                          ? "🧑‍🏫 Giảng bài"
+                          : selectedStyle === "night_storytelling"
+                            ? "🌙 Kể chuyện đêm"
+                            : selectedStyle === "poetry"
+                              ? "🪶 Đọc thơ"
+                              : "🎬 Điện ảnh"}
                 </strong>
               </button>
 
-              {openFilter==='style'&&(
+              {openFilter === "style" && (
                 <div className="ttv-filter-menu">
                   <button
                     type="button"
                     onClick={() => {
-                      setSelectedStyle('storytelling');
+                      setSelectedStyle("storytelling");
                       setOpenFilter(null);
                     }}
                     className="ttv-filter-option"
@@ -742,7 +655,7 @@ export default function TextToVoicePage() {
                   <button
                     type="button"
                     onClick={() => {
-                      setSelectedStyle('podcast');
+                      setSelectedStyle("podcast");
                       setOpenFilter(null);
                     }}
                     className="ttv-filter-option"
@@ -753,7 +666,7 @@ export default function TextToVoicePage() {
                   <button
                     type="button"
                     onClick={() => {
-                      setSelectedStyle('news');
+                      setSelectedStyle("news");
                       setOpenFilter(null);
                     }}
                     className="ttv-filter-option"
@@ -764,7 +677,7 @@ export default function TextToVoicePage() {
                   <button
                     type="button"
                     onClick={() => {
-                      setSelectedStyle('lecture');
+                      setSelectedStyle("lecture");
                       setOpenFilter(null);
                     }}
                     className="ttv-filter-option"
@@ -775,7 +688,7 @@ export default function TextToVoicePage() {
                   <button
                     type="button"
                     onClick={() => {
-                      setSelectedStyle('cinematic');
+                      setSelectedStyle("cinematic");
                       setOpenFilter(null);
                     }}
                     className="ttv-filter-option"
@@ -786,7 +699,7 @@ export default function TextToVoicePage() {
                   <button
                     type="button"
                     onClick={() => {
-                      setSelectedStyle('night_storytelling');
+                      setSelectedStyle("night_storytelling");
                       setOpenFilter(null);
                     }}
                     className="ttv-filter-option"
@@ -797,7 +710,7 @@ export default function TextToVoicePage() {
                   <button
                     type="button"
                     onClick={() => {
-                      setSelectedStyle('poetry');
+                      setSelectedStyle("poetry");
                       setOpenFilter(null);
                     }}
                     className="ttv-filter-option"
@@ -810,22 +723,17 @@ export default function TextToVoicePage() {
           </div>
 
           <div className="ttv-controls">
-
             <div className="ttv-control">
               <div className="ttv-control-header">
-                <span className="ttv-control-label">
-                  🔊 Volume
-                </span>
+                <span className="ttv-control-label">🔊 Volume</span>
 
                 <span className="ttv-control-value">
-                  {Math.round(volume*100)}%
+                  {Math.round(volume * 100)}%
                 </span>
               </div>
 
               <div className="ttv-range-row">
-                <span className="ttv-range-icon">
-                  🔈
-                </span>
+                <span className="ttv-range-icon">🔈</span>
 
                 <input
                   type="range"
@@ -833,18 +741,12 @@ export default function TextToVoicePage() {
                   max="1"
                   step="0.05"
                   value={volume}
-                  onChange={(event) =>
-                    setVolume(
-                      Number(event.target.value),
-                    )
-                  }
+                  onChange={(event) => setVolume(Number(event.target.value))}
                   className="ttv-range"
                   aria-label="Volume"
                 />
 
-                <span className="ttv-range-icon">
-                  🔊
-                </span>
+                <span className="ttv-range-icon">🔊</span>
               </div>
             </div>
 
@@ -861,9 +763,7 @@ export default function TextToVoicePage() {
               </div>
 
               <div className="ttv-range-row">
-                <span className="ttv-range-text">
-                  Chậm
-                </span>
+                <span className="ttv-range-text">Chậm</span>
 
                 <input
                   type="range"
@@ -872,26 +772,20 @@ export default function TextToVoicePage() {
                   step="0.05"
                   value={selectedSpeed}
                   onChange={(event) =>
-                    setSelectedSpeed(
-                      Number(event.target.value),
-                    )
+                    setSelectedSpeed(Number(event.target.value))
                   }
                   className="ttv-range"
                   aria-label="Tốc độ đọc"
                 />
 
-                <span className="ttv-range-text">
-                  Nhanh
-                </span>
+                <span className="ttv-range-text">Nhanh</span>
               </div>
             </div>
-
           </div>
 
           <div className="ttv-bottom-grid">
             {/* Sửa câu từ */}
             <div className="ttv-bottom-card ttv-edit-card">
-
               <div className="ttv-bottom-card-title">
                 <span className="ttv-label-icon">✍️</span>
                 Sửa câu từ
@@ -904,58 +798,48 @@ export default function TextToVoicePage() {
               >
                 🤖✨AI Tự động
               </button>
-
             </div>
             {/* Ngôn ngữ */}
             <div className="ttv-bottom-card ttv-language-card">
-
-              <div className="ttv-bottom-card-title">
-                🌐 Ngôn ngữ
-              </div>
+              <div className="ttv-bottom-card-title">🌐 Ngôn ngữ</div>
 
               <div className="ttv-language-selector">
-
                 <button
                   type="button"
-                  className={`ttv-language-option ${language==='vi'? 'active':''
-                    }`}
-                  onClick={() => setLanguage('vi')}
+                  className={`ttv-language-option ${
+                    language === "vi" ? "active" : ""
+                  }`}
+                  onClick={() => setLanguage("vi")}
                   aria-label="Chọn Tiếng Việt"
-                  aria-pressed={language==='vi'}
+                  aria-pressed={language === "vi"}
                 >
                   <span className="ttv-language-flag">
                     <img src={flagVi} alt="Tiếng Việt" />
                   </span>
 
-                  <span className="ttv-language-name">
-                    Tiếng Việt
-                  </span>
+                  <span className="ttv-language-name">Tiếng Việt</span>
                 </button>
 
                 <button
                   type="button"
-                  className={`ttv-language-option ${language==='en'? 'active':''
-                    }`}
-                  onClick={() => setLanguage('en')}
+                  className={`ttv-language-option ${
+                    language === "en" ? "active" : ""
+                  }`}
+                  onClick={() => setLanguage("en")}
                   aria-label="Chọn Tiếng Anh"
-                  aria-pressed={language==='en'}
+                  aria-pressed={language === "en"}
                 >
                   <span className="ttv-language-flag">
                     <img src={flagEn} alt="Tiếng Anh" />
                   </span>
 
-                  <span className="ttv-language-name">
-                    English
-                  </span>
+                  <span className="ttv-language-name">English</span>
                 </button>
-
               </div>
-
             </div>
 
             {/* 🎙️Tạo giọng đọc */}
             <div className="ttv-bottom-card ttv-play-card">
-
               <div className="ttv-bottom-card-title">
                 <span className="ttv-label-icon">🎙️</span>
                 Tạo giọng đọc
@@ -965,52 +849,43 @@ export default function TextToVoicePage() {
                 type="button"
                 className="ttv-play-button"
                 onClick={handleGenerateClick}
-                disabled={
-                  !text.trim()||
-                  isGenerating||
-                  isLoadingPresets
-                }
+                disabled={!text.trim() || isGenerating || isLoadingPresets}
                 aria-label="Tạo giọng đọc"
               >
                 <span className="ttv-play-waves">
                   <span>)))</span>
                 </span>
 
-                <span className="ttv-play-circle">
-                  {isGenerating
-                    ? '…'
-                    :'▶'}
-                </span>
+                {isGenerating ? (
+                  <span className="ttv-generating">Đang tạo…</span>
+                ) : (
+                  <>
+                    <img src={playIcon} alt="" className="ttv-play-icon-web" />
+
+                    <img
+                      src={soundIcon}
+                      alt=""
+                      className="ttv-sound-icon-mobile"
+                    />
+                  </>
+                )}
 
                 <span className="ttv-play-waves">
                   <span>(((</span>
                 </span>
               </button>
-
             </div>
           </div>
         </div>
 
-        {error&&(
-          <p role="alert">
-            {error}
-          </p>
-        )
-        }
+        {error && <p role="alert">{error}</p>}
       </section>
 
-      {
-        audioUrl&&(
-          <section className="ttv-audio-section">
-            <audio
-              ref={audioRef}
-              className="ttv-audio"
-              controls
-              src={audioUrl}
-            />
-          </section>
-        )
-      }
+      {audioUrl && (
+        <section className="ttv-audio-section">
+          <audio ref={audioRef} className="ttv-audio" controls src={audioUrl} />
+        </section>
+      )}
       <DialogueComposer
         projectId={projectId}
         language={language}
@@ -1018,19 +893,13 @@ export default function TextToVoicePage() {
         usage={usage}
         onUsageUpdated={setUsage}
       />
-      <AudioHistory
-        projectId={projectId}
-        refreshKey={refreshKey}
-      />
+      <AudioHistory projectId={projectId} refreshKey={refreshKey} />
 
-      {showTextReview&&(
+      {showTextReview && (
         <div className="ttv-review-overlay">
           <div className="ttv-review-dialog">
-
             <div className="ttv-review-header">
-              <h3>
-                🤖✨ AI Tự động
-              </h3>
+              <h3>🤖✨ AI Tự động</h3>
 
               <button
                 type="button"
@@ -1044,51 +913,39 @@ export default function TextToVoicePage() {
               </button>
             </div>
 
-            {isTextReviewing? (
+            {isTextReviewing ? (
               <div className="ttv-review-loading">
-                <div className="ttv-review-spinner">
-                  ✨
-                </div>
+                <div className="ttv-review-spinner">✨</div>
 
-                <strong>
-                  AI đang phân tích văn bản...
-                </strong>
+                <strong>AI đang phân tích văn bản...</strong>
 
-                <p>
-                  Đang kiểm tra chính tả, dấu câu và cách diễn đạt.
-                </p>
+                <p>Đang kiểm tra chính tả, dấu câu và cách diễn đạt.</p>
               </div>
-            ):(
+            ) : (
               <>
-                {textReviewErrors.length===0? (
+                {textReviewErrors.length === 0 ? (
                   <div className="ttv-review-success">
-                    <div className="ttv-review-success-icon">
-                      ✓
-                    </div>
+                    <div className="ttv-review-success-icon">✓</div>
 
-                    <h4>
-                      Văn bản đã ổn
-                    </h4>
+                    <h4>Văn bản đã ổn</h4>
 
                     <p>
-                      AI không phát hiện lỗi chính tả, dấu câu
-                      hoặc cách diễn đạt cần chỉnh sửa.
+                      AI không phát hiện lỗi chính tả, dấu câu hoặc cách diễn
+                      đạt cần chỉnh sửa.
                     </p>
                   </div>
-                ):(
+                ) : (
                   <>
                     <div className="ttv-review-summary">
                       <span>🔎</span>
 
                       <div>
                         <strong>
-                          AI phát hiện {textReviewErrors.length} điểm
-                          cần cải thiện
+                          AI phát hiện {textReviewErrors.length} điểm cần cải
+                          thiện
                         </strong>
 
-                        <p>
-                          Bạn có thể xem các đề xuất bên dưới.
-                        </p>
+                        <p>Bạn có thể xem các đề xuất bên dưới.</p>
                       </div>
                     </div>
 
@@ -1099,7 +956,7 @@ export default function TextToVoicePage() {
                           className="ttv-review-error-item"
                         >
                           <span className="ttv-review-error-number">
-                            {String(index+1).padStart(2, '0')}
+                            {String(index + 1).padStart(2, "0")}
                           </span>
 
                           <span className="ttv-review-error-text">
@@ -1109,34 +966,26 @@ export default function TextToVoicePage() {
                       ))}
                     </div>
 
-                    {textReviewSuggestion&&(
+                    {textReviewSuggestion && (
                       <div className="ttv-review-suggestion">
-                        <strong>
-                          💡 Gợi ý của AI
-                        </strong>
+                        <strong>💡 Gợi ý của AI</strong>
 
-                        <p>
-                          {textReviewSuggestion}
-                        </p>
+                        <p>{textReviewSuggestion}</p>
                       </div>
                     )}
 
-                    {correctedText&&(
+                    {correctedText && (
                       <div className="ttv-corrected-preview">
-                        <strong>
-                          ✨ Bản sửa đề xuất
-                        </strong>
+                        <strong>✨ Bản sửa đề xuất</strong>
 
-                        <div>
-                          {correctedText}
-                        </div>
+                        <div>{correctedText}</div>
                       </div>
                     )}
                   </>
                 )}
 
                 <div className="ttv-review-actions">
-                  {textReviewErrors.length===0? (
+                  {textReviewErrors.length === 0 ? (
                     <button
                       type="button"
                       className="ttv-review-confirm"
@@ -1146,7 +995,7 @@ export default function TextToVoicePage() {
                     >
                       Đóng
                     </button>
-                  ):(
+                  ) : (
                     <>
                       <button
                         type="button"
@@ -1176,18 +1025,14 @@ export default function TextToVoicePage() {
                 </div>
               </>
             )}
-
           </div>
         </div>
       )}
-      {showRegenerateConfirm&&(
+      {showRegenerateConfirm && (
         <div className="ttv-confirm-overlay">
           <div className="ttv-confirm-dialog">
-
             <div className="ttv-confirm-header">
-              <h3>
-                ⚠️ Tạo lại giọng đọc?
-              </h3>
+              <h3>⚠️ Tạo lại giọng đọc?</h3>
 
               <button
                 type="button"
@@ -1203,14 +1048,11 @@ export default function TextToVoicePage() {
 
             <div className="ttv-confirm-content">
               <p>
-                Bạn vừa tạo đoạn âm thanh này với cùng
-                nội dung và cùng cấu hình giọng đọc.
+                Bạn vừa tạo đoạn âm thanh này với cùng nội dung và cùng cấu hình
+                giọng đọc.
               </p>
 
-              <p>
-                Tạo lại sẽ gọi AI và có thể sử dụng thêm
-                hạn mức.
-              </p>
+              <p>Tạo lại sẽ gọi AI và có thể sử dụng thêm hạn mức.</p>
             </div>
 
             <div className="ttv-confirm-actions">
@@ -1235,17 +1077,17 @@ export default function TextToVoicePage() {
                 Tạo lại
               </button>
             </div>
-
           </div>
         </div>
       )}
 
-      {showEnglishNotice&&(
+      {showEnglishNotice && (
         <div className="ttv-confirm-overlay">
           <div className="ttv-confirm-dialog">
             <div className="ttv-confirm-content">
               <p>
-                Tính năng tiếng Anh và các ngôn ngữ khác đang được phát triển. Xin lỗi vì sự bất tiện này!
+                Tính năng tiếng Anh và các ngôn ngữ khác đang được phát triển.
+                Xin lỗi vì sự bất tiện này!
               </p>
             </div>
 
@@ -1254,7 +1096,7 @@ export default function TextToVoicePage() {
                 type="button"
                 className="ttv-confirm-ok"
                 onClick={() => {
-                  setLanguage('vi');
+                  setLanguage("vi");
                   setShowEnglishNotice(false);
                 }}
               >

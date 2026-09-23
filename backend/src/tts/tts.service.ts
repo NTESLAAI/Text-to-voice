@@ -343,6 +343,42 @@ export class TtsService {
     });
   }
 
+  async deleteDialogue(id: string) {
+    const dialogue = await this.prisma.dialogue.findUnique({
+      where: {
+        id,
+      },
+    });
+
+    if (!dialogue) {
+      throw new NotFoundException('Dialogue not found');
+    }
+
+    if (dialogue.fileUrl) {
+      const fileName = dialogue.fileUrl.split('/').pop();
+
+      if (fileName) {
+        const filePath = join(process.cwd(), 'uploads', 'dialogues', fileName);
+
+        try {
+          await fs.unlink(filePath);
+        } catch (error) {
+          console.warn(
+            'Dialogue audio file could not be deleted:',
+            filePath,
+            error,
+          );
+        }
+      }
+    }
+
+    await this.prisma.dialogue.delete({
+      where: {
+        id,
+      },
+    });
+  }
+
   async getProjectUsage(projectId: string) {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
