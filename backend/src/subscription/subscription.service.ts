@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -11,12 +12,20 @@ export class SubscriptionService {
     private readonly prisma: PrismaService,
   ) {}
 
-  async getMySubscription(userId: string) {
+  async getActiveSubscription(userId: string) {
+    const now = new Date();
+
     const subscription =
       await this.prisma.subscription.findFirst({
         where: {
           userId,
           status: 'ACTIVE',
+          startedAt: {
+            lte: now,
+          },
+          expiresAt: {
+            gt: now,
+          },
         },
         include: {
           plan: true,
@@ -27,10 +36,23 @@ export class SubscriptionService {
       });
 
     if (!subscription) {
-      throw new NotFoundException(
-        'Tài khoản chưa có gói sử dụng.',
+      throw new BadRequestException(
+        'Tài khoản chưa có gói sử dụng đang hoạt động.',
       );
     }
+
+    if (!subscription.plan.isActive) {
+      throw new BadRequestException(
+        'Gói sử dụng hiện không còn hoạt động.',
+      );
+    }
+
+    return subscription;
+  }
+
+  async getMySubscription(userId: string) {
+    const subscription =
+      await this.getActiveSubscription(userId);
 
     return {
       id: subscription.id,

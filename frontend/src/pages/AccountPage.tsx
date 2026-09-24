@@ -309,7 +309,7 @@ function AccountPage({ onBack }: AccountPageProps) {
                       fontWeight: 700,
                     }}
                   >
-                    {subscription.plan.name}
+                    {subscription.planName}
                   </div>
                 </div>
 

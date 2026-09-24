@@ -424,19 +424,16 @@ export async function getMyProfile(): Promise<MyProfile> {
 
 export interface MySubscription {
   id: string;
-  plan: {
-    code: string;
-    name: string;
-    price: number;
-    currency: string;
-  };
+  plan: string;
+  planName: string;
+  price: number;
+  currency: string;
   startedAt: string;
   expiresAt: string;
   status: string;
   characterLimit: number;
   rolloverCharacters: number;
   pricePaid?: number | null;
-  currency: string;
 }
 export async function changePassword(
   currentPassword: string,
