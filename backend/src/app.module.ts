@@ -10,6 +10,7 @@ import { AudioModule } from './audio/audio.module';
 import { TextReviewModule } from './text-review/text-review.module';
 import { AuthModule } from './auth/auth.module';
 import { SubscriptionModule } from './subscription/subscription.module';
+import { PaymentModule } from './payment/payment.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { SubscriptionModule } from './subscription/subscription.module';
     TextReviewModule,
     AuthModule,
     SubscriptionModule,
+    PaymentModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -13,12 +13,14 @@ model User {
   email     String   @unique
   password  String?
   name      String?
+  role      String   @default("USER")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   projects            Project[]
   subscriptions       Subscription[]
   usages              Usage[]
+  payments            Payment[]
   passwordResetTokens PasswordResetToken[]
 }
 
@@ -33,6 +35,7 @@ model Plan {
   isActive       Boolean @default(true)
 
   subscriptions Subscription[]
+  payments      Payment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -63,6 +66,36 @@ model Subscription {
   @@index([userId])
   @@index([planId])
   @@index([expiresAt])
+}
+
+model Payment {
+  id String @id @default(uuid())
+
+  userId String
+  planId String
+
+  amount   Float
+  currency String @default("VND")
+
+  status   String
+  provider String
+
+  providerTransactionId String?
+  reference             String?
+
+  paidAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan Plan @relation(fields: [planId], references: [id])
+
+  @@index([userId])
+  @@index([planId])
+  @@index([status])
+  @@index([providerTransactionId])
+  @@index([reference])
 }
 
 model Usage {
