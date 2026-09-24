@@ -182,7 +182,7 @@ export class PaymentService {
             now.getTime() + payment.plan.durationDays * 24 * 60 * 60 * 1000,
           ),
           status: 'ACTIVE',
-          characterLimit: payment.plan.characterLimit + previousRemaining,
+          characterLimit: payment.plan.characterLimit,
           rolloverCharacters: previousRemaining,
           pricePaid: payment.amount,
           currency: payment.currency,

@@ -435,6 +435,19 @@ export interface MySubscription {
   rolloverCharacters: number;
   pricePaid?: number | null;
 }
+export interface CreatePaymentResult {
+  id: string;
+  plan: string;
+  planName: string;
+  amount: number;
+  currency: string;
+  status: string;
+  provider: string;
+  bankName?: string;
+  accountNumber?: string;
+  accountName?: string;
+  createdAt: string;
+}
 export async function changePassword(
   currentPassword: string,
   newPassword: string,
@@ -451,6 +464,15 @@ export async function changePassword(
 }
 export async function getMySubscription(): Promise<MySubscription> {
   const response = await api.get<MySubscription>("/subscription/me");
+
+  return response.data;
+}
+export async function createPayment(
+  planCode: string,
+): Promise<CreatePaymentResult> {
+  const response = await api.post<CreatePaymentResult>("/payment/create", {
+    planCode,
+  });
 
   return response.data;
 }

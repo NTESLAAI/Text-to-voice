@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 
 import {
   changePassword,
+  createPayment,
   getMyProfile,
   getMySubscription,
   getMyUsage,
+  type CreatePaymentResult,
   type MyProfile,
   type MySubscription,
   type ProjectUsage,
@@ -17,6 +19,9 @@ interface AccountPageProps {
 function AccountPage({ onBack }: AccountPageProps) {
   const [profile, setProfile] = useState<MyProfile | null>(null);
   const [subscription, setSubscription] = useState<MySubscription | null>(null);
+  const [payment, setPayment] = useState<CreatePaymentResult | null>(null);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [paymentError, setPaymentError] = useState("");
   const [usage, setUsage] = useState<ProjectUsage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -115,7 +120,27 @@ function AccountPage({ onBack }: AccountPageProps) {
       setChangingPassword(false);
     }
   }
+  async function handleCreatePayment(planCode: string) {
+    setPaymentError("");
+    setPayment(null);
 
+    try {
+      setPaymentLoading(true);
+
+      const result = await createPayment(planCode);
+
+      setPayment(result);
+    } catch (err: any) {
+      console.error("Create payment failed:", err);
+
+      const message =
+        err?.response?.data?.message || "Không thể tạo yêu cầu thanh toán.";
+
+      setPaymentError(Array.isArray(message) ? message.join(", ") : message);
+    } finally {
+      setPaymentLoading(false);
+    }
+  }
   function formatDate(value: string) {
     return new Date(value).toLocaleDateString("vi-VN");
   }
@@ -413,6 +438,142 @@ function AccountPage({ onBack }: AccountPageProps) {
               </div>
             </div>
           )}
+          <div
+            style={{
+              marginTop: "32px",
+              paddingTop: "28px",
+              borderTop: "1px solid #e7eaf0",
+            }}
+          >
+            <h2
+              style={{
+                margin: "0 0 8px",
+                fontSize: "20px",
+                color: "#0f172a",
+              }}
+            >
+              Nâng cấp gói
+            </h2>
+
+            <p
+              style={{
+                margin: "0 0 20px",
+                color: "#64748b",
+                fontSize: "14px",
+              }}
+            >
+              Chọn gói cao hơn để tăng hạn mức sử dụng.
+            </p>
+
+            <div
+              style={{
+                display: "grid",
+                gap: "12px",
+              }}
+            >
+              {[
+                { code: "BASIC", name: "Basic", price: 129000 },
+                { code: "PRO", name: "Pro", price: 299000 },
+                { code: "BUSINESS", name: "Business", price: 799000 },
+              ]
+                .filter((plan) => {
+                  const currentPrices: Record<string, number> = {
+                    FREE: 0,
+                    BASIC: 129000,
+                    PRO: 299000,
+                    BUSINESS: 799000,
+                  };
+
+                  return plan.price > (subscription ? currentPrices[subscription.plan] ?? 0 : 0);
+                })
+                .map((plan) => (
+                  <div
+                    key={plan.code}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "16px",
+                      padding: "16px",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "12px",
+                      background: "#f8fafc",
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          fontSize: "16px",
+                          fontWeight: 700,
+                          color: "#0f172a",
+                        }}
+                      >
+                        {plan.name}
+                      </div>
+
+                      <div
+                        style={{
+                          marginTop: "4px",
+                          fontSize: "14px",
+                          color: "#64748b",
+                        }}
+                      >
+                        {plan.price.toLocaleString("vi-VN")} VND / 30 ngày
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleCreatePayment(plan.code)}
+                      disabled={paymentLoading}
+                      style={{
+                        border: "none",
+                        borderRadius: "9px",
+                        padding: "10px 16px",
+                        background: paymentLoading ? "#94a3b8" : "#2563eb",
+                        color: "#ffffff",
+                        fontSize: "14px",
+                        fontWeight: 600,
+                        cursor: paymentLoading ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      {paymentLoading ? "Đang xử lý..." : "Nâng cấp"}
+                    </button>
+                  </div>
+                ))}
+            </div>
+
+            {paymentError && (
+              <div
+                style={{
+                  marginTop: "16px",
+                  padding: "10px 12px",
+                  borderRadius: "8px",
+                  background: "#fee2e2",
+                  color: "#b91c1c",
+                  fontSize: "14px",
+                }}
+              >
+                {paymentError}
+              </div>
+            )}
+
+            {payment && (
+              <div
+                style={{
+                  marginTop: "16px",
+                  padding: "14px",
+                  borderRadius: "10px",
+                  background: "#eff6ff",
+                  color: "#1e3a8a",
+                  fontSize: "14px",
+                }}
+              >
+                Đã tạo yêu cầu thanh toán cho gói{" "}
+                <strong>{payment.planName}</strong>.
+              </div>
+            )}
+          </div>
           <div
             style={{
               marginTop: "32px",
