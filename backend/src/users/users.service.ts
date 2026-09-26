@@ -43,19 +43,29 @@ export class UsersService {
         select: publicUserSelect,
       });
 
-      await tx.subscription.create({
-        data: {
-          userId: user.id,
-          planId: freePlan.id,
-          startedAt: now,
-          expiresAt,
-          status: 'ACTIVE',
-          characterLimit: freePlan.characterLimit,
-          rolloverCharacters: 0,
-          pricePaid: 0,
-          currency: freePlan.currency,
-        },
-      });
+      const subscription = await tx.subscription.create({
+  data: {
+    userId: user.id,
+    planId: freePlan.id,
+    startedAt: now,
+    expiresAt,
+    status: 'ACTIVE',
+    characterLimit: freePlan.characterLimit,
+    rolloverCharacters: 0,
+    pricePaid: 0,
+    currency: freePlan.currency,
+  },
+});
+
+await tx.quotaLot.create({
+  data: {
+    subscriptionId: subscription.id,
+    charactersGranted: freePlan.characterLimit,
+    charactersRemaining: freePlan.characterLimit,
+    rolloverCount: 0,
+    expiresAt,
+  },
+});
 
       return user;
     });

@@ -1,47 +1,46 @@
 import { Injectable } from '@nestjs/common';
 import { OpenRouter } from '@openrouter/sdk';
+import { PrismaService } from '../prisma/prisma.service';
 
 export interface TextReviewResult {
-    hasErrors: boolean;
-    errors: string[];
-    suggestion: string;
-    correctedText: string;
+  hasErrors: boolean;
+  errors: string[];
+  suggestion: string;
+  correctedText: string;
 }
 
 @Injectable()
 export class TextReviewService {
-    private readonly client: OpenRouter;
+  private readonly client: OpenRouter;
 
-    constructor() {
-        const apiKey=process.env.OPENROUTER_API_KEY;
+  constructor(private readonly prisma: PrismaService) {
+    const apiKey = process.env.OPENROUTER_API_KEY;
 
-        if (!apiKey) {
-            throw new Error('OPENROUTER_API_KEY is not configured');
-        }
-
-        this.client=new OpenRouter({
-            apiKey,
-        });
+    if (!apiKey) {
+      throw new Error('OPENROUTER_API_KEY is not configured');
     }
 
-    async reviewText(
-        text: string,
-    ): Promise<TextReviewResult> {
-        const response=await this.client.chat.send({
-            chatRequest: {
-                model: 'openai/gpt-5.2',
-                messages: [
-                    {
-                        role: 'system',
-                        content:
-                            'Bạn là trợ lý chuyên kiểm tra và sửa văn bản tiếng Việt. '+
-                            'Bạn phải trả về DUY NHẤT một JSON hợp lệ, không markdown, '+
-                            'không giải thích bên ngoài JSON. '+
-                            'Không được thay đổi ý nghĩa của người dùng.',
-                    },
-                    {
-                        role: 'user',
-                        content: `
+    this.client = new OpenRouter({
+      apiKey,
+    });
+  }
+
+  async reviewText(text: string, userId: string): Promise<TextReviewResult> {
+    const response = await this.client.chat.send({
+      chatRequest: {
+        model: 'openai/gpt-5.2',
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Bạn là trợ lý chuyên kiểm tra và sửa văn bản tiếng Việt. ' +
+              'Bạn phải trả về DUY NHẤT một JSON hợp lệ, không markdown, ' +
+              'không giải thích bên ngoài JSON. ' +
+              'Không được thay đổi ý nghĩa của người dùng.',
+          },
+          {
+            role: 'user',
+            content: `
 Hãy kiểm tra văn bản sau.
 
 Yêu cầu:
@@ -74,62 +73,123 @@ Phải trả về đúng cấu trúc JSON sau:
 Văn bản cần kiểm tra:
 "${text}"
           `,
-                    },
-                ],
-            },
-        });
+          },
+        ],
+      },
+    });
 
-        const result=response as {
-            choices?: Array<{
-                message?: {
-                    content?: string|null;
-                };
-            }>;
+    const result = response as {
+      choices?: Array<{
+        message?: {
+          content?: string | null;
+        };
+      }>;
+      usage?: {
+        promptTokens?: number;
+        completionTokens?: number;
+        totalTokens?: number;
+
+        completionTokensDetails?: {
+          reasoningTokens?: number;
         };
 
-        const content=
-            result.choices?.[0]?.message?.content?.trim()??'';
+        cost?: number;
 
-        try {
-            const parsed=
-                JSON.parse(content) as TextReviewResult;
+        costDetails?: {
+          upstreamInferencePromptCost?: number;
+          upstreamInferenceCompletionsCost?: number;
+        };
 
-            const rawCorrectedText=
-                typeof parsed.correctedText==='string'
-                    ? parsed.correctedText.trim()
-                    :text;
+        isByok?: boolean;
+      };
+    };
+    console.log('[TEXT REVIEW] OpenRouter usage:', result.usage);
 
-            const originalText=text.trim();
+    const usage = result.usage;
 
-            const correctedText=
-                rawCorrectedText.length>=2&&
-                    rawCorrectedText.startsWith('"')&&
-                    rawCorrectedText.endsWith('"')&&
-                    !originalText.startsWith('"')&&
-                    !originalText.endsWith('"')
-                    ? rawCorrectedText.slice(1, -1).trim()
-                    :rawCorrectedText;
+    if (usage) {
+      try {
+        const activeSubscription = await this.prisma.subscription.findFirst({
+          where: {
+            userId,
+            status: 'ACTIVE',
+            startedAt: {
+              lte: new Date(),
+            },
+            expiresAt: {
+              gt: new Date(),
+            },
+          },
+          orderBy: {
+            startedAt: 'desc',
+          },
+        });
 
-            return {
-                hasErrors: Boolean(parsed.hasErrors),
-                errors: Array.isArray(parsed.errors)
-                    ? parsed.errors
-                    :[],
-                suggestion:
-                    typeof parsed.suggestion==='string'
-                        ? parsed.suggestion
-                        :'',
-                correctedText,
-            };
-        } catch {
-            return {
-                hasErrors: true,
-                errors: [
-                    'AI trả về kết quả không đúng định dạng.',
-                ],
-                suggestion: '',
-                correctedText: text,
-            };
-        }
+        await this.prisma.aiUsage.create({
+          data: {
+            userId,
+            subscriptionId: activeSubscription?.id ?? null,
+
+            feature: 'TEXT_REVIEW',
+            provider: 'openrouter',
+            model: 'openai/gpt-5.2',
+
+            promptTokens: usage.promptTokens ?? 0,
+            completionTokens: usage.completionTokens ?? 0,
+            reasoningTokens:
+              usage.completionTokensDetails?.reasoningTokens ?? 0,
+            totalTokens: usage.totalTokens ?? 0,
+
+            costUsd: usage.cost ?? 0,
+
+            promptCostUsd: usage.costDetails?.upstreamInferencePromptCost ?? 0,
+
+            completionCostUsd:
+              usage.costDetails?.upstreamInferenceCompletionsCost ?? 0,
+
+            isByok: usage.isByok ?? false,
+          },
+        });
+      } catch (error) {
+        console.error('[TEXT REVIEW] Failed to save AI usage:', error);
+      }
     }
+
+    const content = result.choices?.[0]?.message?.content?.trim() ?? '';
+
+    try {
+      const parsed = JSON.parse(content) as TextReviewResult;
+
+      const rawCorrectedText =
+        typeof parsed.correctedText === 'string'
+          ? parsed.correctedText.trim()
+          : text;
+
+      const originalText = text.trim();
+
+      const correctedText =
+        rawCorrectedText.length >= 2 &&
+        rawCorrectedText.startsWith('"') &&
+        rawCorrectedText.endsWith('"') &&
+        !originalText.startsWith('"') &&
+        !originalText.endsWith('"')
+          ? rawCorrectedText.slice(1, -1).trim()
+          : rawCorrectedText;
+
+      return {
+        hasErrors: Boolean(parsed.hasErrors),
+        errors: Array.isArray(parsed.errors) ? parsed.errors : [],
+        suggestion:
+          typeof parsed.suggestion === 'string' ? parsed.suggestion : '',
+        correctedText,
+      };
+    } catch {
+      return {
+        hasErrors: true,
+        errors: ['AI trả về kết quả không đúng định dạng.'],
+        suggestion: '',
+        correctedText: text,
+      };
+    }
+  }
 }

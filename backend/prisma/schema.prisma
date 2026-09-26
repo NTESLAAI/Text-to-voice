@@ -59,9 +59,13 @@ model Subscription {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  plan   Plan    @relation(fields: [planId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  plan Plan @relation(fields: [planId], references: [id])
+
   usages Usage[]
+
+  quotaLots QuotaLot[]
 
   @@index([userId])
   @@index([planId])
@@ -115,6 +119,39 @@ model Usage {
   @@index([userId])
   @@index([subscriptionId])
   @@index([createdAt])
+}
+
+model QuotaLot {
+  id String @id @default(uuid())
+
+  subscriptionId String
+
+  // Lot trực tiếp tạo ra lot này khi rollover.
+  // null = quota gốc của subscription.
+  sourceLotId String?
+
+  charactersGranted   Int
+  charactersRemaining Int
+
+  // 0 = quota chưa rollover
+  // 1 = quota đã rollover, không được rollover tiếp
+  rolloverCount Int @default(0)
+
+  // Thời điểm lot này hết hạn
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  sourceLot QuotaLot? @relation("QuotaLotRollover", fields: [sourceLotId], references: [id], onDelete: SetNull)
+
+  rolloverLots QuotaLot[] @relation("QuotaLotRollover")
+
+  @@unique([sourceLotId])
+  @@index([subscriptionId])
+  @@index([expiresAt])
 }
 
 model Project {
@@ -221,4 +258,37 @@ model PasswordResetToken {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+model AiUsage {
+  id String @id @default(uuid())
+
+  userId         String
+  subscriptionId String?
+
+  // Tính năng AI đã sử dụng
+  // Ví dụ: TEXT_REVIEW
+  feature String
+
+  provider String @default("openrouter")
+  model    String
+
+  promptTokens     Int @default(0)
+  completionTokens Int @default(0)
+  reasoningTokens  Int @default(0)
+  totalTokens      Int @default(0)
+
+  // Chi phí thực tế do OpenRouter trả về, USD
+  costUsd           Decimal @db.Decimal(18, 8)
+  promptCostUsd     Decimal @default(0) @db.Decimal(18, 8)
+  completionCostUsd Decimal @default(0) @db.Decimal(18, 8)
+
+  isByok Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([subscriptionId])
+  @@index([feature])
+  @@index([createdAt])
 }

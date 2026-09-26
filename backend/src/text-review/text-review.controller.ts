@@ -2,8 +2,11 @@ import {
   Body,
   Controller,
   Post,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
 
+import { JwtAuthGuard } from '../auth/guards/jwt-auth/jwt-auth.guard';
 import { TextReviewService } from './text-review.service';
 
 interface ReviewTextDto {
@@ -17,11 +20,14 @@ export class TextReviewController {
   ) {}
 
   @Post()
+  @UseGuards(JwtAuthGuard)
   async reviewText(
     @Body() body: ReviewTextDto,
+    @Req() req: any,
   ) {
     return this.textReviewService.reviewText(
       body.text,
+      req.user.userId,
     );
   }
 }
