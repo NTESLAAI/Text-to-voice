@@ -126,9 +126,33 @@ function AccountPage({ onBack }: AccountPageProps) {
       setChangingPassword(false);
     }
   }
-  function handleCreatePayment(planCode: string) {
+  async function handleCreatePayment(planCode: string) {
     setPaymentError("");
     setPayment(null);
+
+    // FREE → Paid: đây là mua mới, không phải Upgrade.
+    if (subscription?.plan === "FREE") {
+      try {
+        setPaymentLoading(true);
+
+        const result = await createPayment(planCode);
+
+        setPayment(result);
+      } catch (err: any) {
+        console.error("Create payment failed:", err);
+
+        const message =
+          err?.response?.data?.message || "Không thể tạo yêu cầu thanh toán.";
+
+        setPaymentError(Array.isArray(message) ? message.join(", ") : message);
+      } finally {
+        setPaymentLoading(false);
+      }
+
+      return;
+    }
+
+    // Paid → Paid: phải chọn một trong hai phương án Upgrade.
     setSelectedUpgradePlan(planCode);
     setSelectedUpgradeOption(null);
   }
