@@ -12,7 +12,11 @@ export class PaymentController {
   @UseGuards(JwtAuthGuard)
   @Post('create')
   createPayment(@Req() req: any, @Body() body: CreatePaymentDto) {
-    return this.paymentService.createPayment(req.user.userId, body.planCode);
+    return this.paymentService.createPayment(
+      req.user.userId,
+      body.planCode,
+      body.upgradeOption,
+    );
   }
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Post(':id/confirm')

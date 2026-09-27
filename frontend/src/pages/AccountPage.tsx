@@ -22,6 +22,12 @@ function AccountPage({ onBack }: AccountPageProps) {
   const [payment, setPayment] = useState<CreatePaymentResult | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentError, setPaymentError] = useState("");
+  const [selectedUpgradePlan, setSelectedUpgradePlan] = useState<string | null>(
+    null,
+  );
+  const [selectedUpgradeOption, setSelectedUpgradeOption] = useState<
+    "TRANSFER_QUOTA" | "CONVERT_TO_CREDIT" | null
+  >(null);
   const [usage, setUsage] = useState<ProjectUsage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -120,26 +126,11 @@ function AccountPage({ onBack }: AccountPageProps) {
       setChangingPassword(false);
     }
   }
-  async function handleCreatePayment(planCode: string) {
+  function handleCreatePayment(planCode: string) {
     setPaymentError("");
     setPayment(null);
-
-    try {
-      setPaymentLoading(true);
-
-      const result = await createPayment(planCode);
-
-      setPayment(result);
-    } catch (err: any) {
-      console.error("Create payment failed:", err);
-
-      const message =
-        err?.response?.data?.message || "Không thể tạo yêu cầu thanh toán.";
-
-      setPaymentError(Array.isArray(message) ? message.join(", ") : message);
-    } finally {
-      setPaymentLoading(false);
-    }
+    setSelectedUpgradePlan(planCode);
+    setSelectedUpgradeOption(null);
   }
   function formatDate(value: string) {
     return new Date(value).toLocaleDateString("vi-VN");
@@ -484,7 +475,10 @@ function AccountPage({ onBack }: AccountPageProps) {
                     BUSINESS: 799000,
                   };
 
-                  return plan.price > (subscription ? currentPrices[subscription.plan] ?? 0 : 0);
+                  return (
+                    plan.price >
+                    (subscription ? (currentPrices[subscription.plan] ?? 0) : 0)
+                  );
                 })
                 .map((plan) => (
                   <div
@@ -542,7 +536,190 @@ function AccountPage({ onBack }: AccountPageProps) {
                   </div>
                 ))}
             </div>
+            {selectedUpgradePlan && subscription?.plan !== "FREE" && (
+              <div
+                style={{
+                  marginTop: "20px",
+                  padding: "18px",
+                  border: "1px solid #dbeafe",
+                  borderRadius: "12px",
+                  background: "#f8fbff",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: "16px",
+                    fontWeight: 700,
+                    color: "#0f172a",
+                    marginBottom: "6px",
+                  }}
+                >
+                  Chọn phương án nâng cấp
+                </div>
 
+                <div
+                  style={{
+                    fontSize: "13px",
+                    color: "#64748b",
+                    marginBottom: "16px",
+                  }}
+                >
+                  Bạn chỉ được chọn một trong hai phương án dưới đây.
+                </div>
+
+                <label
+                  style={{
+                    display: "block",
+                    padding: "14px",
+                    marginBottom: "10px",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "10px",
+                    background:
+                      selectedUpgradeOption === "TRANSFER_QUOTA"
+                        ? "#eff6ff"
+                        : "#ffffff",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="upgradeOption"
+                    value="TRANSFER_QUOTA"
+                    checked={selectedUpgradeOption === "TRANSFER_QUOTA"}
+                    onChange={() => setSelectedUpgradeOption("TRANSFER_QUOTA")}
+                    style={{ marginRight: "8px" }}
+                  />
+
+                  <strong>Chuyển toàn bộ quota còn lại</strong>
+
+                  <div
+                    style={{
+                      marginTop: "6px",
+                      marginLeft: "24px",
+                      fontSize: "13px",
+                      color: "#64748b",
+                    }}
+                  >
+                    Toàn bộ quota còn lại của gói hiện tại sẽ được chuyển sang
+                    gói mới. Không giảm giá gói mới.
+                  </div>
+                </label>
+
+                <label
+                  style={{
+                    display: "block",
+                    padding: "14px",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "10px",
+                    background:
+                      selectedUpgradeOption === "CONVERT_TO_CREDIT"
+                        ? "#eff6ff"
+                        : "#ffffff",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="upgradeOption"
+                    value="CONVERT_TO_CREDIT"
+                    checked={selectedUpgradeOption === "CONVERT_TO_CREDIT"}
+                    onChange={() =>
+                      setSelectedUpgradeOption("CONVERT_TO_CREDIT")
+                    }
+                    style={{ marginRight: "8px" }}
+                  />
+
+                  <strong>Quy đổi quota thành tiền</strong>
+
+                  <div
+                    style={{
+                      marginTop: "6px",
+                      marginLeft: "24px",
+                      fontSize: "13px",
+                      color: "#64748b",
+                    }}
+                  >
+                    Quota còn lại sẽ được quy đổi thành tiền và trừ vào giá gói
+                    mới. Quota cũ sẽ không được chuyển sang.
+                  </div>
+                </label>
+              </div>
+            )}
+            {selectedUpgradePlan &&
+              subscription?.plan !== "FREE" &&
+              selectedUpgradeOption && (
+                <div
+                  style={{
+                    marginTop: "12px",
+                    display: "flex",
+                    gap: "10px",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedUpgradePlan(null);
+                      setSelectedUpgradeOption(null);
+                    }}
+                    style={{
+                      border: "1px solid #cbd5e1",
+                      borderRadius: "9px",
+                      padding: "10px 16px",
+                      background: "#ffffff",
+                      color: "#475569",
+                      fontSize: "14px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Hủy
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={paymentLoading}
+                    onClick={async () => {
+                      setPaymentError("");
+                      setPayment(null);
+
+                      try {
+                        setPaymentLoading(true);
+
+                        const result = await createPayment(
+                          selectedUpgradePlan,
+                          selectedUpgradeOption,
+                        );
+
+                        setPayment(result);
+                      } catch (err: any) {
+                        console.error("Create payment failed:", err);
+
+                        const message =
+                          err?.response?.data?.message ||
+                          "Không thể tạo yêu cầu thanh toán.";
+
+                        setPaymentError(
+                          Array.isArray(message) ? message.join(", ") : message,
+                        );
+                      } finally {
+                        setPaymentLoading(false);
+                      }
+                    }}
+                    style={{
+                      border: "none",
+                      borderRadius: "9px",
+                      padding: "10px 16px",
+                      background: paymentLoading ? "#94a3b8" : "#2563eb",
+                      color: "#ffffff",
+                      fontSize: "14px",
+                      fontWeight: 600,
+                      cursor: paymentLoading ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {paymentLoading ? "Đang xử lý..." : "Tiếp tục thanh toán"}
+                  </button>
+                </div>
+              )}
             {paymentError && (
               <div
                 style={{
@@ -562,15 +739,96 @@ function AccountPage({ onBack }: AccountPageProps) {
               <div
                 style={{
                   marginTop: "16px",
-                  padding: "14px",
-                  borderRadius: "10px",
+                  padding: "18px",
+                  borderRadius: "12px",
                   background: "#eff6ff",
                   color: "#1e3a8a",
                   fontSize: "14px",
                 }}
               >
-                Đã tạo yêu cầu thanh toán cho gói{" "}
-                <strong>{payment.planName}</strong>.
+                <div
+                  style={{
+                    fontSize: "16px",
+                    fontWeight: 700,
+                    marginBottom: "14px",
+                  }}
+                >
+                  Yêu cầu thanh toán
+                </div>
+
+                <div style={{ marginBottom: "8px" }}>
+                  Gói mới: <strong>{payment.planName}</strong>
+                </div>
+
+                {payment.paymentType === "UPGRADE" && (
+                  <>
+                    <div style={{ marginBottom: "8px" }}>
+                      Phương án:{" "}
+                      <strong>
+                        {payment.upgradeOption === "TRANSFER_QUOTA"
+                          ? "Chuyển toàn bộ quota còn lại"
+                          : "Quy đổi quota thành tiền"}
+                      </strong>
+                    </div>
+
+                    {typeof payment.remainingCharacters === "number" && (
+                      <div style={{ marginBottom: "8px" }}>
+                        Quota còn lại:{" "}
+                        <strong>
+                          {payment.remainingCharacters.toLocaleString("vi-VN")}{" "}
+                          ký tự
+                        </strong>
+                      </div>
+                    )}
+
+                    {payment.upgradeOption === "CONVERT_TO_CREDIT" &&
+                      typeof payment.creditAmount === "number" && (
+                        <div style={{ marginBottom: "8px" }}>
+                          Giá trị quy đổi:{" "}
+                          <strong>
+                            {payment.creditAmount.toLocaleString("vi-VN")} VND
+                          </strong>
+                        </div>
+                      )}
+                  </>
+                )}
+
+                <div style={{ marginBottom: "8px" }}>
+                  Số tiền cần thanh toán:{" "}
+                  <strong>
+                    {payment.amount.toLocaleString("vi-VN")} {payment.currency}
+                  </strong>
+                </div>
+
+                <div style={{ marginBottom: "8px" }}>
+                  Trạng thái: <strong>{payment.status}</strong>
+                </div>
+
+                {payment.bankName && (
+                  <div
+                    style={{
+                      marginTop: "16px",
+                      paddingTop: "14px",
+                      borderTop: "1px solid #bfdbfe",
+                    }}
+                  >
+                    <div style={{ marginBottom: "6px" }}>
+                      Ngân hàng: <strong>{payment.bankName}</strong>
+                    </div>
+
+                    {payment.accountNumber && (
+                      <div style={{ marginBottom: "6px" }}>
+                        Số tài khoản: <strong>{payment.accountNumber}</strong>
+                      </div>
+                    )}
+
+                    {payment.accountName && (
+                      <div>
+                        Chủ tài khoản: <strong>{payment.accountName}</strong>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

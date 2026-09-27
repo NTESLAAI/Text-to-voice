@@ -80,14 +80,17 @@ model Payment {
 
   amount   Float
   currency String @default("VND")
-
   status   String
   provider String
 
   providerTransactionId String?
   reference             String?
+  paidAt                DateTime?
 
-  paidAt DateTime?
+  // Upgrade
+  paymentType   String  @default("NEW_PURCHASE")
+  upgradeOption String?
+  creditAmount  Float?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

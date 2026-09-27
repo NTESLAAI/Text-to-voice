@@ -443,6 +443,12 @@ export interface CreatePaymentResult {
   currency: string;
   status: string;
   provider: string;
+
+  paymentType?: string;
+  upgradeOption?: "TRANSFER_QUOTA" | "CONVERT_TO_CREDIT";
+  creditAmount?: number | null;
+  remainingCharacters?: number;
+
   bankName?: string;
   accountNumber?: string;
   accountName?: string;
@@ -469,9 +475,11 @@ export async function getMySubscription(): Promise<MySubscription> {
 }
 export async function createPayment(
   planCode: string,
+  upgradeOption?: "TRANSFER_QUOTA" | "CONVERT_TO_CREDIT",
 ): Promise<CreatePaymentResult> {
   const response = await api.post<CreatePaymentResult>("/payment/create", {
     planCode,
+    ...(upgradeOption ? { upgradeOption } : {}),
   });
 
   return response.data;
