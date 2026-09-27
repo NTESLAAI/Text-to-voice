@@ -113,8 +113,9 @@ model Usage {
 
   createdAt DateTime @default(now())
 
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+  user             User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription     Subscription?          @relation(fields: [subscriptionId], references: [id])
+  quotaAllocations UsageQuotaAllocation[]
 
   @@index([userId])
   @@index([subscriptionId])
@@ -147,11 +148,29 @@ model QuotaLot {
 
   sourceLot QuotaLot? @relation("QuotaLotRollover", fields: [sourceLotId], references: [id], onDelete: SetNull)
 
-  rolloverLots QuotaLot[] @relation("QuotaLotRollover")
+  rolloverLots     QuotaLot[]             @relation("QuotaLotRollover")
+  usageAllocations UsageQuotaAllocation[]
 
   @@unique([sourceLotId])
   @@index([subscriptionId])
   @@index([expiresAt])
+}
+
+model UsageQuotaAllocation {
+  id String @id @default(uuid())
+
+  usageId    String
+  quotaLotId String
+
+  characters Int
+
+  createdAt DateTime @default(now())
+
+  usage    Usage    @relation(fields: [usageId], references: [id], onDelete: Cascade)
+  quotaLot QuotaLot @relation(fields: [quotaLotId], references: [id], onDelete: Cascade)
+
+  @@index([usageId])
+  @@index([quotaLotId])
 }
 
 model Project {

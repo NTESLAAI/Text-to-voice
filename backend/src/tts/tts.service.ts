@@ -8,6 +8,7 @@ import { promises as fs } from 'fs';
 import { join } from 'path';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { Prisma } from '../../generated/prisma/client';
 import { characterCountRules } from './character-count';
 import { AudioService } from '../audio/audio.service';
 import {
@@ -120,68 +121,95 @@ export class TtsService {
     const fileUrl = `/uploads/audio/${fileName}`;
 
     // 9. LÆ°u metadata vÃ o PostgreSQL
+    let audio: Awaited<ReturnType<typeof this.prisma.audio.create>>;
+
     try {
-      const audio = await this.prisma.audio.create({
-        data: {
-          projectId: request.projectId,
-          text: request.text,
-          language: request.language,
-          voice: 'Zephyr',
-          character: ttsRequest.character,
-          tone: ttsRequest.tone,
-          emotion: ttsRequest.emotion,
-          style: ttsRequest.style,
-          speed: ttsRequest.speed,
-          provider: 'openrouter',
-          model: 'google/gemini-3.1-flash-tts-preview',
-          fileUrl,
-          format: 'wav',
+      audio = await this.prisma.$transaction(async (tx) => {
+        const createdAudio = await tx.audio.create({
+          data: {
+            projectId: request.projectId,
+            text: request.text,
+            language: request.language,
+            voice: 'Zephyr',
+            character: ttsRequest.character,
+            tone: ttsRequest.tone,
+            emotion: ttsRequest.emotion,
+            style: ttsRequest.style,
+            speed: ttsRequest.speed,
+            provider: 'openrouter',
+            model: 'google/gemini-3.1-flash-tts-preview',
+            fileUrl,
+            format: 'wav',
+            characters,
+            duration,
+          },
+        });
+
+        const allocations = await this.allocateQuotaLots(
+          tx,
+          quota.subscription.id,
           characters,
-          duration,
-        },
+        );
+
+        await tx.usage.create({
+          data: {
+            userId: project.userId,
+            subscriptionId: quota.subscription.id,
+            characters,
+            type: 'tts',
+            referenceId: createdAudio.id,
+            quotaAllocations: {
+              create: allocations.map((allocation) => ({
+                quotaLotId: allocation.quotaLotId,
+                characters: allocation.characters,
+              })),
+            },
+          },
+        });
+
+        return createdAudio;
       });
-
-      await this.audioService.removeProjectAudioExceedingLimit(
-        request.projectId,
-      );
-
-      await this.prisma.usage.create({
-        data: {
-          userId: project.userId,
-          subscriptionId: quota.subscription.id,
-          characters,
-          type: 'tts',
-          referenceId: audio.id,
-        },
-      });
-
-      return {
-        id: audio.id,
-        projectId: audio.projectId,
-        text: audio.text,
-        language: audio.language,
-        voice: audio.voice,
-        speed: audio.speed,
-        provider: audio.provider,
-        model: audio.model,
-        fileUrl: audio.fileUrl,
-        format: audio.format,
-        characters: audio.characters,
-        duration: audio.duration,
-        audio: audioBuffer,
-      };
     } catch (error) {
       try {
         await fs.unlink(filePath);
       } catch (cleanupError) {
         console.error(
-          'Failed to clean up WAV after Audio record creation failed:',
+          'Failed to clean up WAV after Audio creation/usage failed:',
           { filePath, cleanupError },
         );
       }
 
       throw error;
     }
+
+    // Transaction đã thành công.
+    // Từ đây trở đi không được xóa WAV nếu việc dọn lịch sử audio gặp lỗi.
+    try {
+      await this.audioService.removeProjectAudioExceedingLimit(
+        request.projectId,
+      );
+    } catch (error) {
+      console.error('Failed to remove old project audio files:', {
+        projectId: request.projectId,
+        error,
+      });
+    }
+
+    return {
+      id: audio.id,
+      projectId: audio.projectId,
+      text: audio.text,
+      language: audio.language,
+      voice: audio.voice,
+      speed: audio.speed,
+      provider: audio.provider,
+      model: audio.model,
+      fileUrl: audio.fileUrl,
+      format: audio.format,
+      characters: audio.characters,
+      duration: audio.duration,
+      audio: audioBuffer,
+    };
   }
 
   async synthesizeDialogue(request: SynthesizeDialogueDto) {
@@ -254,38 +282,54 @@ export class TtsService {
     await fs.writeFile(filePath, audioBuffer);
 
     try {
-      const dialogue = await this.prisma.dialogue.create({
-        data: {
-          projectId: request.projectId,
-          language: request.language,
-          fileUrl,
-          format: 'wav',
-          characters,
-          duration,
-          provider: 'openrouter',
-          model: 'google/gemini-3.1-flash-tts-preview',
-          speakers: {
-            create: [speakerA, speakerB],
+      const dialogue = await this.prisma.$transaction(async (tx) => {
+        const createdDialogue = await tx.dialogue.create({
+          data: {
+            projectId: request.projectId,
+            language: request.language,
+            fileUrl,
+            format: 'wav',
+            characters,
+            duration,
+            provider: 'openrouter',
+            model: 'google/gemini-3.1-flash-tts-preview',
+            speakers: {
+              create: [speakerA, speakerB],
+            },
+            turns: {
+              create: request.turns.map((turn, index) => ({
+                order: index + 1,
+                speaker: turn.speaker,
+                text: turn.text,
+                style: turn.style,
+              })),
+            },
           },
-          turns: {
-            create: request.turns.map((turn, index) => ({
-              order: index + 1,
-              speaker: turn.speaker,
-              text: turn.text,
-              style: turn.style,
-            })),
-          },
-        },
-      });
+        });
 
-      await this.prisma.usage.create({
-        data: {
-          userId: project.userId,
-          subscriptionId: quota.subscription.id,
+        const allocations = await this.allocateQuotaLots(
+          tx,
+          quota.subscription.id,
           characters,
-          type: 'dialogue',
-          referenceId: dialogue.id,
-        },
+        );
+
+        await tx.usage.create({
+          data: {
+            userId: project.userId,
+            subscriptionId: quota.subscription.id,
+            characters,
+            type: 'dialogue',
+            referenceId: createdDialogue.id,
+            quotaAllocations: {
+              create: allocations.map((allocation) => ({
+                quotaLotId: allocation.quotaLotId,
+                characters: allocation.characters,
+              })),
+            },
+          },
+        });
+
+        return createdDialogue;
       });
 
       return {
@@ -302,7 +346,7 @@ export class TtsService {
         await fs.unlink(filePath);
       } catch (cleanupError) {
         console.error(
-          'Failed to clean up WAV after Dialogue creation failed:',
+          'Failed to clean up WAV after Dialogue creation/usage failed:',
           { filePath, cleanupError },
         );
       }
@@ -413,22 +457,31 @@ export class TtsService {
       );
     }
 
-    const usage = await this.prisma.usage.aggregate({
+    const quotaLots = await this.prisma.quotaLot.findMany({
       where: {
-        userId: project.userId,
         subscriptionId: subscription.id,
+        expiresAt: { gt: new Date() },
       },
-      _sum: {
-        characters: true,
+      select: {
+        charactersGranted: true,
+        charactersRemaining: true,
       },
     });
 
-    const usedCharacters = usage._sum.characters ?? 0;
+    const totalQuota = quotaLots.reduce(
+      (total, lot) => total + lot.charactersGranted,
+      0,
+    );
+
+    const remainingCharacters = quotaLots.reduce(
+      (total, lot) => total + lot.charactersRemaining,
+      0,
+    );
+
+    const usedCharacters = Math.max(totalQuota - remainingCharacters, 0);
 
     const characterLimit = subscription.characterLimit;
     const rolloverCharacters = subscription.rolloverCharacters;
-
-    const totalQuota = characterLimit + rolloverCharacters;
 
     return {
       plan: subscription.plan.code,
@@ -436,7 +489,7 @@ export class TtsService {
       rolloverCharacters,
       totalQuota,
       usedCharacters,
-      remainingCharacters: Math.max(totalQuota - usedCharacters, 0),
+      remainingCharacters,
     };
   }
   async getMyUsage(userId: string) {
@@ -463,21 +516,31 @@ export class TtsService {
       throw new BadRequestException('Gói sử dụng hiện không còn hoạt động.');
     }
 
-    const usage = await this.prisma.usage.aggregate({
+    const quotaLots = await this.prisma.quotaLot.findMany({
       where: {
-        userId,
         subscriptionId: subscription.id,
+        expiresAt: { gt: new Date() },
       },
-      _sum: {
-        characters: true,
+      select: {
+        charactersGranted: true,
+        charactersRemaining: true,
       },
     });
 
-    const usedCharacters = usage._sum.characters ?? 0;
+    const totalQuota = quotaLots.reduce(
+      (total, lot) => total + lot.charactersGranted,
+      0,
+    );
+
+    const remainingCharacters = quotaLots.reduce(
+      (total, lot) => total + lot.charactersRemaining,
+      0,
+    );
+
+    const usedCharacters = Math.max(totalQuota - remainingCharacters, 0);
 
     const characterLimit = subscription.characterLimit;
     const rolloverCharacters = subscription.rolloverCharacters;
-    const totalQuota = characterLimit + rolloverCharacters;
 
     return {
       plan: subscription.plan.code,
@@ -485,10 +548,84 @@ export class TtsService {
       rolloverCharacters,
       totalQuota,
       usedCharacters,
-      remainingCharacters: Math.max(totalQuota - usedCharacters, 0),
+      remainingCharacters,
     };
   }
+  private async allocateQuotaLots(
+    tx: Prisma.TransactionClient,
+    subscriptionId: string,
+    characters: number,
+  ) {
+    if (characters <= 0) {
+      return [];
+    }
 
+    const lots = await tx.$queryRaw<
+      {
+        id: string;
+        charactersRemaining: number;
+      }[]
+    >`
+    SELECT
+      "id",
+      "charactersRemaining"
+    FROM "QuotaLot"
+    WHERE
+      "subscriptionId" = ${subscriptionId}
+      AND "charactersRemaining" > 0
+      AND "expiresAt" > NOW()
+    ORDER BY
+      "expiresAt" ASC,
+      "createdAt" ASC
+    FOR UPDATE
+  `;
+
+    const totalRemaining = lots.reduce(
+      (total, lot) => total + lot.charactersRemaining,
+      0,
+    );
+
+    if (characters > totalRemaining) {
+      throw new BadRequestException(
+        `Bạn chỉ còn ${totalRemaining.toLocaleString(
+          'vi-VN',
+        )} ký tự trong chu kỳ sử dụng.`,
+      );
+    }
+
+    let remaining = characters;
+
+    const allocations: {
+      quotaLotId: string;
+      characters: number;
+    }[] = [];
+
+    for (const lot of lots) {
+      if (remaining <= 0) {
+        break;
+      }
+
+      const allocated = Math.min(lot.charactersRemaining, remaining);
+
+      await tx.quotaLot.update({
+        where: {
+          id: lot.id,
+        },
+        data: {
+          charactersRemaining: lot.charactersRemaining - allocated,
+        },
+      });
+
+      allocations.push({
+        quotaLotId: lot.id,
+        characters: allocated,
+      });
+
+      remaining -= allocated;
+    }
+
+    return allocations;
+  }
   private async checkCharacterQuota(userId: string, characters: number) {
     const now = new Date();
 
@@ -513,50 +650,56 @@ export class TtsService {
 
     if (!subscription) {
       throw new BadRequestException(
-        'TÃ i khoáº£n chÆ°a cÃ³ gÃ³i sá»­ dá»¥ng Ä‘ang hoáº¡t Ä‘á»™ng.',
+        'Tài khoản chưa có gói sử dụng đang hoạt động.',
       );
     }
 
     if (!subscription.plan.isActive) {
-      throw new BadRequestException(
-        'GÃ³i sá»­ dá»¥ng hiá»‡n khÃ´ng cÃ²n hoáº¡t Ä‘á»™ng.',
-      );
+      throw new BadRequestException('Gói sử dụng hiện không còn hoạt động.');
     }
 
-    const usage = await this.prisma.usage.aggregate({
+    const quotaLots = await this.prisma.quotaLot.findMany({
       where: {
-        userId,
         subscriptionId: subscription.id,
+        expiresAt: {
+          gt: now,
+        },
       },
-      _sum: {
-        characters: true,
-      },
+      orderBy: [
+        {
+          expiresAt: 'asc',
+        },
+        {
+          createdAt: 'asc',
+        },
+      ],
     });
 
-    const usedCharacters = usage._sum.characters ?? 0;
-
-    const characterLimit = subscription.characterLimit;
-    const rolloverCharacters = subscription.rolloverCharacters;
-
-    const totalQuota = characterLimit + rolloverCharacters;
-
-    const remainingCharacters = totalQuota - usedCharacters;
+    const remainingCharacters = quotaLots.reduce(
+      (total, lot) => total + lot.charactersRemaining,
+      0,
+    );
 
     if (characters > remainingCharacters) {
       throw new BadRequestException(
-        `Báº¡n chá»‰ cÃ²n ${Math.max(remainingCharacters, 0).toLocaleString(
+        `Bạn chỉ còn ${Math.max(remainingCharacters, 0).toLocaleString(
           'vi-VN',
-        )} kÃ½ tá»± trong chu ká»³ sá»­ dá»¥ng.`,
+        )} ký tự trong chu kỳ sử dụng.`,
       );
     }
 
     return {
       subscription,
       plan: subscription.plan,
-      characterLimit,
-      rolloverCharacters,
-      totalQuota,
-      usedCharacters,
+      characterLimit: subscription.characterLimit,
+      rolloverCharacters: subscription.rolloverCharacters,
+      totalQuota: quotaLots.reduce(
+        (total, lot) => total + lot.charactersGranted,
+        0,
+      ),
+      usedCharacters:
+        quotaLots.reduce((total, lot) => total + lot.charactersGranted, 0) -
+        remainingCharacters,
       remainingCharacters,
     };
   }
