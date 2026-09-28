@@ -539,23 +539,39 @@ export class PaymentService {
        * Tạo thêm một QuotaLot chứa toàn bộ quota còn lại
        * của subscription cũ.
        *
-       * Không dùng sourceLotId vì đây là Upgrade,
-       * không phải rollover.
+       * Transfer toàn bộ quota còn lại theo từng QuotaLot,
+       * giữ sourceLotId để đảm bảo mỗi lot nguồn chỉ được chuyển đúng một lần.
        * ============================================================
        */
       if (
         payment.upgradeOption === 'TRANSFER_QUOTA' &&
         remainingCharacters > 0
       ) {
-        await tx.quotaLot.create({
-          data: {
-            subscriptionId: newSubscription.id,
-            charactersGranted: remainingCharacters,
-            charactersRemaining: remainingCharacters,
-            rolloverCount: 0,
-            expiresAt: newSubscription.expiresAt,
-          },
-        });
+        for (const lot of activeSubscription.quotaLots) {
+          if (lot.charactersRemaining <= 0) {
+            continue;
+          }
+
+          await tx.quotaLot.create({
+            data: {
+              subscriptionId: newSubscription.id,
+              sourceLotId: lot.id,
+              charactersGranted: lot.charactersRemaining,
+              charactersRemaining: lot.charactersRemaining,
+              rolloverCount: 0,
+              expiresAt: newSubscription.expiresAt,
+            },
+          });
+
+          await tx.quotaLot.update({
+            where: {
+              id: lot.id,
+            },
+            data: {
+              rolloverCount: lot.rolloverCount + 1,
+            },
+          });
+        }
       }
 
       /*
