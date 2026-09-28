@@ -67,9 +67,113 @@ export class PaymentService {
       },
     });
 
+    /*
+     * RENEWAL:
+     * Subscription Paid đã hết hạn nhưng vẫn còn trong cửa sổ 24 giờ.
+     */
+    const renewalSubscription = !activeSubscription
+      ? await this.prisma.subscription.findFirst({
+          where: {
+            userId,
+            status: 'ACTIVE',
+            startedAt: {
+              lte: now,
+            },
+            expiresAt: {
+              lte: now,
+              gte: new Date(now.getTime() - 24 * 60 * 60 * 1000),
+            },
+            plan: {
+              code: {
+                not: 'FREE',
+              },
+            },
+          },
+          include: {
+            plan: true,
+            quotaLots: {
+              where: {
+                charactersRemaining: {
+                  gt: 0,
+                },
+                rolloverCount: 0,
+                expiresAt: {
+                  lte: now,
+                },
+              },
+              orderBy: {
+                expiresAt: 'asc',
+              },
+            },
+          },
+          orderBy: {
+            expiresAt: 'desc',
+          },
+        })
+      : null;
+
+    if (!activeSubscription && !renewalSubscription) {
+      throw new BadRequestException(
+        'Tài khoản chưa có gói sử dụng đang hoạt động hoặc không còn trong thời gian gia hạn 24 giờ.',
+      );
+    }
+
+    /*
+     * ============================================================
+     * RENEWAL
+     * ============================================================
+     *
+     * Paid subscription đã hết hạn nhưng vẫn trong cửa sổ 24 giờ.
+     * Renewal là giao dịch riêng, không phải Upgrade.
+     *
+     * - Có thể renew cùng gói.
+     * - Thanh toán đầy đủ giá gói mới.
+     * - Không sử dụng upgradeOption.
+     * - Quota cũ sẽ được rollover khi confirmPayment().
+     */
+    if (renewalSubscription) {
+      if (upgradeOption) {
+        throw new BadRequestException(
+          'Giao dịch Renewal không sử dụng lựa chọn Upgrade.',
+        );
+      }
+
+      const payment = await this.prisma.payment.create({
+        data: {
+          userId,
+          planId: plan.id,
+          amount: plan.price,
+          currency: plan.currency,
+          status: 'PENDING',
+          provider: 'BANK_TRANSFER',
+          paymentType: 'RENEWAL',
+        },
+        include: {
+          plan: true,
+        },
+      });
+
+      return {
+        id: payment.id,
+        plan: payment.plan.code,
+        planName: payment.plan.name,
+        amount: payment.amount,
+        currency: payment.currency,
+        status: payment.status,
+        provider: payment.provider,
+        paymentType: payment.paymentType,
+        upgradeOption: payment.upgradeOption,
+        creditAmount: payment.creditAmount,
+        bankName: process.env.BANK_TRANSFER_BANK_NAME,
+        accountNumber: process.env.BANK_TRANSFER_ACCOUNT_NUMBER,
+        accountName: process.env.BANK_TRANSFER_ACCOUNT_NAME,
+        createdAt: payment.createdAt,
+      };
+    }
+
     if (!activeSubscription) {
       throw new BadRequestException(
-        'Tài khoản chưa có gói sử dụng đang hoạt động.',
+        'Tài khoản không có gói sử dụng đang hoạt động.',
       );
     }
 
@@ -305,15 +409,183 @@ export class PaymentService {
         },
       });
 
-      if (!activeSubscription) {
+      const renewalSubscription =
+        payment.paymentType === 'RENEWAL' && !activeSubscription
+          ? await tx.subscription.findFirst({
+              where: {
+                userId: payment.userId,
+                status: 'ACTIVE',
+                startedAt: {
+                  lte: now,
+                },
+                expiresAt: {
+                  lte: now,
+                  gte: new Date(now.getTime() - 24 * 60 * 60 * 1000),
+                },
+                plan: {
+                  code: {
+                    not: 'FREE',
+                  },
+                },
+              },
+              include: {
+                plan: true,
+                quotaLots: {
+                  where: {
+                    charactersRemaining: {
+                      gt: 0,
+                    },
+                    rolloverCount: 0,
+                    expiresAt: {
+                      lte: now,
+                    },
+                  },
+                  orderBy: {
+                    expiresAt: 'asc',
+                  },
+                },
+              },
+            })
+          : null;
+
+      const isFreeToPaid = activeSubscription?.plan.code === 'FREE';
+
+      const isUpgrade = payment.paymentType === 'UPGRADE';
+      const isRenewal = payment.paymentType === 'RENEWAL';
+
+      if (isRenewal) {
+        if (!renewalSubscription) {
+          throw new BadRequestException(
+            'Gói sử dụng không còn trong thời gian gia hạn 24 giờ.',
+          );
+        }
+      } else if (!activeSubscription) {
         throw new BadRequestException(
           'Tài khoản không có gói sử dụng đang hoạt động.',
         );
       }
 
-      const isFreeToPaid = activeSubscription.plan.code === 'FREE';
-      const isUpgrade = payment.paymentType === 'UPGRADE';
+      /*
+       * ============================================================
+       * RENEWAL
+       * ============================================================
+       *
+       * Paid subscription đã hết hạn nhưng vẫn trong cửa sổ 24 giờ.
+       *
+       * - Subscription cũ kết thúc.
+       * - Tạo subscription mới.
+       * - Tạo quota lot mới của plan.
+       * - Rollover từng quota lot cũ đủ điều kiện.
+       * - Mỗi source lot chỉ được rollover một lần.
+       */
+      if (isRenewal && renewalSubscription) {
+        await tx.subscription.update({
+          where: {
+            id: renewalSubscription.id,
+          },
+          data: {
+            status: 'EXPIRED',
+          },
+        });
 
+        const newSubscription = await tx.subscription.create({
+          data: {
+            userId: payment.userId,
+            planId: payment.planId,
+            startedAt: now,
+            expiresAt: new Date(
+              now.getTime() + payment.plan.durationDays * 24 * 60 * 60 * 1000,
+            ),
+            status: 'ACTIVE',
+            characterLimit: payment.plan.characterLimit,
+            rolloverCharacters: 0,
+            pricePaid: payment.amount,
+            currency: payment.currency,
+          },
+          include: {
+            plan: true,
+          },
+        });
+
+        await tx.quotaLot.create({
+          data: {
+            subscriptionId: newSubscription.id,
+            sourceLotId: null,
+            charactersGranted: payment.plan.characterLimit,
+            charactersRemaining: payment.plan.characterLimit,
+            rolloverCount: 0,
+            expiresAt: newSubscription.expiresAt,
+          },
+        });
+
+        for (const lot of renewalSubscription.quotaLots) {
+          if (lot.charactersRemaining <= 0 || lot.rolloverCount > 0) {
+            continue;
+          }
+
+          await tx.quotaLot.create({
+            data: {
+              subscriptionId: newSubscription.id,
+              sourceLotId: lot.id,
+              charactersGranted: lot.charactersRemaining,
+              charactersRemaining: lot.charactersRemaining,
+              rolloverCount: 0,
+              expiresAt: newSubscription.expiresAt,
+            },
+          });
+
+          await tx.quotaLot.update({
+            where: {
+              id: lot.id,
+            },
+            data: {
+              rolloverCount: lot.rolloverCount + 1,
+            },
+          });
+        }
+
+        const updatedPayment = await tx.payment.update({
+          where: {
+            id: payment.id,
+          },
+          data: {
+            status: 'PAID',
+            paidAt: now,
+          },
+          include: {
+            plan: true,
+          },
+        });
+
+        return {
+          id: updatedPayment.id,
+          plan: updatedPayment.plan.code,
+          planName: updatedPayment.plan.name,
+          amount: updatedPayment.amount,
+          currency: updatedPayment.currency,
+          status: updatedPayment.status,
+          provider: updatedPayment.provider,
+          paymentType: updatedPayment.paymentType,
+          upgradeOption: updatedPayment.upgradeOption,
+          creditAmount: updatedPayment.creditAmount,
+          paidAt: updatedPayment.paidAt,
+          subscription: {
+            id: newSubscription.id,
+            plan: newSubscription.plan.code,
+            planName: newSubscription.plan.name,
+            status: newSubscription.status,
+            startedAt: newSubscription.startedAt,
+            expiresAt: newSubscription.expiresAt,
+            characterLimit: newSubscription.characterLimit,
+            rolloverCharacters: newSubscription.rolloverCharacters,
+          },
+        };
+      }
+      if (!activeSubscription) {
+        throw new BadRequestException(
+          'Tài khoản không có gói sử dụng đang hoạt động.',
+        );
+      }
       /*
        * ============================================================
        * FREE → PAID
