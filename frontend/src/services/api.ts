@@ -434,6 +434,8 @@ export interface MySubscription {
   characterLimit: number;
   rolloverCharacters: number;
   pricePaid?: number | null;
+  renewalAvailable: boolean;
+  renewalExpiresAt: string | null;
 }
 export interface CreatePaymentResult {
   id: string;

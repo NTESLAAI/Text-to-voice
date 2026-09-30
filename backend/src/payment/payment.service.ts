@@ -353,7 +353,61 @@ export class PaymentService {
       createdAt: payment.createdAt,
     };
   }
+  async confirmPaymentByUser(userId: string, paymentId: string) {
+    const payment = await this.prisma.payment.findUnique({
+      where: { id: paymentId },
+    });
 
+    if (!payment) {
+      throw new NotFoundException('Không tìm thấy giao dịch thanh toán.');
+    }
+
+    if (payment.userId !== userId) {
+      throw new BadRequestException(
+        'Bạn không có quyền xác nhận giao dịch này.',
+      );
+    }
+
+    if (payment.status !== 'PENDING') {
+      throw new BadRequestException(
+        'Giao dịch không ở trạng thái chờ thanh toán.',
+      );
+    }
+
+    return this.prisma.payment.update({
+      where: { id: paymentId },
+      data: {
+        status: 'USER_CONFIRMED',
+      },
+    });
+  }
+
+  async cancelPayment(userId: string, paymentId: string) {
+    const payment = await this.prisma.payment.findUnique({
+      where: { id: paymentId },
+    });
+
+    if (!payment) {
+      throw new NotFoundException('Không tìm thấy giao dịch thanh toán.');
+    }
+
+    if (payment.userId !== userId) {
+      throw new BadRequestException('Bạn không có quyền hủy giao dịch này.');
+    }
+
+    if (payment.status !== 'PENDING') {
+      throw new BadRequestException(
+        'Chỉ có thể hủy giao dịch đang chờ thanh toán.',
+      );
+    }
+
+    return this.prisma.payment.update({
+      where: { id: paymentId },
+      data: {
+        status: 'CANCELLED',
+      },
+    });
+  }
   async confirmPayment(paymentId: string) {
     return this.prisma.$transaction(async (tx) => {
       const now = new Date();
@@ -371,9 +425,9 @@ export class PaymentService {
         throw new NotFoundException('Không tìm thấy giao dịch thanh toán.');
       }
 
-      if (payment.status !== 'PENDING') {
+      if (payment.status !== 'PENDING' && payment.status !== 'USER_CONFIRMED') {
         throw new BadRequestException(
-          'Giao dịch không ở trạng thái chờ thanh toán.',
+          'Giao dịch không ở trạng thái chờ xác nhận.',
         );
       }
 

@@ -18,6 +18,17 @@ export class PaymentController {
       body.upgradeOption,
     );
   }
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/confirm-user')
+  confirmPaymentByUser(@Req() req: any, @Param('id') paymentId: string) {
+    return this.paymentService.confirmPaymentByUser(req.user.userId, paymentId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/cancel')
+  cancelPayment(@Req() req: any, @Param('id') paymentId: string) {
+    return this.paymentService.cancelPayment(req.user.userId, paymentId);
+  }
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Post(':id/confirm')
   confirmPayment(@Param('id') paymentId: string) {
