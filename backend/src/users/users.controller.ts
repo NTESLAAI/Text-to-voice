@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth/jwt-auth.guard';
+import { AdminGuard } from '../auth/guards/admin/admin.guard';
 import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Controller('users')
@@ -24,7 +25,11 @@ export class UsersController {
   findAll() {
     return this.usersService.findAll();
   }
-
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @Get('admin')
+  findAllForAdmin() {
+    return this.usersService.findAllForAdmin();
+  }
   @UseGuards(JwtAuthGuard)
   @Get('me')
   findMe(@Req() req: any) {
