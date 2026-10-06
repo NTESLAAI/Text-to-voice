@@ -1,5 +1,5 @@
 ﻿import { useState } from "react";
-import api, { checkEmailExists } from "../services/api";
+import api, { checkEmailExists, checkPhoneExists } from "../services/api";
 
 interface RegisterPageProps {
   onRegisterSuccess: () => void;
@@ -12,6 +12,9 @@ function RegisterPage({
 }: RegisterPageProps) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [phoneExists, setPhoneExists] = useState<boolean | null>(null);
+  const [checkingPhone, setCheckingPhone] = useState(false);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -30,13 +33,34 @@ function RegisterPage({
     hasMinLength && hasUppercase && hasLowercase && hasNumber;
 
   const isPasswordMatch = password.length > 0 && password === confirmPassword;
-  const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const normalizedEmail = email.trim();
+  const normalizedPhone = phone.trim();
+
+  const isEmailValid =
+    normalizedEmail.length === 0 ||
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
+
+  const isPhoneValid =
+    normalizedPhone.length === 0 || /^\+?[0-9]{8,15}$/.test(normalizedPhone);
+
+  const hasEmailOrPhone =
+    normalizedEmail.length > 0 || normalizedPhone.length > 0;
+
+  const emailCheckPassed =
+    normalizedEmail.length === 0 || emailExists === false;
+
+  const phoneCheckPassed =
+    normalizedPhone.length === 0 || phoneExists === false;
 
   const canRegister =
     name.trim().length > 0 &&
+    hasEmailOrPhone &&
     isEmailValid &&
-    emailExists === false &&
+    isPhoneValid &&
+    emailCheckPassed &&
+    phoneCheckPassed &&
     !checkingEmail &&
+    !checkingPhone &&
     isPasswordValid &&
     isPasswordMatch;
 
@@ -60,11 +84,56 @@ function RegisterPage({
       setCheckingEmail(false);
     }
   }
+  async function handlePhoneBlur() {
+    const normalizedPhone = phone.trim();
+
+    if (!normalizedPhone || !/^\+?[0-9]{8,15}$/.test(normalizedPhone)) {
+      setPhoneExists(null);
+      return;
+    }
+
+    setCheckingPhone(true);
+
+    try {
+      const result = await checkPhoneExists(normalizedPhone);
+      setPhoneExists(result.exists);
+    } catch (error) {
+      console.error("CHECK PHONE ERROR:", error);
+      setPhoneExists(null);
+    } finally {
+      setCheckingPhone(false);
+    }
+  }
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
 
-    if (!name.trim() || !email.trim() || !password || !confirmPassword) {
-      setError("Vui lòng nhập đầy đủ thông tin.");
+    if (
+      !name.trim() ||
+      (!email.trim() && !phone.trim()) ||
+      !password ||
+      !confirmPassword
+    ) {
+      setError("Vui lòng nhập họ tên, email hoặc số điện thoại và mật khẩu.");
+      return;
+    }
+
+    if (email.trim() && !isEmailValid) {
+      setError("Email không hợp lệ.");
+      return;
+    }
+
+    if (phone.trim() && !isPhoneValid) {
+      setError("Số điện thoại không hợp lệ. Vui lòng nhập từ 8 đến 15 chữ số.");
+      return;
+    }
+
+    if (email.trim() && emailExists !== false) {
+      setError("Vui lòng kiểm tra email trước khi đăng ký.");
+      return;
+    }
+
+    if (phone.trim() && phoneExists !== false) {
+      setError("Vui lòng kiểm tra số điện thoại trước khi đăng ký.");
       return;
     }
 
@@ -86,7 +155,8 @@ function RegisterPage({
     try {
       await api.post("/auth/register", {
         name: name.trim(),
-        email: email.trim(),
+        ...(email.trim() ? { email: email.trim() } : {}),
+        ...(phone.trim() ? { phone: phone.trim() } : {}),
         password,
       });
 
@@ -274,6 +344,84 @@ function RegisterPage({
               }}
             >
               ✓ Email có thể sử dụng.
+            </div>
+          )}
+
+          <label
+            htmlFor="register-phone"
+            style={{
+              display: "block",
+              marginBottom: "9px",
+              fontSize: "15px",
+              fontWeight: 500,
+            }}
+          >
+            Số điện thoại
+          </label>
+
+          <input
+            id="register-phone"
+            type="tel"
+            value={phone}
+            onChange={(event) => {
+              setPhone(event.target.value);
+              setPhoneExists(null);
+            }}
+            onBlur={handlePhoneBlur}
+            placeholder="Nhập số điện thoại"
+            autoComplete="tel"
+            disabled={loading}
+            style={{
+              width: "100%",
+              height: "48px",
+              boxSizing: "border-box",
+              padding: "0 15px",
+              marginBottom: "18px",
+              border: "1px solid #d1d5db",
+              borderRadius: "10px",
+              fontSize: "16px",
+              outline: "none",
+            }}
+          />
+
+          {checkingPhone && (
+            <div
+              style={{
+                marginTop: "-10px",
+                marginBottom: "18px",
+                fontSize: "13px",
+                color: "#64748b",
+              }}
+            >
+              Đang kiểm tra số điện thoại...
+            </div>
+          )}
+
+          {!checkingPhone && phoneExists === true && (
+            <div
+              style={{
+                marginTop: "-10px",
+                marginBottom: "18px",
+                fontSize: "13px",
+                fontWeight: 600,
+                color: "#dc2626",
+              }}
+            >
+              ✕ Số điện thoại này đã được đăng ký. Vui lòng nhập số khác.
+            </div>
+          )}
+
+          {!checkingPhone && phoneExists === false && (
+            <div
+              style={{
+                marginTop: "-10px",
+                marginBottom: "18px",
+                fontSize: "13px",
+                fontWeight: 600,
+                color: "#16a34a",
+              }}
+            >
+              ✓ Số điện thoại có thể sử dụng.
             </div>
           )}
           <label

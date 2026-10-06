@@ -10,7 +10,8 @@ datasource db {
 
 model User {
   id        String   @id @default(uuid())
-  email     String   @unique
+  email     String?  @unique
+  phone     String?  @unique
   password  String?
   name      String?
   role      String   @default("USER")
@@ -85,6 +86,7 @@ model Payment {
 
   providerTransactionId String?
   reference             String?
+  transferCode          String?   @unique
   paidAt                DateTime?
 
   // Upgrade

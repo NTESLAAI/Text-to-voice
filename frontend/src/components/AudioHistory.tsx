@@ -51,6 +51,12 @@ export default function AudioHistory({
   const [activeTab, setActiveTab] = useState<"audio" | "dialogue">("audio");
 
   useEffect(() => {
+    if (!projectId) {
+      setAudios([]);
+      setDialogues([]);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     const objectUrls: string[] = [];
 

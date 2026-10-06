@@ -377,8 +377,10 @@ export async function getMyUsage(): Promise<ProjectUsage> {
 
 export interface AuthUser {
   id: string;
-  email: string;
+  email?: string | null;
+  phone?: string | null;
   name?: string | null;
+  role: string;
 }
 
 export interface LoginResult {
@@ -388,11 +390,11 @@ export interface LoginResult {
 }
 
 export async function login(
-  email: string,
+  identifier: string,
   password: string,
 ): Promise<LoginResult> {
   const response = await api.post<LoginResult>("/auth/login", {
-    email,
+    identifier,
     password,
   });
 
@@ -407,10 +409,19 @@ export async function checkEmailExists(
 
   return response.data;
 }
+export async function checkPhoneExists(
+  phone: string,
+): Promise<{ exists: boolean }> {
+  const response = await api.get<{ exists: boolean }>("/users/check-phone", {
+    params: { phone: phone.trim() },
+  });
 
+  return response.data;
+}
 export interface MyProfile {
   id: string;
   email: string;
+  phone?: string | null;
   name?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -513,6 +524,38 @@ export async function resetPassword(
     newPassword,
   });
 
+  return response.data;
+}
+export interface AdminPayment {
+  id: string;
+  user: {
+    id: string;
+    name: string | null;
+    email: string | null;
+  };
+  plan: {
+    id: string;
+    code: string;
+    name: string;
+  };
+  amount: number;
+  currency: string;
+  status: string;
+  provider: string;
+  transferCode: string | null;
+  paymentType: string;
+  upgradeOption?: string | null;
+  creditAmount?: number | null;
+  createdAt: string;
+  paidAt?: string | null;
+}
+
+export async function getAdminPayments(): Promise<AdminPayment[]> {
+  const response = await api.get<AdminPayment[]>("/admin/payments");
+  return response.data;
+}
+export async function confirmAdminPayment(paymentId: string) {
+  const response = await api.post(`/admin/payments/${paymentId}/confirm`);
   return response.data;
 }
 export default api;

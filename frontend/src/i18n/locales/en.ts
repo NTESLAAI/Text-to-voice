@@ -1,33 +1,36 @@
 const en = {
   translation: {
     app: {
-      title: 'TEXT-TO-VOICE',
-      subtitle: 'TEXT TO SPEECH',
+      title: "TEXT-TO-VOICE",
+      subtitle: "TEXT TO SPEECH",
     },
 
     language: {
-  label: 'Language',
-  vietnamese: 'Vietnamese',
-  english: 'English',
-},
+      label: "Language",
+      vietnamese: "Vietnamese",
+      english: "English",
+    },
 
     tts: {
-      title: 'TEXT-TO-VOICE',
-      placeholder: 'Enter text to speak...',
-      generate: 'Generate Voice',
-      generating: 'Generating voice...',
-      characters: '{{count}} / 5000 characters',
-      history: 'Audio History',
-      play: 'Play',
-      delete: 'Delete',
-      duration: '{{duration}} seconds',
-      empty: 'No audio yet.',
-      confirmDelete: 'Are you sure you want to delete this audio?',
+      title: "TEXT-TO-VOICE",
+      placeholder: "Enter text to speak...",
+      generate: "Generate Voice",
+      generating: "Generating voice...",
+      characters: "{{count}} / 5000 characters",
+      history: "Audio History",
+      play: "Play",
+      delete: "Delete",
+      duration: "{{duration}} seconds",
+      empty: "No audio yet.",
+      confirmDelete: "Are you sure you want to delete this audio?",
     },
 
     common: {
-      error: 'Something went wrong.',
-      loading: 'Loading...',
+      error: "Something went wrong.",
+      loading: "Loading...",
+      confirmLogout: "Are you sure you want to log out?",
+      yes: "Yes",
+      cancel: "Cancel",
     },
   },
 };

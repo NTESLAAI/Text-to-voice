@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 const publicUserSelect = {
   id: true,
   email: true,
+  phone: true,
   name: true,
   createdAt: true,
   updatedAt: true,
@@ -14,7 +15,12 @@ const publicUserSelect = {
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(data: { email: string; password?: string; name?: string }) {
+  async create(data: {
+    email?: string;
+    phone?: string;
+    password?: string;
+    name?: string;
+  }) {
     const hashedPassword = data.password
       ? await bcrypt.hash(data.password, 12)
       : undefined;
@@ -36,7 +42,8 @@ export class UsersService {
 
       const user = await tx.user.create({
         data: {
-          email: data.email.trim().toLowerCase(),
+          email: data.email?.trim().toLowerCase() || null,
+          phone: data.phone?.trim() || null,
           password: hashedPassword,
           name: data.name,
         },
@@ -79,6 +86,25 @@ export class UsersService {
         email: true,
         name: true,
         password: true,
+        role: true,
+      },
+    });
+  }
+
+  async findByIdentifierWithPassword(identifier: string) {
+    const value = identifier.trim();
+
+    const isEmail = value.includes('@');
+
+    return this.prisma.user.findFirst({
+      where: isEmail ? { email: value.toLowerCase() } : { phone: value },
+      select: {
+        id: true,
+        email: true,
+        phone: true,
+        name: true,
+        password: true,
+        role: true,
       },
     });
   }
@@ -87,6 +113,18 @@ export class UsersService {
 
     const user = await this.prisma.user.findUnique({
       where: { email: normalizedEmail },
+      select: { id: true },
+    });
+
+    return {
+      exists: !!user,
+    };
+  }
+  async checkPhoneExists(phone: string) {
+    const normalizedPhone = phone.trim();
+
+    const user = await this.prisma.user.findUnique({
+      where: { phone: normalizedPhone },
       select: { id: true },
     });
 

@@ -13,17 +13,17 @@ function LoginPage({
   onSwitchToRegister,
   onSwitchToForgotPassword,
 }: LoginPageProps) {
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const canLogin = email.trim().length > 0 && password.length > 0;
+  const canLogin = identifier.trim().length > 0 && password.length > 0;
   const [showPassword, setShowPassword] = useState(false);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
 
-    if (!email.trim() || !password) {
+    if (!identifier.trim() || !password) {
       setError("Vui lòng nhập đầy đủ thông tin.");
       return;
     }
@@ -32,7 +32,7 @@ function LoginPage({
     setError("");
 
     try {
-      const result = await login(email.trim(), password);
+      const result = await login(identifier.trim(), password);
       console.log("LOGIN RESULT:", result);
 
       await saveAuth(result.accessToken, result.user);
@@ -42,7 +42,7 @@ function LoginPage({
       console.log("LOGIN SUCCESS CALLBACK");
     } catch (error) {
       console.error("LOGIN ERROR:", error);
-      setError("Email hoặc mật khẩu không đúng. Vui lòng kiểm tra lại.");
+      setError("Email/số điện thoại hoặc mật khẩu không đúng. Vui lòng kiểm tra lại.");
     } finally {
       setLoading(false);
     }
@@ -102,16 +102,16 @@ function LoginPage({
               fontWeight: 500,
             }}
           >
-            Email
+            Email/Số điện thoại
           </label>
 
           <input
-            id="login-email"
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="Nhập email"
-            autoComplete="email"
+            id="login-identifier"
+            type="text"
+            value={identifier}
+            onChange={(event) => setIdentifier(event.target.value)}
+            placeholder="Nhập email hoặc số điện thoại"
+            autoComplete="username"
             disabled={loading}
             style={{
               width: "100%",

@@ -1186,3 +1186,14 @@
     display: none !important;
   }
 }
+@media (min-width: 768px) {
+  .ttv-web-shell.admin-mode {
+    display: block;
+  }
+
+  .ttv-web-shell.admin-mode .ttv-web-main {
+    width: 100%;
+    min-height: 100vh;
+    margin: 0;
+  }
+}

@@ -6,6 +6,8 @@ import RegisterPage from "./pages/RegisterPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import AccountBar from "./components/AccountBar";
+import AdminLayout from "./components/admin/AdminLayout";
+import AdminUsers from "./components/admin/AdminUsers";
 import { getAuthToken } from "./services/authStorage";
 import AccountPage from "./pages/AccountPage";
 import WebHistorySidebar from "./components/WebHistorySidebar";
@@ -15,6 +17,7 @@ import {
   getProjectDialogues,
   getAudioUrl,
 } from "./services/api";
+import AdminPayments from "./components/admin/AdminPayments";
 
 function App() {
   const [checkingAuth, setCheckingAuth] = useState(true);
@@ -23,6 +26,7 @@ function App() {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetToken, setResetToken] = useState("");
   const [showAccount, setShowAccount] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
   const [webView, setWebView] = useState<
     "tts" | "audio-history" | "dialogue-history"
   >("tts");
@@ -62,6 +66,7 @@ function App() {
   };
 
   const [historyAudioUrl, setHistoryAudioUrl] = useState<string | null>(null);
+  const [adminItem, setAdminItem] = useState("users");
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get("token");
@@ -174,59 +179,114 @@ function App() {
   }
 
   return (
-    <div className="ttv-web-shell">
-      <aside className="ttv-web-sidebar">
-        <button
-          type="button"
-          className="ttv-web-sidebar-brand"
-          onClick={() => {
-            setShowAccount(false);
-            setWebView("tts");
-          }}
-        >
-          <strong>🎙️ N.TESLA.AI</strong>
-          <span>Text-to-Voice</span>
-        </button>
-
-        <nav className="ttv-web-sidebar-nav" aria-label="Điều hướng">
-          <div className="ttv-web-sidebar-section-title">LỊCH SỬ</div>
-
-          <WebHistorySidebar
-            projectId={projectId}
-            activeType={historyType}
-            activeId={historyId}
-            refreshKey={historyRefreshKey}
-            onSelect={(type, id) => {
+    <div className={`ttv-web-shell ${showAdmin ? "admin-mode" : ""}`}>
+      {!showAdmin && (
+        <aside className="ttv-web-sidebar">
+          <button
+            type="button"
+            className="ttv-web-sidebar-brand"
+            onClick={() => {
               setShowAccount(false);
-              setWebView(
-                type === "audio" ? "audio-history" : "dialogue-history",
-              );
-              setHistoryType(type);
-              setHistoryId(id);
+              setWebView("tts");
             }}
-          />
-        </nav>
+          >
+            <strong>🎙️ N.TESLA.AI</strong>
+            <span>Text-to-Voice</span>
+          </button>
 
-        <div className="ttv-web-sidebar-account">
-          <AccountBar
-            onLogout={() => setIsAuthenticated(false)}
-            onAccount={() => setShowAccount(true)}
-          />
-        </div>
-      </aside>
+          <nav className="ttv-web-sidebar-nav" aria-label="Điều hướng">
+            <div className="ttv-web-sidebar-section-title">LỊCH SỬ</div>
+
+            <WebHistorySidebar
+              projectId={projectId}
+              activeType={historyType}
+              activeId={historyId}
+              refreshKey={historyRefreshKey}
+              onSelect={(type, id) => {
+                setShowAccount(false);
+                setWebView(
+                  type === "audio" ? "audio-history" : "dialogue-history",
+                );
+                setHistoryType(type);
+                setHistoryId(id);
+              }}
+            />
+          </nav>
+
+          <div className="ttv-web-sidebar-account">
+            <AccountBar
+              onLogout={() => {
+                setHistoryId(null);
+                setHistoryType(null);
+                setHistoryAudioUrl(null);
+                setWebView("tts");
+                setProjectId("");
+                setHistoryRefreshKey((current) => current + 1);
+                setIsAuthenticated(false);
+              }}
+              onAccount={() => {
+                setShowAdmin(false);
+                setShowAccount(true);
+              }}
+              onAdmin={() => {
+                setShowAccount(false);
+                setShowAdmin(true);
+              }}
+            />
+          </div>
+        </aside>
+      )}
 
       <main className="ttv-web-main">
-        {showAccount ? (
+        {showAdmin ? (
+          <AdminLayout
+            activeItem={adminItem}
+            onSelect={setAdminItem}
+            onBack={() => setShowAdmin(false)}
+          >
+            {adminItem === "users" ? <AdminUsers /> : <AdminPayments />}
+          </AdminLayout>
+        ) : showAccount ? (
           <AccountPage onBack={() => setShowAccount(false)} />
         ) : webView === "tts" ? (
           <TextToVoicePage onProjectIdReady={setProjectId} />
         ) : (
           <div className="ttv-web-history-player">
-            <h2>
-              {historyType === "audio"
-                ? "🎧 Lịch sử âm thanh"
-                : "💬 Lịch sử hội thoại"}
-            </h2>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                marginBottom: "16px",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setWebView("tts");
+                  setHistoryId(null);
+                  setHistoryType(null);
+                  setHistoryAudioUrl(null);
+                }}
+                style={{
+                  cursor: "pointer",
+                  padding: "8px 14px",
+                  borderRadius: "8px",
+                  border: "1px solid #ccc",
+                  background: "transparent",
+                  color: "inherit",
+                  fontSize: "14px",
+                }}
+              >
+                ← Quay lại
+              </button>
+
+              <h2 style={{ margin: 0 }}>
+                {historyType === "audio"
+                  ? "🎧 Lịch sử âm thanh"
+                  : "💬 Lịch sử hội thoại"}
+              </h2>
+            </div>
 
             {historyAudioUrl ? (
               <div className="ttv-web-history-player-row">

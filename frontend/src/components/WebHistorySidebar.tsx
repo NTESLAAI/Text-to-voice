@@ -53,11 +53,14 @@ export default function WebHistorySidebar({
   const [dialogueOpen, setDialogueOpen] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+
+    setAudios([]);
+    setDialogues([]);
+
     if (!projectId) {
       return;
     }
-
-    let cancelled = false;
 
     const loadHistory = async () => {
       try {
@@ -66,9 +69,7 @@ export default function WebHistorySidebar({
           getProjectDialogues(projectId),
         ]);
 
-        if (cancelled) {
-          return;
-        }
+        if (cancelled) return;
 
         setAudios(audioData);
         setDialogues(dialogueData);

@@ -49,6 +49,10 @@ export class UsersController {
   checkEmail(@Query('email') email: string) {
     return this.usersService.checkEmailExists(email);
   }
+  @Get('check-phone')
+  checkPhone(@Query('phone') phone: string) {
+    return this.usersService.checkPhoneExists(phone);
+  }
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);

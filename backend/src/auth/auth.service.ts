@@ -29,7 +29,20 @@ export class AuthService {
       return await this.usersService.create(data);
     } catch (error: any) {
       if (error?.code === 'P2002') {
-        throw new ConflictException('Email đã được đăng ký');
+        const target = error?.meta?.target;
+        const fields = Array.isArray(target)
+          ? target.join(',')
+          : String(target ?? '');
+
+        if (fields.includes('phone')) {
+          throw new ConflictException('Số điện thoại đã được đăng ký');
+        }
+
+        if (fields.includes('email')) {
+          throw new ConflictException('Email đã được đăng ký');
+        }
+
+        throw new ConflictException('Email hoặc số điện thoại đã được đăng ký');
       }
 
       throw error;
@@ -37,7 +50,9 @@ export class AuthService {
   }
 
   async login(data: LoginDto) {
-    const user = await this.usersService.findByEmailWithPassword(data.email);
+    const user = await this.usersService.findByIdentifierWithPassword(
+      data.identifier,
+    );
 
     if (!user) {
       throw new UnauthorizedException();
@@ -64,6 +79,7 @@ export class AuthService {
         id: user.id,
         email: user.email,
         name: user.name,
+        role: user.role,
       },
     };
   }
@@ -98,9 +114,7 @@ export class AuthService {
 
     const rawToken = randomBytes(32).toString('hex');
 
-    const tokenHash = createHash('sha256')
-      .update(rawToken)
-      .digest('hex');
+    const tokenHash = createHash('sha256').update(rawToken).digest('hex');
 
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
@@ -130,10 +144,8 @@ export class AuthService {
 
     return response;
   }
-    async resetPassword(token: string, newPassword: string) {
-    const tokenHash = createHash('sha256')
-      .update(token)
-      .digest('hex');
+  async resetPassword(token: string, newPassword: string) {
+    const tokenHash = createHash('sha256').update(token).digest('hex');
 
     const resetToken = await this.prisma.passwordResetToken.findUnique({
       where: {
@@ -142,21 +154,15 @@ export class AuthService {
     });
 
     if (!resetToken) {
-      throw new BadRequestException(
-        'Token đặt lại mật khẩu không hợp lệ.',
-      );
+      throw new BadRequestException('Token đặt lại mật khẩu không hợp lệ.');
     }
 
     if (resetToken.usedAt) {
-      throw new BadRequestException(
-        'Token đặt lại mật khẩu đã được sử dụng.',
-      );
+      throw new BadRequestException('Token đặt lại mật khẩu đã được sử dụng.');
     }
 
     if (resetToken.expiresAt <= new Date()) {
-      throw new BadRequestException(
-        'Token đặt lại mật khẩu đã hết hạn.',
-      );
+      throw new BadRequestException('Token đặt lại mật khẩu đã hết hạn.');
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 12);

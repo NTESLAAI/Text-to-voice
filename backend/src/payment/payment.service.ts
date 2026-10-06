@@ -3,12 +3,34 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { randomInt } from 'crypto';
 
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class PaymentService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private generateTransferCode(paymentType: string): string {
+    const prefixes: Record<string, string> = {
+      RENEWAL: 'GH',
+      NEW_PURCHASE: 'KH',
+      UPGRADE: 'NC',
+    };
+    const prefix = prefixes[paymentType];
+    if (!prefix) {
+      throw new BadRequestException('Loại thanh toán không hợp lệ.');
+    }
+
+    // Loại bỏ các ký tự dễ nhầm lẫn: I, O, 0, 1.
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const suffix = Array.from(
+      { length: 8 },
+      () => alphabet[randomInt(alphabet.length)],
+    ).join('');
+
+    return `${prefix}-${suffix}`;
+  }
 
   async createPayment(
     userId: string,
@@ -147,6 +169,7 @@ export class PaymentService {
           status: 'PENDING',
           provider: 'BANK_TRANSFER',
           paymentType: 'RENEWAL',
+          transferCode: this.generateTransferCode('RENEWAL'),
         },
         include: {
           plan: true,
@@ -162,6 +185,7 @@ export class PaymentService {
         status: payment.status,
         provider: payment.provider,
         paymentType: payment.paymentType,
+        transferCode: payment.transferCode,
         upgradeOption: payment.upgradeOption,
         creditAmount: payment.creditAmount,
         bankName: process.env.BANK_TRANSFER_BANK_NAME,
@@ -203,6 +227,7 @@ export class PaymentService {
           status: 'PENDING',
           provider: 'BANK_TRANSFER',
           paymentType: 'NEW_PURCHASE',
+          transferCode: this.generateTransferCode('NEW_PURCHASE'),
         },
         include: {
           plan: true,
@@ -218,6 +243,7 @@ export class PaymentService {
         status: payment.status,
         provider: payment.provider,
         paymentType: payment.paymentType,
+        transferCode: payment.transferCode,
         upgradeOption: payment.upgradeOption,
         creditAmount: payment.creditAmount,
         bankName: process.env.BANK_TRANSFER_BANK_NAME,
@@ -327,6 +353,7 @@ export class PaymentService {
         status: 'PENDING',
         provider: 'BANK_TRANSFER',
         paymentType: 'UPGRADE',
+        transferCode: this.generateTransferCode('UPGRADE'),
         upgradeOption,
         creditAmount,
       },
@@ -344,6 +371,7 @@ export class PaymentService {
       status: payment.status,
       provider: payment.provider,
       paymentType: payment.paymentType,
+      transferCode: payment.transferCode,
       upgradeOption: payment.upgradeOption,
       creditAmount: payment.creditAmount,
       remainingCharacters,

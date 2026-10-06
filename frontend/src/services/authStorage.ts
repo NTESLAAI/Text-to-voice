@@ -1,12 +1,14 @@
-﻿import { Preferences } from '@capacitor/preferences';
+﻿import { Preferences } from "@capacitor/preferences";
 
-const TOKEN_KEY = 'auth_token';
-const USER_KEY = 'auth_user';
+const TOKEN_KEY = "auth_token";
+const USER_KEY = "auth_user";
 
 export interface StoredUser {
   id: string;
-  email: string;
+  email?: string | null;
+  phone?: string | null;
   name?: string | null;
+  role: string;
 }
 
 export async function saveAuth(

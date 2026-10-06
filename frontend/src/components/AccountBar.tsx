@@ -1,4 +1,5 @@
-﻿import { useEffect, useRef, useState } from "react";
+﻿import { useTranslation } from "react-i18next";
+import { useEffect, useRef, useState } from "react";
 import {
   clearAuth,
   getAuthUser,
@@ -8,11 +9,14 @@ import {
 interface AccountBarProps {
   onLogout: () => void;
   onAccount: () => void;
+  onAdmin: () => void;
 }
 
-function AccountBar({ onLogout, onAccount }: AccountBarProps) {
+function AccountBar({ onLogout, onAccount, onAdmin }: AccountBarProps) {
+  const { t } = useTranslation();
   const [user, setUser] = useState<StoredUser | null>(null);
   const [open, setOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const accountRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -40,6 +44,7 @@ function AccountBar({ onLogout, onAccount }: AccountBarProps) {
 
   async function handleLogout() {
     await clearAuth();
+    setShowLogoutConfirm(false);
     setOpen(false);
     onLogout();
   }
@@ -187,10 +192,44 @@ function AccountBar({ onLogout, onAccount }: AccountBarProps) {
             <span>👤</span>
             <span>Tài khoản</span>
           </button>
-
+          {user?.role === "ADMIN" && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onAdmin();
+              }}
+              style={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                padding: "10px 12px",
+                border: "none",
+                borderRadius: "7px",
+                background: "transparent",
+                color: "#2f2f2f",
+                fontSize: "14px",
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+              onMouseEnter={(event) => {
+                event.currentTarget.style.background = "#f1f1f1";
+              }}
+              onMouseLeave={(event) => {
+                event.currentTarget.style.background = "transparent";
+              }}
+            >
+              <span>⚙️</span>
+              <span>Quản trị</span>
+            </button>
+          )}
           <button
             type="button"
-            onClick={handleLogout}
+            onClick={() => {
+              setOpen(false);
+              setShowLogoutConfirm(true);
+            }}
             style={{
               width: "100%",
               display: "flex",
@@ -215,6 +254,86 @@ function AccountBar({ onLogout, onAccount }: AccountBarProps) {
             <span>↪</span>
             <span>Đăng xuất</span>
           </button>
+        </div>
+      )}
+
+      {/* Logout confirmation */}
+      {showLogoutConfirm && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0, 0, 0, 0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "16px",
+            zIndex: 2000,
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="logout-confirm-title"
+            style={{
+              width: "100%",
+              maxWidth: "360px",
+              padding: "24px",
+              borderRadius: "12px",
+              background: "#fff",
+              boxShadow: "0 8px 30px rgba(0, 0, 0, 0.2)",
+              textAlign: "center",
+            }}
+          >
+            <p
+              id="logout-confirm-title"
+              style={{
+                margin: "0 0 22px",
+                fontSize: "16px",
+                color: "#2f2f2f",
+              }}
+            >
+              {t("common.confirmLogout")}
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                gap: "12px",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(false)}
+                style={{
+                  padding: "9px 18px",
+                  border: "1px solid #ccc",
+                  borderRadius: "7px",
+                  background: "#fff",
+                  color: "#333",
+                  cursor: "pointer",
+                }}
+              >
+                {t("common.cancel")}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleLogout}
+                style={{
+                  padding: "9px 18px",
+                  border: "none",
+                  borderRadius: "7px",
+                  background: "#2563eb",
+                  color: "#fff",
+                  cursor: "pointer",
+                }}
+              >
+                {t("common.yes")}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
