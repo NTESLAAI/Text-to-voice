@@ -1042,7 +1042,7 @@ function AccountPage({ onBack }: AccountPageProps) {
                         marginBottom: "12px",
                       }}
                     >
-                      Cảm ơn bạn đã tin tưởng và sử dụng N.TESLA.AI!
+                      Cảm ơn bạn đã tin tưởng và sử dụng Text-To-Voice!
                     </div>
 
                     <div
