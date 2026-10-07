@@ -28,3 +28,7 @@ export async function getAdminUsers(): Promise<AdminUser[]> {
   const response = await api.get<AdminUser[]>("/users/admin");
   return response.data;
 }
+export async function resetAdminUser(userId: string) {
+  const response = await api.post(`/users/admin/${userId}/reset`);
+  return response.data;
+}

@@ -30,6 +30,12 @@ export class UsersController {
   findAllForAdmin() {
     return this.usersService.findAllForAdmin();
   }
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @Post('admin/:id/reset')
+  resetAccount(@Param('id') id: string) {
+    return this.usersService.resetAccount(id);
+  }
+  
   @UseGuards(JwtAuthGuard)
   @Get('me')
   findMe(@Req() req: any) {

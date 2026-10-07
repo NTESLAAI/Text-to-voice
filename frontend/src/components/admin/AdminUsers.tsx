@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import { getAdminUsers, type AdminUser } from "../../services/adminApi";
+import {
+  getAdminUsers,
+  resetAdminUser,
+  type AdminUser,
+} from "../../services/adminApi";
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString("vi-VN");
@@ -24,6 +28,7 @@ export default function AdminUsers() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [resettingUserId, setResettingUserId] = useState<string | null>(null);
   const [openResetFor, setOpenResetFor] = useState<string | null>(null);
 
   const [resetDialog, setResetDialog] = useState<{
@@ -261,9 +266,28 @@ export default function AdminUsers() {
               <button
                 type="button"
                 className="admin-modal-confirm"
-                onClick={() => setResetDialog(null)}
+                disabled={resettingUserId === resetDialog.user.id}
+                onClick={async () => {
+                  try {
+                    setResettingUserId(resetDialog.user.id);
+                    setError("");
+
+                    await resetAdminUser(resetDialog.user.id);
+
+                    const data = await getAdminUsers();
+                    setUsers(data);
+                    setResetDialog(null);
+                  } catch (err) {
+                    console.error("Không thể reset tài khoản:", err);
+                    setError("Không thể reset tài khoản. Vui lòng thử lại.");
+                  } finally {
+                    setResettingUserId(null);
+                  }
+                }}
               >
-                Xác nhận
+                {resettingUserId === resetDialog.user.id
+                  ? "Đang reset..."
+                  : "Xác nhận"}
               </button>
             </div>
           </section>

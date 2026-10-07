@@ -198,6 +198,8 @@ export class UsersService {
             status: true,
             startedAt: true,
             expiresAt: true,
+            characterLimit: true,
+            rolloverCharacters: true,
             plan: {
               select: {
                 code: true,
@@ -226,17 +228,16 @@ export class UsersService {
     return users.map((user) => {
       const subscription = user.subscriptions[0];
 
-      const quotaGranted =
-        subscription?.quotaLots.reduce(
-          (total, lot) => total + lot.charactersGranted,
-          0,
-        ) ?? 0;
+      const quotaGranted = subscription
+        ? subscription.characterLimit + subscription.rolloverCharacters
+        : 0;
 
-      const quotaRemaining =
-        subscription?.quotaLots.reduce(
-          (total, lot) => total + lot.charactersRemaining,
-          0,
-        ) ?? 0;
+      const quotaRemaining = subscription
+        ? subscription.quotaLots.reduce(
+            (total, lot) => total + lot.charactersRemaining,
+            0,
+          )
+        : 0;
 
       return {
         id: user.id,
@@ -259,6 +260,83 @@ export class UsersService {
       };
     });
   }
+
+  async resetAccount(userId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const subscription = await tx.subscription.findFirst({
+        where: {
+          userId,
+          status: 'ACTIVE',
+        },
+        orderBy: {
+          startedAt: 'desc',
+        },
+        include: {
+          plan: true,
+        },
+      });
+
+      if (!subscription) {
+        throw new BadRequestException(
+          'Tài khoản không có gói đăng ký đang hoạt động',
+        );
+      }
+
+      const now = new Date();
+
+      const expiresAt = new Date(now);
+      expiresAt.setDate(expiresAt.getDate() + 30);
+
+      // Đóng toàn bộ quota lot cũ nhưng giữ nguyên lịch sử
+      await tx.quotaLot.updateMany({
+        where: {
+          subscriptionId: subscription.id,
+          charactersRemaining: {
+            gt: 0,
+          },
+        },
+        data: {
+          charactersRemaining: 0,
+        },
+      });
+
+      // Đưa subscription về trạng thái ban đầu của gói hiện tại
+      const updatedSubscription = await tx.subscription.update({
+        where: {
+          id: subscription.id,
+        },
+        data: {
+          startedAt: now,
+          expiresAt,
+          status: 'ACTIVE',
+          characterLimit: subscription.plan.characterLimit,
+          rolloverCharacters: 0,
+        },
+        include: {
+          plan: true,
+        },
+      });
+
+      // Tạo lại quota gốc của gói
+      const quotaLot = await tx.quotaLot.create({
+        data: {
+          subscriptionId: subscription.id,
+          sourceLotId: null,
+          charactersGranted: subscription.plan.characterLimit,
+          charactersRemaining: subscription.plan.characterLimit,
+          rolloverCount: 0,
+          expiresAt,
+        },
+      });
+
+      return {
+        message: 'Đã reset tài khoản thành công',
+        subscription: updatedSubscription,
+        quotaLot,
+      };
+    });
+  }
+
   async findAll() {
     return this.prisma.user.findMany({
       orderBy: {
