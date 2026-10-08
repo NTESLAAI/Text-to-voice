@@ -194,10 +194,13 @@ export async function synthesizeSpeech(
     let audioBlob: Blob;
 
     if (Capacitor.getPlatform() === "android") {
+      const token = await getAuthToken();
+
       const response = await CapacitorHttp.post({
         url: `${API_BASE_URL}/tts/synthesize`,
         headers: {
           "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         data: request,
         responseType: "blob",
@@ -267,10 +270,13 @@ export async function synthesizeDialogue(
   let audioBlob: Blob;
 
   if (Capacitor.getPlatform() === "android") {
+    const token = await getAuthToken();
+
     const response = await CapacitorHttp.post({
       url: `${API_BASE_URL}/tts/dialogue`,
       headers: {
         "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       data: request,
       responseType: "blob",
@@ -333,6 +339,47 @@ export function getAudioUrl(fileUrl: string): string {
   }
 
   return `${API_BASE_URL}${fileUrl}`;
+}
+
+export async function getProtectedAudioBlob(audioId: string): Promise<Blob> {
+  const token = await getAuthToken();
+
+  if (!token) {
+    throw new Error("Authentication required");
+  }
+
+  const url = `${API_BASE_URL}/audio/file/${audioId}`;
+
+  if (Capacitor.isNativePlatform()) {
+    const response = await CapacitorHttp.get({
+      url,
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      responseType: "blob",
+    });
+
+    const binaryString = atob(response.data as string);
+    const bytes = new Uint8Array(binaryString.length);
+
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+
+    return new Blob([bytes], { type: "audio/wav" });
+  }
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to load audio: ${response.status}`);
+  }
+
+  return response.blob();
 }
 
 export interface TextReviewResult {

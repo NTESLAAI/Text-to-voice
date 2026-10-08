@@ -59,7 +59,7 @@ export class TtsService {
     private readonly ttsProvider: OpenRouterTtsProvider,
   ) {}
 
-  async synthesize(request: TtsRequest) {
+  async synthesize(request: TtsRequest, userId: string) {
     const preset = request.preset ? VOICE_PRESETS[request.preset] : null;
 
     const ttsRequest: TtsRequest = preset
@@ -75,9 +75,10 @@ export class TtsService {
       : request;
 
     // 1. Kiá»ƒm tra Project
-    const project = await this.prisma.project.findUnique({
+    const project = await this.prisma.project.findFirst({
       where: {
         id: request.projectId,
+        userId,
       },
     });
 
@@ -212,10 +213,11 @@ export class TtsService {
     };
   }
 
-  async synthesizeDialogue(request: SynthesizeDialogueDto) {
-    const project = await this.prisma.project.findUnique({
+  async synthesizeDialogue(request: SynthesizeDialogueDto, userId: string) {
+    const project = await this.prisma.project.findFirst({
       where: {
         id: request.projectId,
+        userId,
       },
     });
 
@@ -354,10 +356,11 @@ export class TtsService {
       throw error;
     }
   }
-  async getDialogueHistory(projectId: string) {
-    const project = await this.prisma.project.findUnique({
+  async getDialogueHistory(projectId: string, userId: string) {
+    const project = await this.prisma.project.findFirst({
       where: {
         id: projectId,
+        userId,
       },
     });
 
@@ -387,10 +390,13 @@ export class TtsService {
     });
   }
 
-  async deleteDialogue(id: string) {
-    const dialogue = await this.prisma.dialogue.findUnique({
+  async deleteDialogue(id: string, userId: string) {
+    const dialogue = await this.prisma.dialogue.findFirst({
       where: {
         id,
+        project: {
+          userId,
+        },
       },
     });
 
@@ -423,9 +429,12 @@ export class TtsService {
     });
   }
 
-  async getProjectUsage(projectId: string) {
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
+  async getProjectUsage(projectId: string, userId: string) {
+    const project = await this.prisma.project.findFirst({
+      where: {
+        id: projectId,
+        userId,
+      },
     });
 
     if (!project) {

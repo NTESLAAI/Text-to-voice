@@ -1,12 +1,10 @@
 import { useEffect, useState } from "react";
-import { Capacitor } from "@capacitor/core";
-import { CapacitorHttp } from "@capacitor/core";
 import { useTranslation } from "react-i18next";
 
 import {
   deleteAudio,
   deleteDialogue,
-  getAudioUrl,
+  getProtectedAudioBlob,
   getProjectAudio,
   getProjectDialogues,
 } from "../services/api";
@@ -79,77 +77,7 @@ export default function AudioHistory({
         await Promise.all(
           data.map(async (audio) => {
             try {
-              const audioUrl = getAudioUrl(audio.fileUrl);
-
-              let blob: Blob;
-
-              if (Capacitor.isNativePlatform()) {
-                const response = await CapacitorHttp.get({
-                  url: audioUrl,
-                  responseType: "blob",
-                });
-
-                console.log(
-                  "HISTORY AUDIO DATA SAMPLE:",
-                  JSON.stringify({
-                    length:
-                      typeof response.data === "string"
-                        ? response.data.length
-                        : null,
-                    start:
-                      typeof response.data === "string"
-                        ? response.data.substring(0, 100)
-                        : null,
-                  }),
-                );
-
-                console.log(
-                  "HISTORY AUDIO NATIVE RESPONSE:",
-                  JSON.stringify({
-                    status: response.status,
-                    dataType: typeof response.data,
-                    isBlob: response.data instanceof Blob,
-                    dataConstructor: response.data?.constructor?.name,
-                    dataKeys:
-                      response.data && typeof response.data === "object"
-                        ? Object.keys(response.data)
-                        : [],
-                  }),
-                );
-
-                console.log(
-                  "HISTORY AUDIO NATIVE RESPONSE:",
-                  JSON.stringify({
-                    status: response.status,
-                    dataType: typeof response.data,
-                    isBlob: response.data instanceof Blob,
-                    dataConstructor: response.data?.constructor?.name,
-                    dataKeys:
-                      response.data && typeof response.data === "object"
-                        ? Object.keys(response.data)
-                        : [],
-                  }),
-                );
-
-                const binaryString = atob(response.data);
-                const bytes = new Uint8Array(binaryString.length);
-
-                for (let i = 0; i < binaryString.length; i++) {
-                  bytes[i] = binaryString.charCodeAt(i);
-                }
-
-                blob = new Blob([bytes], {
-                  type: "audio/wav",
-                });
-              } else {
-                const response = await fetch(audioUrl);
-
-                if (!response.ok) {
-                  throw new Error(`Failed to load audio: ${response.status}`);
-                }
-
-                blob = await response.blob();
-              }
+              const blob = await getProtectedAudioBlob(audio.id);
 
               if (cancelled) {
                 return;
@@ -173,37 +101,7 @@ export default function AudioHistory({
           await Promise.all(
             dialogueData.map(async (dialogue) => {
               try {
-                const dialogueUrl = getAudioUrl(dialogue.fileUrl);
-
-                let blob: Blob;
-
-                if (Capacitor.isNativePlatform()) {
-                  const response = await CapacitorHttp.get({
-                    url: dialogueUrl,
-                    responseType: "blob",
-                  });
-
-                  const binaryString = atob(response.data);
-                  const bytes = new Uint8Array(binaryString.length);
-
-                  for (let i = 0; i < binaryString.length; i++) {
-                    bytes[i] = binaryString.charCodeAt(i);
-                  }
-
-                  blob = new Blob([bytes], {
-                    type: "audio/wav",
-                  });
-                } else {
-                  const response = await fetch(dialogueUrl);
-
-                  if (!response.ok) {
-                    throw new Error(
-                      `Failed to load dialogue audio: ${response.status}`,
-                    );
-                  }
-
-                  blob = await response.blob();
-                }
+                const blob = await getProtectedAudioBlob(dialogue.id);
 
                 if (cancelled) {
                   return;

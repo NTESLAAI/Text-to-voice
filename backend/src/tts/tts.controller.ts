@@ -28,25 +28,34 @@ export class TtsController {
       ...preset,
     }));
   }
+
   @UseGuards(JwtAuthGuard)
   @Get('usage/me')
   async getMyUsage(@Req() req: any) {
     return this.ttsService.getMyUsage(req.user.userId);
   }
+
+  @UseGuards(JwtAuthGuard)
   @Get('usage/project/:projectId')
-  async getProjectUsage(@Param('projectId') projectId: string) {
-    return this.ttsService.getProjectUsage(projectId);
+  async getProjectUsage(
+    @Param('projectId') projectId: string,
+    @Req() req: any,
+  ) {
+    return this.ttsService.getProjectUsage(projectId, req.user.userId);
   }
+
+  @UseGuards(JwtAuthGuard)
   @Post('synthesize')
   async synthesize(
     @Body() dto: SynthesizeSpeechDto,
+    @Req() req: any,
     @Res() res: Response,
   ): Promise<void> {
     console.log('========== TTS REQUEST ==========');
     console.log(dto);
     console.log('=================================');
 
-    const result = await this.ttsService.synthesize(dto);
+    const result = await this.ttsService.synthesize(dto, req.user.userId);
 
     res.set({
       'Content-Type': 'audio/wav',
@@ -57,12 +66,17 @@ export class TtsController {
     res.send(result.audio);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Post('dialogue')
   async synthesizeDialogue(
     @Body() dto: SynthesizeDialogueDto,
+    @Req() req: any,
     @Res() res: Response,
   ): Promise<void> {
-    const result = await this.ttsService.synthesizeDialogue(dto);
+    const result = await this.ttsService.synthesizeDialogue(
+      dto,
+      req.user.userId,
+    );
 
     res.set({
       'Content-Type': 'audio/wav',
@@ -72,13 +86,20 @@ export class TtsController {
 
     res.send(result.audio);
   }
+
+  @UseGuards(JwtAuthGuard)
   @Get('dialogue/project/:projectId')
-  async getDialogueHistory(@Param('projectId') projectId: string) {
-    return this.ttsService.getDialogueHistory(projectId);
+  async getDialogueHistory(
+    @Param('projectId') projectId: string,
+    @Req() req: any,
+  ) {
+    return this.ttsService.getDialogueHistory(projectId, req.user.userId);
   }
+
+  @UseGuards(JwtAuthGuard)
   @Delete('dialogue/:id')
-  async deleteDialogue(@Param('id') id: string) {
-    await this.ttsService.deleteDialogue(id);
+  async deleteDialogue(@Param('id') id: string, @Req() req: any) {
+    await this.ttsService.deleteDialogue(id, req.user.userId);
 
     return {
       success: true,

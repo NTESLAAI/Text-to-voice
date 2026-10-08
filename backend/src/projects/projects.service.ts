@@ -3,12 +3,9 @@ import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class ProjectsService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
-  async create(data: {
-    name: string;
-    userId: string;
-  }) {
+  async create(data: { name: string; userId: string }) {
     return this.prisma.project.create({
       data: {
         name: data.name,
@@ -17,7 +14,7 @@ export class ProjectsService {
     });
   }
   async getOrCreateForUser(userId: string) {
-    const existingProject=await this.prisma.project.findFirst({
+    const existingProject = await this.prisma.project.findFirst({
       where: {
         userId,
       },
@@ -37,17 +34,23 @@ export class ProjectsService {
       },
     });
   }
-  async findAll() {
+  async findAll(userId: string) {
     return this.prisma.project.findMany({
+      where: {
+        userId,
+      },
       orderBy: {
         createdAt: 'desc',
       },
     });
   }
 
-  async findOne(id: string) {
-    return this.prisma.project.findUnique({
-      where: { id },
+  async findOne(id: string, userId: string) {
+    return this.prisma.project.findFirst({
+      where: {
+        id,
+        userId,
+      },
       include: {
         user: {
           select: {
