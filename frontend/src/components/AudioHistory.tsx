@@ -5,6 +5,7 @@ import {
   deleteAudio,
   deleteDialogue,
   getProtectedAudioBlob,
+  getProtectedDialogueBlob,
   getProjectAudio,
   getProjectDialogues,
 } from "../services/api";
@@ -101,7 +102,7 @@ export default function AudioHistory({
           await Promise.all(
             dialogueData.map(async (dialogue) => {
               try {
-                const blob = await getProtectedAudioBlob(dialogue.id);
+                const blob = await getProtectedDialogueBlob(dialogue.id);
 
                 if (cancelled) {
                   return;

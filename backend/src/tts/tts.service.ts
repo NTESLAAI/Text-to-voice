@@ -390,6 +390,44 @@ export class TtsService {
     });
   }
 
+  async getDialogueFile(id: string, userId: string) {
+    const dialogue = await this.prisma.dialogue.findFirst({
+      where: {
+        id,
+        project: {
+          userId,
+        },
+      },
+    });
+
+    if (!dialogue) {
+      throw new NotFoundException('Dialogue not found');
+    }
+
+    if (!dialogue.fileUrl) {
+      throw new NotFoundException('Dialogue audio file not found');
+    }
+
+    const fileName = dialogue.fileUrl.split('/').pop();
+
+    if (!fileName) {
+      throw new NotFoundException('Dialogue audio file not found');
+    }
+
+    const filePath = join(process.cwd(), 'uploads', 'dialogues', fileName);
+
+    try {
+      const audio = await fs.readFile(filePath);
+
+      return {
+        audio,
+        fileName,
+      };
+    } catch {
+      throw new NotFoundException('Dialogue audio file not found');
+    }
+  }
+
   async deleteDialogue(id: string, userId: string) {
     const dialogue = await this.prisma.dialogue.findFirst({
       where: {

@@ -382,6 +382,59 @@ export async function getProtectedAudioBlob(audioId: string): Promise<Blob> {
   return response.blob();
 }
 
+export async function getProtectedDialogueBlob(
+  dialogueId: string,
+): Promise<Blob> {
+  const token = await getAuthToken();
+
+  if (!token) {
+    throw new Error("Authentication token not found");
+  }
+
+  const url = `${API_BASE_URL}/tts/dialogue/file/${dialogueId}`;
+
+  if (Capacitor.isNativePlatform()) {
+    const response = await CapacitorHttp.get({
+      url,
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      responseType: "blob",
+    });
+
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(`Failed to load dialogue audio: ${response.status}`);
+    }
+
+    const base64 = response.data;
+
+    const byteCharacters = atob(base64);
+    const byteNumbers = new Array(byteCharacters.length);
+
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+
+    const byteArray = new Uint8Array(byteNumbers);
+
+    return new Blob([byteArray], {
+      type: "audio/wav",
+    });
+  }
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to load dialogue audio: ${response.status}`);
+  }
+
+  return await response.blob();
+}
+
 export interface TextReviewResult {
   hasErrors: boolean;
   errors: string[];

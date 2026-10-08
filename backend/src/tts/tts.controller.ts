@@ -97,6 +97,24 @@ export class TtsController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('dialogue/file/:id')
+  async getDialogueFile(
+    @Param('id') id: string,
+    @Req() req: any,
+    @Res() res: Response,
+  ): Promise<void> {
+    const result = await this.ttsService.getDialogueFile(id, req.user.userId);
+
+    res.set({
+      'Content-Type': 'audio/wav',
+      'Content-Length': result.audio.length.toString(),
+      'Content-Disposition': 'inline; filename="dialogue.wav"',
+    });
+
+    res.send(result.audio);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Delete('dialogue/:id')
   async deleteDialogue(@Param('id') id: string, @Req() req: any) {
     await this.ttsService.deleteDialogue(id, req.user.userId);

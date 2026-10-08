@@ -15,7 +15,8 @@ import { deleteAudio } from "./services/api";
 import {
   getProjectAudio,
   getProjectDialogues,
-  getAudioUrl,
+  getProtectedAudioBlob,
+  getProtectedDialogueBlob,
 } from "./services/api";
 import AdminPayments from "./components/admin/AdminPayments";
 
@@ -102,8 +103,17 @@ function App() {
           const audios = await getProjectAudio(projectId);
           const audio = audios.find((item) => item.id === historyId);
 
+          if (!audio) {
+            if (!cancelled) {
+              setHistoryAudioUrl(null);
+            }
+            return;
+          }
+
+          const blob = await getProtectedAudioBlob(audio.id);
+
           if (!cancelled) {
-            setHistoryAudioUrl(audio ? getAudioUrl(audio.fileUrl) : null);
+            setHistoryAudioUrl(URL.createObjectURL(blob));
           }
 
           return;
@@ -112,8 +122,17 @@ function App() {
         const dialogues = await getProjectDialogues(projectId);
         const dialogue = dialogues.find((item) => item.id === historyId);
 
+        if (!dialogue) {
+          if (!cancelled) {
+            setHistoryAudioUrl(null);
+          }
+          return;
+        }
+
+        const blob = await getProtectedDialogueBlob(dialogue.id);
+
         if (!cancelled) {
-          setHistoryAudioUrl(dialogue ? getAudioUrl(dialogue.fileUrl) : null);
+          setHistoryAudioUrl(URL.createObjectURL(blob));
         }
       } catch (error) {
         console.error("Failed to load selected history audio:", error);
