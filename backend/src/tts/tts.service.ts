@@ -390,6 +390,21 @@ export class TtsService {
     });
   }
 
+  private getDialogueFileName(fileUrl: string): string {
+    const fileName = fileUrl.split('/').pop();
+
+    if (
+      !fileName ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.wav$/i.test(
+        fileName,
+      )
+    ) {
+      throw new NotFoundException('Dialogue audio file not found');
+    }
+
+    return fileName;
+  }
+
   async getDialogueFile(id: string, userId: string) {
     const dialogue = await this.prisma.dialogue.findFirst({
       where: {
@@ -408,11 +423,7 @@ export class TtsService {
       throw new NotFoundException('Dialogue audio file not found');
     }
 
-    const fileName = dialogue.fileUrl.split('/').pop();
-
-    if (!fileName) {
-      throw new NotFoundException('Dialogue audio file not found');
-    }
+    const fileName = this.getDialogueFileName(dialogue.fileUrl);
 
     const filePath = join(process.cwd(), 'uploads', 'dialogues', fileName);
 
@@ -443,20 +454,17 @@ export class TtsService {
     }
 
     if (dialogue.fileUrl) {
-      const fileName = dialogue.fileUrl.split('/').pop();
+      const fileName = this.getDialogueFileName(dialogue.fileUrl);
+      const filePath = join(process.cwd(), 'uploads', 'dialogues', fileName);
 
-      if (fileName) {
-        const filePath = join(process.cwd(), 'uploads', 'dialogues', fileName);
-
-        try {
-          await fs.unlink(filePath);
-        } catch (error) {
-          console.warn(
-            'Dialogue audio file could not be deleted:',
-            filePath,
-            error,
-          );
-        }
+      try {
+        await fs.unlink(filePath);
+      } catch (error) {
+        console.warn(
+          'Dialogue audio file could not be deleted:',
+          filePath,
+          error,
+        );
       }
     }
 
