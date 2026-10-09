@@ -35,7 +35,7 @@ export class UsersController {
   resetAccount(@Param('id') id: string) {
     return this.usersService.resetAccount(id);
   }
-  
+
   @UseGuards(JwtAuthGuard)
   @Get('me')
   findMe(@Req() req: any) {
@@ -59,6 +59,7 @@ export class UsersController {
   checkPhone(@Query('phone') phone: string) {
     return this.usersService.checkPhoneExists(phone);
   }
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);
