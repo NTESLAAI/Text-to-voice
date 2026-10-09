@@ -51,10 +51,7 @@ export class TtsController {
     @Req() req: any,
     @Res() res: Response,
   ): Promise<void> {
-    console.log('========== TTS REQUEST ==========');
-    console.log(dto);
-    console.log('=================================');
-
+    
     const result = await this.ttsService.synthesize(dto, req.user.userId);
 
     res.set({
