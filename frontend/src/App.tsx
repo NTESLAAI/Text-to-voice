@@ -11,7 +11,7 @@ import AdminUsers from "./components/admin/AdminUsers";
 import { getAuthToken } from "./services/authStorage";
 import AccountPage from "./pages/AccountPage";
 import WebHistorySidebar from "./components/WebHistorySidebar";
-import { deleteAudio } from "./services/api";
+import { deleteAudio, deleteDialogue } from "./services/api";
 import {
   getProjectAudio,
   getProjectDialogues,
@@ -40,13 +40,18 @@ function App() {
 
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
+
   const handleDeleteHistory = async () => {
-    if (!historyId || historyType !== "audio") {
+    if (!historyId || !historyType) {
       return;
     }
 
+    const isDialogue = historyType === "dialogue";
+
     const confirmed = window.confirm(
-      "Bạn có chắc muốn xóa bản ghi âm thanh này không?",
+      isDialogue
+        ? "Bạn có chắc muốn xóa hội thoại này không?"
+        : "Bạn có chắc muốn xóa bản ghi âm thanh này không?",
     );
 
     if (!confirmed) {
@@ -54,15 +59,23 @@ function App() {
     }
 
     try {
-      await deleteAudio(historyId);
-      setHistoryRefreshKey((current) => current + 1);
+      if (isDialogue) {
+        await deleteDialogue(historyId);
+      } else {
+        await deleteAudio(historyId);
+      }
 
+      setHistoryRefreshKey((current) => current + 1);
       setHistoryId(null);
       setHistoryType(null);
       setWebView("tts");
     } catch (error) {
-      console.error("Failed to delete history audio:", error);
-      window.alert("Không thể xóa bản ghi âm thanh.");
+      console.error("Failed to delete history item:", error);
+      window.alert(
+        isDialogue
+          ? "Không thể xóa hội thoại."
+          : "Không thể xóa bản ghi âm thanh.",
+      );
     }
   };
 
