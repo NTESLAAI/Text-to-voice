@@ -586,6 +586,24 @@ export async function getMySubscription(): Promise<MySubscription> {
 
   return response.data;
 }
+
+export interface AvailablePlan {
+  id: string;
+  code: string;
+  name: string;
+  price: number;
+  currency: string;
+  durationDays: number;
+  characterLimit: number;
+  isActive: boolean;
+}
+
+export async function getAvailablePlans(): Promise<AvailablePlan[]> {
+  const response = await api.get<AvailablePlan[]>("/subscription/plans");
+
+  return response.data;
+}
+
 export async function createPayment(
   planCode: string,
   upgradeOption?: "TRANSFER_QUOTA" | "CONVERT_TO_CREDIT",

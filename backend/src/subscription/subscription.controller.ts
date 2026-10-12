@@ -20,4 +20,10 @@ export class SubscriptionController {
       'Luồng nâng cấp trực tiếp đã ngừng sử dụng. Vui lòng tạo yêu cầu thanh toán qua Payment.',
     );
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('plans')
+  getAvailablePlans() {
+    return this.subscriptionService.getAvailablePlans();
+  }
 }

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentService } from '../payment/payment.service';
 import { UsersService } from '../users/users.service';
+import { UpdatePlanDto } from './dto/update-plan.dto';
 
 @Injectable()
 export class AdminService {
@@ -27,5 +28,18 @@ export class AdminService {
 
   async getUsers() {
     return this.usersService.findAllForAdmin();
+  }
+
+  async getPlans() {
+    return this.prisma.plan.findMany({
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async updatePlan(planId: string, data: UpdatePlanDto) {
+    return this.prisma.plan.update({
+      where: { id: planId },
+      data,
+    });
   }
 }

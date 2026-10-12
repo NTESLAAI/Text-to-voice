@@ -10,6 +10,27 @@ import { PrismaService } from '../prisma/prisma.service';
 export class SubscriptionService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async getAvailablePlans() {
+    return this.prisma.plan.findMany({
+      where: {
+        isActive: true,
+      },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        price: true,
+        currency: true,
+        durationDays: true,
+        characterLimit: true,
+        isActive: true,
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
+  }
+
   async getActiveSubscription(userId: string) {
     const now = new Date();
 

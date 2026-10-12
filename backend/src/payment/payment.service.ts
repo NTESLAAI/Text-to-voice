@@ -381,65 +381,88 @@ export class PaymentService {
       createdAt: payment.createdAt,
     };
   }
+
   async confirmPaymentByUser(userId: string, paymentId: string) {
-    const payment = await this.prisma.payment.findUnique({
-      where: { id: paymentId },
-    });
-
-    if (!payment) {
-      throw new NotFoundException('Không tìm thấy giao dịch thanh toán.');
-    }
-
-    if (payment.userId !== userId) {
-      throw new BadRequestException(
-        'Bạn không có quyền xác nhận giao dịch này.',
-      );
-    }
-
-    if (payment.status !== 'PENDING') {
-      throw new BadRequestException(
-        'Giao dịch không ở trạng thái chờ thanh toán.',
-      );
-    }
-
-    return this.prisma.payment.update({
-      where: { id: paymentId },
+    const result = await this.prisma.payment.updateMany({
+      where: {
+        id: paymentId,
+        userId,
+        status: 'PENDING',
+      },
       data: {
         status: 'USER_CONFIRMED',
       },
     });
+
+    if (result.count === 0) {
+      const payment = await this.prisma.payment.findUnique({
+        where: { id: paymentId },
+      });
+
+      if (!payment) {
+        throw new NotFoundException('Không tìm thấy giao dịch thanh toán.');
+      }
+
+      if (payment.userId !== userId) {
+        throw new BadRequestException(
+          'Bạn không có quyền xác nhận giao dịch này.',
+        );
+      }
+
+      throw new BadRequestException(
+        'Giao dịch không còn ở trạng thái chờ thanh toán.',
+      );
+    }
+
+    return this.prisma.payment.findUnique({
+      where: { id: paymentId },
+    });
   }
 
   async cancelPayment(userId: string, paymentId: string) {
-    const payment = await this.prisma.payment.findUnique({
-      where: { id: paymentId },
+    const result = await this.prisma.payment.updateMany({
+      where: {
+        id: paymentId,
+        userId,
+        status: 'PENDING',
+      },
+      data: {
+        status: 'CANCELLED',
+      },
     });
 
-    if (!payment) {
-      throw new NotFoundException('Không tìm thấy giao dịch thanh toán.');
-    }
+    if (result.count === 0) {
+      const payment = await this.prisma.payment.findUnique({
+        where: { id: paymentId },
+      });
 
-    if (payment.userId !== userId) {
-      throw new BadRequestException('Bạn không có quyền hủy giao dịch này.');
-    }
+      if (!payment) {
+        throw new NotFoundException('Không tìm thấy giao dịch thanh toán.');
+      }
 
-    if (payment.status !== 'PENDING') {
+      if (payment.userId !== userId) {
+        throw new BadRequestException('Bạn không có quyền hủy giao dịch này.');
+      }
+
       throw new BadRequestException(
         'Chỉ có thể hủy giao dịch đang chờ thanh toán.',
       );
     }
 
-    return this.prisma.payment.update({
+    return this.prisma.payment.findUnique({
       where: { id: paymentId },
-      data: {
-        status: 'CANCELLED',
-      },
     });
   }
+
   async confirmPayment(paymentId: string) {
     return this.prisma.$transaction(async (tx) => {
       const now = new Date();
-
+      await tx.$queryRaw`
+  SELECT "id"
+  FROM "Payment"
+  WHERE "id" = ${paymentId}
+  FOR UPDATE
+`;
       const payment = await tx.payment.findUnique({
         where: {
           id: paymentId,

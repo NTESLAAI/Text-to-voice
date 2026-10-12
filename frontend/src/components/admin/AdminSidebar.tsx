@@ -6,6 +6,8 @@ interface AdminSidebarProps {
 const menuItems = [
   { id: "users", label: "Quản lý người dùng" },
   { id: "payments", label: "Quản lý thanh toán" },
+  { id: "plans", label: "Quản lý gói cước" },
+  { id: "promotions", label: "Quản lý khuyến mại" },
 ];
 
 export default function AdminSidebar({

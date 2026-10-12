@@ -3,9 +3,11 @@ import { useEffect, useState } from "react";
 import {
   changePassword,
   createPayment,
+  getAvailablePlans,
   getMyProfile,
   getMySubscription,
   getMyUsage,
+  type AvailablePlan,
   type CreatePaymentResult,
   type MyProfile,
   type MySubscription,
@@ -19,6 +21,7 @@ interface AccountPageProps {
 function AccountPage({ onBack }: AccountPageProps) {
   const [profile, setProfile] = useState<MyProfile | null>(null);
   const [subscription, setSubscription] = useState<MySubscription | null>(null);
+  const [availablePlans, setAvailablePlans] = useState<AvailablePlan[]>([]);
   const [payment, setPayment] = useState<CreatePaymentResult | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentError, setPaymentError] = useState("");
@@ -66,10 +69,15 @@ function AccountPage({ onBack }: AccountPageProps) {
       try {
         setError("");
 
-        const [profileData, subscriptionData] = await Promise.all([
+        const [profileData, subscriptionData, plansData] = await Promise.all([
           getMyProfile(),
           getMySubscription(),
+          getAvailablePlans(),
         ]);
+
+        setProfile(profileData);
+        setSubscription(subscriptionData);
+        setAvailablePlans(plansData);
 
         setProfile(profileData);
         setSubscription(subscriptionData);
@@ -187,15 +195,8 @@ function AccountPage({ onBack }: AccountPageProps) {
     return new Date(value).toLocaleDateString("vi-VN");
   }
 
-  const planCatalog: Record<string, { name: string; price: number }> = {
-    BASIC: { name: "Basic", price: 129000 },
-    PRO: { name: "Pro", price: 299000 },
-    BUSINESS: { name: "Business", price: 799000 },
-  };
-
-  const selectedPlanInfo = selectedUpgradePlan
-    ? planCatalog[selectedUpgradePlan]
-    : null;
+  const selectedPlanInfo =
+    availablePlans.find((plan) => plan.code === selectedUpgradePlan) ?? null;
 
   const isRenewalFlow = Boolean(subscription?.renewalAvailable);
   const isFreePurchaseFlow = subscription?.plan === "FREE";
@@ -695,29 +696,19 @@ function AccountPage({ onBack }: AccountPageProps) {
                       gap: "12px",
                     }}
                   >
-                    {[
-                      { code: "BASIC", name: "Basic", price: 129000 },
-                      { code: "PRO", name: "Pro", price: 299000 },
-                      { code: "BUSINESS", name: "Business", price: 799000 },
-                    ]
+                    {availablePlans
+                      .filter((plan) => plan.code !== "FREE")
+                      .sort((a, b) => a.price - b.price)
                       .filter((plan) => {
                         if (subscription?.renewalAvailable) {
                           return true;
                         }
 
-                        const currentPrices: Record<string, number> = {
-                          FREE: 0,
-                          BASIC: 129000,
-                          PRO: 299000,
-                          BUSINESS: 799000,
-                        };
-
-                        return (
-                          plan.price >
-                          (subscription
-                            ? (currentPrices[subscription.plan] ?? 0)
-                            : 0)
+                        const currentPlan = availablePlans.find(
+                          (item) => item.code === subscription?.plan,
                         );
+
+                        return plan.price > (currentPlan?.price ?? 0);
                       })
                       .map((plan) => (
                         <div
@@ -751,7 +742,8 @@ function AccountPage({ onBack }: AccountPageProps) {
                                 color: "#64748b",
                               }}
                             >
-                              {plan.price.toLocaleString("vi-VN")} VND / 30 ngày
+                              {plan.price.toLocaleString("vi-VN")}{" "}
+                              {plan.currency} / {plan.durationDays} ngày
                             </div>
                           </div>
 
@@ -813,7 +805,7 @@ function AccountPage({ onBack }: AccountPageProps) {
                     </div>
 
                     <div style={{ marginBottom: "10px" }}>
-                      Số tiền cần thanh toán:{" "}
+                      Giá niêm yết gói mới:{" "}
                       <strong>
                         {selectedPlanInfo.price.toLocaleString("vi-VN")} VND
                       </strong>
@@ -1067,6 +1059,20 @@ function AccountPage({ onBack }: AccountPageProps) {
                         marginBottom: "8px",
                       }}
                     >
+                      Số tiền cần thanh toán:{" "}
+                      <strong>
+                        {payment.amount.toLocaleString("vi-VN")}{" "}
+                        {payment.currency}
+                      </strong>
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: "14px",
+                        lineHeight: 1.6,
+                        marginBottom: "8px",
+                      }}
+                    >
                       Sau khi nhận được thanh toán, Admin sẽ kiểm tra và kích
                       hoạt gói mới cho tài khoản của bạn.
                     </div>
@@ -1121,9 +1127,19 @@ function AccountPage({ onBack }: AccountPageProps) {
                         ? "gia hạn"
                         : "nâng cấp"}
                     </div>
+
                     <div style={{ fontSize: "14px", marginBottom: "6px" }}>
                       Gói: <strong>{payment.planName}</strong>
                     </div>
+
+                    <div style={{ fontSize: "14px", marginBottom: "6px" }}>
+                      Số tiền:{" "}
+                      <strong>
+                        {payment.amount.toLocaleString("vi-VN")}{" "}
+                        {payment.currency}
+                      </strong>
+                    </div>
+
                     <div style={{ fontSize: "14px" }}>
                       🟡 <strong>ĐANG CHỜ XÁC NHẬN</strong>
                     </div>

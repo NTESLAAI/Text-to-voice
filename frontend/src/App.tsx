@@ -19,6 +19,7 @@ import {
   getProtectedDialogueBlob,
 } from "./services/api";
 import AdminPayments from "./components/admin/AdminPayments";
+import AdminPlans from "./components/admin/AdminPlans";
 
 function App() {
   const [checkingAuth, setCheckingAuth] = useState(true);
@@ -276,7 +277,17 @@ function App() {
             onSelect={setAdminItem}
             onBack={() => setShowAdmin(false)}
           >
-            {adminItem === "users" ? <AdminUsers /> : <AdminPayments />}
+            {adminItem === "users" ? (
+              <AdminUsers />
+            ) : adminItem === "payments" ? (
+              <AdminPayments />
+            ) : adminItem === "plans" ? (
+              <AdminPlans />
+            ) : (
+              <div className="admin-empty-state">
+                Chức năng quản lý khuyến mại đang được phát triển.
+              </div>
+            )}
           </AdminLayout>
         ) : showAccount ? (
           <AccountPage onBack={() => setShowAccount(false)} />
