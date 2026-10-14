@@ -79,6 +79,17 @@ model Payment {
   userId String
   planId String
 
+  // Snapshot thông tin gói tại thời điểm tạo giao dịch
+  planNameSnapshot                 String?
+  planPriceSnapshot                Float?
+  planDurationDaysSnapshot         Int?
+  planCharacterLimitSnapshot       Int?
+  // Snapshot thông tin gói nguồn khi tạo giao dịch Upgrade
+  sourcePlanPriceSnapshot          Float?
+  sourcePlanCharacterLimitSnapshot Int?
+  // Subscription nguồn của giao dịch Upgrade
+  sourceSubscriptionId             String?
+
   amount   Float
   currency String @default("VND")
   status   String

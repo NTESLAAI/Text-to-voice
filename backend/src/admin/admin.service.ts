@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentService } from '../payment/payment.service';
 import { UsersService } from '../users/users.service';
@@ -37,6 +37,15 @@ export class AdminService {
   }
 
   async updatePlan(planId: string, data: UpdatePlanDto) {
+    const plan = await this.prisma.plan.findUnique({
+      where: { id: planId },
+      select: { id: true },
+    });
+
+    if (!plan) {
+      throw new NotFoundException('Không tìm thấy gói dịch vụ');
+    }
+
     return this.prisma.plan.update({
       where: { id: planId },
       data,

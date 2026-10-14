@@ -75,6 +75,8 @@ export class PaymentService {
             charactersRemaining: {
               gt: 0,
             },
+            // Chỉ quota gốc chưa rollover mới đủ điều kiện chuyển/quy đổi.
+            rolloverCount: 0,
             expiresAt: {
               gt: now,
             },
@@ -164,6 +166,13 @@ export class PaymentService {
         data: {
           userId,
           planId: plan.id,
+
+          // Snapshot thông tin gói tại thời điểm tạo giao dịch
+          planNameSnapshot: plan.name,
+          planPriceSnapshot: plan.price,
+          planDurationDaysSnapshot: plan.durationDays,
+          planCharacterLimitSnapshot: plan.characterLimit,
+
           amount: plan.price,
           currency: plan.currency,
           status: 'PENDING',
@@ -222,6 +231,13 @@ export class PaymentService {
         data: {
           userId,
           planId: plan.id,
+
+          // Snapshot thông tin gói tại thời điểm tạo giao dịch
+          planNameSnapshot: plan.name,
+          planPriceSnapshot: plan.price,
+          planDurationDaysSnapshot: plan.durationDays,
+          planCharacterLimitSnapshot: plan.characterLimit,
+
           amount: plan.price,
           currency: plan.currency,
           status: 'PENDING',
@@ -229,6 +245,7 @@ export class PaymentService {
           paymentType: 'NEW_PURCHASE',
           transferCode: this.generateTransferCode('NEW_PURCHASE'),
         },
+
         include: {
           plan: true,
         },
@@ -348,6 +365,18 @@ export class PaymentService {
       data: {
         userId,
         planId: plan.id,
+
+        // Snapshot thông tin gói tại thời điểm tạo giao dịch
+        planNameSnapshot: plan.name,
+        planPriceSnapshot: plan.price,
+        planDurationDaysSnapshot: plan.durationDays,
+        planCharacterLimitSnapshot: plan.characterLimit,
+        // Snapshot gói nguồn tại thời điểm tạo giao dịch Upgrade
+        sourcePlanPriceSnapshot: activeSubscription.plan.price,
+        sourcePlanCharacterLimitSnapshot:
+          activeSubscription.plan.characterLimit,
+        sourceSubscriptionId: activeSubscription.id,
+
         amount,
         currency: plan.currency,
         status: 'PENDING',
@@ -357,6 +386,7 @@ export class PaymentService {
         upgradeOption,
         creditAmount,
       },
+
       include: {
         plan: true,
       },
@@ -482,6 +512,18 @@ export class PaymentService {
         );
       }
 
+      // Ưu tiên thông tin gói đã lưu tại thời điểm tạo giao dịch.
+      // Dùng thông tin Plan hiện tại làm dự phòng cho giao dịch cũ.
+      const planName = payment.planNameSnapshot ?? payment.plan.name;
+
+      const planPrice = payment.planPriceSnapshot ?? payment.plan.price;
+
+      const planDurationDays =
+        payment.planDurationDaysSnapshot ?? payment.plan.durationDays;
+
+      const planCharacterLimit =
+        payment.planCharacterLimitSnapshot ?? payment.plan.characterLimit;
+
       const activeSubscription = await tx.subscription.findFirst({
         where: {
           userId: payment.userId,
@@ -500,6 +542,8 @@ export class PaymentService {
               charactersRemaining: {
                 gt: 0,
               },
+              // Chỉ quota gốc chưa rollover mới đủ điều kiện chuyển/quy đổi.
+              rolloverCount: 0,
               expiresAt: {
                 gt: now,
               },
@@ -584,14 +628,22 @@ export class PaymentService {
        * - Mỗi source lot chỉ được rollover một lần.
        */
       if (isRenewal && renewalSubscription) {
-        await tx.subscription.update({
+        const expiredSubscription = await tx.subscription.updateMany({
           where: {
             id: renewalSubscription.id,
+            userId: payment.userId,
+            status: 'ACTIVE',
           },
           data: {
             status: 'EXPIRED',
           },
         });
+
+        if (expiredSubscription.count !== 1) {
+          throw new BadRequestException(
+            'Subscription gia hạn đã được xử lý bởi giao dịch khác. Vui lòng kiểm tra lại trạng thái thanh toán.',
+          );
+        }
 
         const newSubscription = await tx.subscription.create({
           data: {
@@ -599,10 +651,10 @@ export class PaymentService {
             planId: payment.planId,
             startedAt: now,
             expiresAt: new Date(
-              now.getTime() + payment.plan.durationDays * 24 * 60 * 60 * 1000,
+              now.getTime() + planDurationDays * 24 * 60 * 60 * 1000,
             ),
             status: 'ACTIVE',
-            characterLimit: payment.plan.characterLimit,
+            characterLimit: planCharacterLimit,
             rolloverCharacters: 0,
             pricePaid: payment.amount,
             currency: payment.currency,
@@ -616,8 +668,8 @@ export class PaymentService {
           data: {
             subscriptionId: newSubscription.id,
             sourceLotId: null,
-            charactersGranted: payment.plan.characterLimit,
-            charactersRemaining: payment.plan.characterLimit,
+            charactersGranted: planCharacterLimit,
+            charactersRemaining: planCharacterLimit,
             rolloverCount: 0,
             expiresAt: newSubscription.expiresAt,
           },
@@ -634,7 +686,8 @@ export class PaymentService {
               sourceLotId: lot.id,
               charactersGranted: lot.charactersRemaining,
               charactersRemaining: lot.charactersRemaining,
-              rolloverCount: 0,
+              // Lot đích đã nhận quota rollover, không được rollover tiếp.
+              rolloverCount: 1,
               expiresAt: newSubscription.expiresAt,
             },
           });
@@ -644,6 +697,7 @@ export class PaymentService {
               id: lot.id,
             },
             data: {
+              charactersRemaining: 0,
               rolloverCount: lot.rolloverCount + 1,
             },
           });
@@ -665,7 +719,7 @@ export class PaymentService {
         return {
           id: updatedPayment.id,
           plan: updatedPayment.plan.code,
-          planName: updatedPayment.plan.name,
+          planName,
           amount: updatedPayment.amount,
           currency: updatedPayment.currency,
           status: updatedPayment.status,
@@ -677,7 +731,7 @@ export class PaymentService {
           subscription: {
             id: newSubscription.id,
             plan: newSubscription.plan.code,
-            planName: newSubscription.plan.name,
+            planName,
             status: newSubscription.status,
             startedAt: newSubscription.startedAt,
             expiresAt: newSubscription.expiresAt,
@@ -721,10 +775,10 @@ export class PaymentService {
             planId: payment.planId,
             startedAt: now,
             expiresAt: new Date(
-              now.getTime() + payment.plan.durationDays * 24 * 60 * 60 * 1000,
+              now.getTime() + planDurationDays * 24 * 60 * 60 * 1000,
             ),
             status: 'ACTIVE',
-            characterLimit: payment.plan.characterLimit,
+            characterLimit: planCharacterLimit,
             rolloverCharacters: 0,
             pricePaid: payment.amount,
             currency: payment.currency,
@@ -737,8 +791,8 @@ export class PaymentService {
         await tx.quotaLot.create({
           data: {
             subscriptionId: newSubscription.id,
-            charactersGranted: payment.plan.characterLimit,
-            charactersRemaining: payment.plan.characterLimit,
+            charactersGranted: planCharacterLimit,
+            charactersRemaining: planCharacterLimit,
             rolloverCount: 0,
             expiresAt: newSubscription.expiresAt,
           },
@@ -766,7 +820,7 @@ export class PaymentService {
           subscription: {
             id: newSubscription.id,
             plan: newSubscription.plan.code,
-            planName: newSubscription.plan.name,
+            planName,
             characterLimit: newSubscription.characterLimit,
             rolloverCharacters: newSubscription.rolloverCharacters,
             startedAt: newSubscription.startedAt,
@@ -790,6 +844,15 @@ export class PaymentService {
       }
 
       if (
+        !payment.sourceSubscriptionId ||
+        payment.sourceSubscriptionId !== activeSubscription.id
+      ) {
+        throw new BadRequestException(
+          'Subscription nguồn đã thay đổi kể từ khi tạo giao dịch Upgrade. Vui lòng tạo lại giao dịch.',
+        );
+      }
+
+      if (
         payment.upgradeOption !== 'TRANSFER_QUOTA' &&
         payment.upgradeOption !== 'CONVERT_TO_CREDIT'
       ) {
@@ -798,7 +861,14 @@ export class PaymentService {
         );
       }
 
-      if (payment.plan.price <= activeSubscription.plan.price) {
+      const sourcePlanPrice =
+        payment.sourcePlanPriceSnapshot ?? activeSubscription.plan.price;
+
+      const sourcePlanCharacterLimit =
+        payment.sourcePlanCharacterLimitSnapshot ??
+        activeSubscription.plan.characterLimit;
+
+      if (planPrice <= sourcePlanPrice) {
         throw new BadRequestException(
           'Chỉ có thể nâng cấp lên gói có giá cao hơn gói hiện tại.',
         );
@@ -822,16 +892,15 @@ export class PaymentService {
        * Không tự ý thay đổi số tiền giao dịch đã được tạo.
        * Vì vậy yêu cầu tạo lại Payment nếu quota đã thay đổi.
        */
+
       if (payment.upgradeOption === 'CONVERT_TO_CREDIT') {
-        if (activeSubscription.plan.characterLimit <= 0) {
+        if (sourcePlanCharacterLimit <= 0) {
           throw new BadRequestException(
             'Không xác định được quota gốc của gói hiện tại.',
           );
         }
 
-        const pricePerCharacter =
-          activeSubscription.plan.price /
-          activeSubscription.plan.characterLimit;
+        const pricePerCharacter = sourcePlanPrice / sourcePlanCharacterLimit;
 
         const currentCreditAmount = Math.round(
           remainingCharacters * pricePerCharacter,
@@ -851,14 +920,23 @@ export class PaymentService {
        * Kết thúc subscription cũ
        * ============================================================
        */
-      await tx.subscription.update({
+
+      const expiredSubscription = await tx.subscription.updateMany({
         where: {
           id: activeSubscription.id,
+          userId: payment.userId,
+          status: 'ACTIVE',
         },
         data: {
           status: 'EXPIRED',
         },
       });
+
+      if (expiredSubscription.count !== 1) {
+        throw new BadRequestException(
+          'Subscription nguồn đã thay đổi hoặc đã được xử lý bởi giao dịch khác. Vui lòng tạo lại giao dịch Upgrade.',
+        );
+      }
 
       /*
        * ============================================================
@@ -881,10 +959,10 @@ export class PaymentService {
           planId: payment.planId,
           startedAt: now,
           expiresAt: new Date(
-            now.getTime() + payment.plan.durationDays * 24 * 60 * 60 * 1000,
+            now.getTime() + planDurationDays * 24 * 60 * 60 * 1000,
           ),
           status: 'ACTIVE',
-          characterLimit: payment.plan.characterLimit,
+          characterLimit: planCharacterLimit,
           rolloverCharacters: transferredQuota,
           pricePaid: payment.amount,
           currency: payment.currency,
@@ -902,8 +980,8 @@ export class PaymentService {
       await tx.quotaLot.create({
         data: {
           subscriptionId: newSubscription.id,
-          charactersGranted: payment.plan.characterLimit,
-          charactersRemaining: payment.plan.characterLimit,
+          charactersGranted: planCharacterLimit,
+          charactersRemaining: planCharacterLimit,
           rolloverCount: 0,
           expiresAt: newSubscription.expiresAt,
         },
@@ -935,7 +1013,8 @@ export class PaymentService {
               sourceLotId: lot.id,
               charactersGranted: lot.charactersRemaining,
               charactersRemaining: lot.charactersRemaining,
-              rolloverCount: 0,
+              // Lot đích đã nhận quota rollover, không được rollover tiếp.
+              rolloverCount: 1,
               expiresAt: newSubscription.expiresAt,
             },
           });
@@ -945,6 +1024,7 @@ export class PaymentService {
               id: lot.id,
             },
             data: {
+              charactersRemaining: 0,
               rolloverCount: lot.rolloverCount + 1,
             },
           });
@@ -980,7 +1060,7 @@ export class PaymentService {
         subscription: {
           id: newSubscription.id,
           plan: newSubscription.plan.code,
-          planName: newSubscription.plan.name,
+          planName,
           characterLimit: newSubscription.characterLimit,
           rolloverCharacters: newSubscription.rolloverCharacters,
           startedAt: newSubscription.startedAt,
