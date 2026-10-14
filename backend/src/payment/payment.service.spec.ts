@@ -152,6 +152,91 @@ describe('PaymentService', () => {
     expect(prismaMock.payment.create).not.toHaveBeenCalled();
   });
 
+  it('should reject Free-to-Paid confirmation when the Free subscription was already processed', async () => {
+    const now = new Date();
+
+    const freePlan = {
+      id: 'plan-free',
+      code: 'FREE',
+      name: 'Free',
+      price: 0,
+      characterLimit: 50,
+      durationDays: 30,
+    };
+
+    const paidPlan = {
+      id: 'plan-basic',
+      code: 'BASIC',
+      name: 'Basic',
+      price: 10000,
+      characterLimit: 1000,
+      durationDays: 30,
+      currency: 'VND',
+    };
+
+    const payment = {
+      id: 'payment-free-to-paid',
+      userId: 'user-1',
+      planId: paidPlan.id,
+      plan: paidPlan,
+      amount: paidPlan.price,
+      currency: 'VND',
+      status: 'PENDING',
+      paymentType: 'NEW_PURCHASE',
+      planNameSnapshot: paidPlan.name,
+      planPriceSnapshot: paidPlan.price,
+      planDurationDaysSnapshot: paidPlan.durationDays,
+      planCharacterLimitSnapshot: paidPlan.characterLimit,
+    };
+
+    const activeFreeSubscription = {
+      id: 'subscription-free',
+      userId: 'user-1',
+      planId: freePlan.id,
+      plan: freePlan,
+      quotaLots: [],
+    };
+
+    const tx = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      payment: {
+        findUnique: jest.fn().mockResolvedValue(payment),
+        update: jest.fn(),
+      },
+      subscription: {
+        findFirst: jest.fn().mockResolvedValue(activeFreeSubscription),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        create: jest.fn(),
+      },
+      quotaLot: {
+        create: jest.fn(),
+      },
+    };
+
+    prismaMock.$transaction.mockImplementation(
+      async (callback: (tx: any) => Promise<unknown>) => callback(tx),
+    );
+
+    await expect(
+      service.confirmPayment('payment-free-to-paid'),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(tx.subscription.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'subscription-free',
+        userId: 'user-1',
+        status: 'ACTIVE',
+      },
+      data: {
+        status: 'EXPIRED',
+      },
+    });
+
+    expect(tx.subscription.create).not.toHaveBeenCalled();
+    expect(tx.quotaLot.create).not.toHaveBeenCalled();
+    expect(tx.payment.update).not.toHaveBeenCalled();
+  });
+
   it('should transfer eligible quota during a paid-plan upgrade', async () => {
     const now = new Date();
 

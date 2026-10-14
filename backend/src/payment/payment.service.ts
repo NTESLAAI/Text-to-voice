@@ -760,14 +760,23 @@ export class PaymentService {
           );
         }
 
-        await tx.subscription.update({
+        // Chỉ một giao dịch được phép chuyển Subscription FREE này sang EXPIRED.
+        const expiredFreeSubscription = await tx.subscription.updateMany({
           where: {
             id: activeSubscription.id,
+            userId: payment.userId,
+            status: 'ACTIVE',
           },
           data: {
             status: 'EXPIRED',
           },
         });
+
+        if (expiredFreeSubscription.count !== 1) {
+          throw new BadRequestException(
+            'Subscription Free đã thay đổi hoặc đã được xử lý bởi giao dịch khác. Vui lòng kiểm tra lại trạng thái tài khoản và tạo giao dịch mới nếu cần.',
+          );
+        }
 
         const newSubscription = await tx.subscription.create({
           data: {
