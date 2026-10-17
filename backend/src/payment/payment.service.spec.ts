@@ -292,7 +292,17 @@ describe('PaymentService', () => {
     };
 
     const tx = {
-      $queryRaw: jest.fn().mockResolvedValue([]),
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValueOnce([]) // Khóa bản ghi Payment
+        .mockResolvedValueOnce([]) // Khóa User
+        .mockResolvedValueOnce([
+          {
+            id: 'lot-basic-1',
+            charactersRemaining: 300,
+            rolloverCount: 0,
+          },
+        ]),
       payment: {
         findUnique: jest.fn().mockResolvedValue(payment),
         update: jest.fn().mockResolvedValue({
@@ -438,7 +448,18 @@ describe('PaymentService', () => {
     };
 
     const tx = {
-      $queryRaw: jest.fn().mockResolvedValue([]),
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValueOnce([]) // Khóa bản ghi Payment
+        .mockResolvedValueOnce([]) // Khóa User
+        .mockResolvedValueOnce([
+          {
+            id: 'lot-valid',
+            charactersRemaining: 300,
+            rolloverCount: 0,
+          },
+        ]),
+
       payment: {
         findUnique: jest.fn().mockResolvedValue(payment),
         update: jest.fn().mockResolvedValue({
@@ -544,7 +565,17 @@ describe('PaymentService', () => {
     };
 
     const tx = {
-      $queryRaw: jest.fn().mockResolvedValue([]),
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValueOnce([]) // Khóa bản ghi Payment
+        .mockResolvedValueOnce([]) // Khóa User
+        .mockResolvedValueOnce([
+          {
+            id: 'lot-valid',
+            charactersRemaining: 200,
+            rolloverCount: 0,
+          },
+        ]),
       payment: {
         findUnique: jest.fn().mockResolvedValue(payment),
         update: jest.fn().mockResolvedValue({

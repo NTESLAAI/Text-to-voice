@@ -126,6 +126,51 @@ export class TtsService {
 
     try {
       audio = await this.prisma.$transaction(async (tx) => {
+        // Khóa User để đồng bộ với confirmPayment().
+        await tx.$queryRaw`
+      SELECT "id"
+      FROM "User"
+      WHERE "id" = ${project.userId}
+      FOR UPDATE
+    `;
+
+        // Kiểm tra lại subscription sau khi đã lấy khóa User.
+        const currentSubscription = await tx.subscription.findFirst({
+          where: {
+            id: quota.subscription.id,
+            userId: project.userId,
+            status: 'ACTIVE',
+            startedAt: {
+              lte: new Date(),
+            },
+            expiresAt: {
+              gt: new Date(),
+            },
+          },
+          include: {
+            plan: true,
+          },
+        });
+
+        if (!currentSubscription) {
+          throw new BadRequestException(
+            'Gói sử dụng đã thay đổi hoặc hết hiệu lực. Vui lòng kiểm tra lại gói sử dụng.',
+          );
+        }
+
+        if (!currentSubscription.plan.isActive) {
+          throw new BadRequestException(
+            'Gói sử dụng hiện không còn hoạt động.',
+          );
+        }
+
+        // Khóa và phân bổ quota trước khi tạo Audio.
+        const allocations = await this.allocateQuotaLots(
+          tx,
+          currentSubscription.id,
+          characters,
+        );
+
         const createdAudio = await tx.audio.create({
           data: {
             projectId: request.projectId,
@@ -146,16 +191,10 @@ export class TtsService {
           },
         });
 
-        const allocations = await this.allocateQuotaLots(
-          tx,
-          quota.subscription.id,
-          characters,
-        );
-
         await tx.usage.create({
           data: {
             userId: project.userId,
-            subscriptionId: quota.subscription.id,
+            subscriptionId: currentSubscription.id,
             characters,
             type: 'tts',
             referenceId: createdAudio.id,
@@ -285,6 +324,51 @@ export class TtsService {
 
     try {
       const dialogue = await this.prisma.$transaction(async (tx) => {
+        // 1. Khóa User để đồng bộ với thao tác nâng cấp/chuyển gói.
+        await tx.$queryRaw`
+      SELECT "id"
+      FROM "User"
+      WHERE "id" = ${project.userId}
+      FOR UPDATE
+    `;
+
+        // 2. Kiểm tra lại chính xác gói đã được xác định trước đó.
+        const now = new Date();
+
+        const currentSubscription = await tx.subscription.findFirst({
+          where: {
+            id: quota.subscription.id,
+            userId: project.userId,
+            status: 'ACTIVE',
+            startedAt: { lte: now },
+            expiresAt: { gt: now },
+          },
+          include: {
+            plan: true,
+          },
+        });
+
+        if (!currentSubscription) {
+          throw new BadRequestException(
+            'Gói sử dụng đã thay đổi hoặc hết hiệu lực. Vui lòng kiểm tra lại gói sử dụng.',
+          );
+        }
+
+        if (!currentSubscription.plan.isActive) {
+          throw new BadRequestException(
+            'Gói sử dụng hiện không còn hoạt động.',
+          );
+        }
+
+        // 3. Trừ quota trước khi tạo Dialogue.
+        // Nếu thiếu quota, transaction sẽ rollback.
+        const allocations = await this.allocateQuotaLots(
+          tx,
+          currentSubscription.id,
+          characters,
+        );
+
+        // 4. Tạo Dialogue và các bản ghi liên quan.
         const createdDialogue = await tx.dialogue.create({
           data: {
             projectId: request.projectId,
@@ -309,16 +393,11 @@ export class TtsService {
           },
         });
 
-        const allocations = await this.allocateQuotaLots(
-          tx,
-          quota.subscription.id,
-          characters,
-        );
-
+        // 5. Ghi Usage bằng subscription đã được xác minh lại.
         await tx.usage.create({
           data: {
             userId: project.userId,
-            subscriptionId: quota.subscription.id,
+            subscriptionId: currentSubscription.id,
             characters,
             type: 'dialogue',
             referenceId: createdDialogue.id,

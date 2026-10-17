@@ -524,6 +524,15 @@ export class PaymentService {
       const planCharacterLimit =
         payment.planCharacterLimitSnapshot ?? payment.plan.characterLimit;
 
+      // Khóa User để tuần tự hóa các giao dịch thanh toán
+      // khác nhau của cùng một người dùng.
+      await tx.$queryRaw`
+        SELECT "id"
+        FROM "User"
+        WHERE "id" = ${payment.userId}
+        FOR UPDATE
+      `;
+
       const activeSubscription = await tx.subscription.findFirst({
         where: {
           userId: payment.userId,
@@ -886,7 +895,33 @@ export class PaymentService {
       /*
        * Tổng quota còn lại đủ điều kiện tại thời điểm Admin xác nhận.
        */
-      const remainingCharacters = activeSubscription.quotaLots.reduce(
+
+      /*
+       * Khóa các QuotaLot nguồn và đọc số dư hiện tại từ PostgreSQL.
+       * Không sử dụng activeSubscription.quotaLots ở bước này vì
+       * dữ liệu đó có thể đã cũ nếu TTS vừa sử dụng quota.
+       */
+      const lockedQuotaLots = await tx.$queryRaw<
+        {
+          id: string;
+          charactersRemaining: number;
+          rolloverCount: number;
+        }[]
+      >`
+        SELECT
+          "id",
+          "charactersRemaining",
+          "rolloverCount"
+        FROM "QuotaLot"
+        WHERE "subscriptionId" = ${activeSubscription.id}
+          AND "charactersRemaining" > 0
+          AND "rolloverCount" = 0
+          AND "expiresAt" > ${now}
+        ORDER BY "expiresAt" ASC, "createdAt" ASC
+        FOR UPDATE
+      `;
+
+      const remainingCharacters = lockedQuotaLots.reduce(
         (total, lot) => total + lot.charactersRemaining,
         0,
       );
@@ -1011,7 +1046,7 @@ export class PaymentService {
         payment.upgradeOption === 'TRANSFER_QUOTA' &&
         remainingCharacters > 0
       ) {
-        for (const lot of activeSubscription.quotaLots) {
+        for (const lot of lockedQuotaLots) {
           if (lot.charactersRemaining <= 0) {
             continue;
           }
@@ -1038,6 +1073,27 @@ export class PaymentService {
             },
           });
         }
+      }
+
+      // CONVERT_TO_CREDIT:
+      // Quota nguồn đã được quy đổi thành credit nên không được sử dụng lại.
+      if (
+        payment.upgradeOption === 'CONVERT_TO_CREDIT' &&
+        lockedQuotaLots.length > 0
+      ) {
+        await tx.quotaLot.updateMany({
+          where: {
+            id: {
+              in: lockedQuotaLots.map((lot) => lot.id),
+            },
+            charactersRemaining: {
+              gt: 0,
+            },
+          },
+          data: {
+            charactersRemaining: 0,
+          },
+        });
       }
 
       /*
