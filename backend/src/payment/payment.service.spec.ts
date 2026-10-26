@@ -10,6 +10,9 @@ describe('PaymentService', () => {
     plan: {
       findUnique: jest.fn(),
     },
+    promotion: {
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
     subscription: {
       findFirst: jest.fn(),
     },
@@ -29,7 +32,7 @@ describe('PaymentService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
-
+    prismaMock.promotion.findFirst.mockResolvedValue(null);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PaymentService,
@@ -45,6 +48,228 @@ describe('PaymentService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('should apply active promotion price to a new Free-to-Paid purchase', async () => {
+    const targetPlan = {
+      id: 'plan-basic',
+      code: 'BASIC',
+      name: 'Basic',
+      price: 10000,
+      characterLimit: 1000,
+      durationDays: 30,
+      currency: 'VND',
+      isActive: true,
+    };
+
+    const promotion = {
+      id: 'promotion-1',
+      title: 'Khuyến mại tháng 10',
+      planPrices: [{ planId: targetPlan.id, promotionalPrice: 7000 }],
+    };
+
+    prismaMock.plan.findUnique.mockResolvedValue(targetPlan);
+    prismaMock.promotion.findFirst.mockResolvedValue(promotion);
+
+    prismaMock.subscription.findFirst.mockResolvedValue({
+      id: 'subscription-free',
+      planId: 'plan-free',
+      plan: {
+        id: 'plan-free',
+        code: 'FREE',
+        name: 'Free',
+        price: 0,
+        characterLimit: 50,
+        durationDays: 30,
+      },
+      quotaLots: [],
+    });
+
+    prismaMock.payment.create.mockImplementation(
+      async ({ data }: { data: Record<string, any> }) => ({
+        id: 'payment-promo-1',
+        ...data,
+        plan: targetPlan,
+        createdAt: data.createdAt,
+      }),
+    );
+
+    const result = await service.createPayment('user-1', 'BASIC');
+
+    expect(result.amount).toBe(7000);
+
+    const createCall = prismaMock.payment.create.mock.calls[0][0];
+
+    expect(createCall.data).toMatchObject({
+      amount: 7000,
+      planPriceSnapshot: 10000,
+      promotionIdSnapshot: 'promotion-1',
+      promotionTitleSnapshot: 'Khuyến mại tháng 10',
+      promotionPriceSnapshot: 7000,
+      discountAmountSnapshot: 3000,
+      paymentType: 'NEW_PURCHASE',
+    });
+
+    expect(prismaMock.promotion.findFirst).toHaveBeenCalledWith({
+      where: {
+        status: 'ACTIVE',
+        startsAt: { lte: expect.any(Date) },
+        endsAt: { gt: expect.any(Date) },
+        redemptions: {
+          none: { userId: 'user-1' },
+        },
+        planPrices: {
+          some: { planId: 'plan-basic' },
+        },
+      },
+      include: {
+        planPrices: {
+          where: { planId: 'plan-basic' },
+        },
+      },
+    });
+  });
+
+  it('should apply active promotion price to a renewal payment', async () => {
+    const now = new Date();
+
+    const targetPlan = {
+      id: 'plan-basic',
+      code: 'BASIC',
+      name: 'Basic',
+      price: 10000,
+      characterLimit: 1000,
+      durationDays: 30,
+      currency: 'VND',
+      isActive: true,
+    };
+
+    const promotion = {
+      id: 'promotion-renewal',
+      title: 'Khuyến mại gia hạn',
+      planPrices: [{ planId: targetPlan.id, promotionalPrice: 7000 }],
+    };
+
+    prismaMock.plan.findUnique.mockResolvedValue(targetPlan);
+    prismaMock.promotion.findFirst.mockResolvedValue(promotion);
+
+    prismaMock.subscription.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 'subscription-expired',
+        userId: 'user-1',
+        planId: targetPlan.id,
+        plan: targetPlan,
+        expiresAt: new Date(now.getTime() - 60 * 60 * 1000),
+        quotaLots: [],
+      });
+
+    prismaMock.payment.create.mockImplementation(
+      async ({ data }: { data: Record<string, any> }) => ({
+        id: 'payment-renewal-promo',
+        ...data,
+        plan: targetPlan,
+      }),
+    );
+
+    const result = await service.createPayment('user-1', 'BASIC');
+
+    expect(result.amount).toBe(7000);
+    expect(result.paymentType).toBe('RENEWAL');
+
+    const createCall = prismaMock.payment.create.mock.calls[0][0];
+
+    expect(createCall.data).toMatchObject({
+      amount: 7000,
+      planPriceSnapshot: 10000,
+      promotionIdSnapshot: 'promotion-renewal',
+      promotionTitleSnapshot: 'Khuyến mại gia hạn',
+      promotionPriceSnapshot: 7000,
+      discountAmountSnapshot: 3000,
+      paymentType: 'RENEWAL',
+    });
+
+    expect(createCall.data.createdAt).toEqual(expect.any(Date));
+  });
+
+  it('should apply promotion price before deducting quota credit on upgrade', async () => {
+    const targetPlan = {
+      id: 'plan-pro',
+      code: 'PRO',
+      name: 'Pro',
+      price: 20000,
+      characterLimit: 5000,
+      durationDays: 30,
+      currency: 'VND',
+      isActive: true,
+    };
+
+    const promotion = {
+      id: 'promotion-credit',
+      title: 'Khuyến mại Pro',
+      planPrices: [{ planId: 'plan-pro', promotionalPrice: 15000 }],
+    };
+
+    prismaMock.plan.findUnique.mockResolvedValue(targetPlan);
+    prismaMock.promotion.findFirst.mockResolvedValue(promotion);
+
+    prismaMock.subscription.findFirst.mockResolvedValue({
+      id: 'subscription-basic',
+      planId: 'plan-basic',
+      plan: {
+        id: 'plan-basic',
+        code: 'BASIC',
+        name: 'Basic',
+        price: 10000,
+        characterLimit: 1000,
+        durationDays: 30,
+      },
+      quotaLots: [
+        {
+          id: 'lot-basic-1',
+          charactersRemaining: 300,
+          rolloverCount: 0,
+        },
+        {
+          id: 'lot-basic-2',
+          charactersRemaining: 200,
+          rolloverCount: 0,
+        },
+      ],
+    });
+
+    prismaMock.payment.create.mockImplementation(
+      async ({ data }: { data: Record<string, any> }) => ({
+        id: 'payment-credit-promo',
+        ...data,
+        plan: targetPlan,
+      }),
+    );
+
+    const result = await service.createPayment(
+      'user-1',
+      'PRO',
+      'CONVERT_TO_CREDIT',
+    );
+
+    expect(result.amount).toBe(10000);
+    expect(result.creditAmount).toBe(5000);
+    expect(result.remainingCharacters).toBe(500);
+    expect(result.upgradeOption).toBe('CONVERT_TO_CREDIT');
+
+    const createCall = prismaMock.payment.create.mock.calls[0][0];
+
+    expect(createCall.data).toMatchObject({
+      amount: 10000,
+      planPriceSnapshot: 20000,
+      promotionIdSnapshot: 'promotion-credit',
+      promotionTitleSnapshot: 'Khuyến mại Pro',
+      promotionPriceSnapshot: 15000,
+      discountAmountSnapshot: 5000,
+      paymentType: 'UPGRADE',
+      upgradeOption: 'CONVERT_TO_CREDIT',
+      creditAmount: 5000,
+    });
   });
 
   it('should calculate credit from eligible remaining quota', async () => {
@@ -235,6 +460,81 @@ describe('PaymentService', () => {
     expect(tx.subscription.create).not.toHaveBeenCalled();
     expect(tx.quotaLot.create).not.toHaveBeenCalled();
     expect(tx.payment.update).not.toHaveBeenCalled();
+  });
+
+  it('should apply active promotion price to a TRANSFER_QUOTA upgrade', async () => {
+    const targetPlan = {
+      id: 'plan-pro',
+      code: 'PRO',
+      name: 'Pro',
+      price: 20000,
+      characterLimit: 5000,
+      durationDays: 30,
+      currency: 'VND',
+      isActive: true,
+    };
+
+    const promotion = {
+      id: 'promotion-upgrade',
+      title: 'Khuyến mại nâng cấp',
+      planPrices: [{ planId: targetPlan.id, promotionalPrice: 15000 }],
+    };
+
+    prismaMock.plan.findUnique.mockResolvedValue(targetPlan);
+    prismaMock.promotion.findFirst.mockResolvedValue(promotion);
+
+    prismaMock.subscription.findFirst.mockResolvedValue({
+      id: 'subscription-basic',
+      planId: 'plan-basic',
+      plan: {
+        id: 'plan-basic',
+        code: 'BASIC',
+        name: 'Basic',
+        price: 10000,
+        characterLimit: 1000,
+        durationDays: 30,
+      },
+      quotaLots: [
+        {
+          id: 'lot-basic',
+          charactersRemaining: 300,
+          rolloverCount: 0,
+        },
+      ],
+    });
+
+    prismaMock.payment.create.mockImplementation(
+      async ({ data }: { data: Record<string, any> }) => ({
+        id: 'payment-upgrade-promo',
+        ...data,
+        plan: targetPlan,
+      }),
+    );
+
+    const result = await service.createPayment(
+      'user-1',
+      'PRO',
+      'TRANSFER_QUOTA',
+    );
+
+    expect(result.amount).toBe(15000);
+    expect(result.paymentType).toBe('UPGRADE');
+    expect(result.upgradeOption).toBe('TRANSFER_QUOTA');
+    expect(result.remainingCharacters).toBe(300);
+
+    const createCall = prismaMock.payment.create.mock.calls[0][0];
+
+    expect(createCall.data).toMatchObject({
+      amount: 15000,
+      planPriceSnapshot: 20000,
+      promotionIdSnapshot: 'promotion-upgrade',
+      promotionTitleSnapshot: 'Khuyến mại nâng cấp',
+      promotionPriceSnapshot: 15000,
+      discountAmountSnapshot: 5000,
+      paymentType: 'UPGRADE',
+      upgradeOption: 'TRANSFER_QUOTA',
+      creditAmount: null,
+    });
   });
 
   it('should transfer eligible quota during a paid-plan upgrade', async () => {

@@ -11,6 +11,53 @@ import { PrismaService } from '../prisma/prisma.service';
 export class PaymentService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async getPromotionPricing(
+    userId: string,
+    planId: string,
+    listPrice: number,
+    now: Date,
+  ) {
+    const promotion = await this.prisma.promotion.findFirst({
+      where: {
+        status: 'ACTIVE',
+        startsAt: { lte: now },
+        endsAt: { gt: now },
+        redemptions: {
+          none: { userId },
+        },
+        planPrices: {
+          some: { planId },
+        },
+      },
+      include: {
+        planPrices: {
+          where: { planId },
+        },
+      },
+    });
+
+    const promotionPrice = promotion?.planPrices[0];
+
+    if (!promotion || !promotionPrice) {
+      return {
+        amount: listPrice,
+        promotionIdSnapshot: null,
+        promotionTitleSnapshot: null,
+        promotionPriceSnapshot: null,
+        discountAmountSnapshot: null,
+      };
+    }
+
+    return {
+      amount: promotionPrice.promotionalPrice,
+      promotionIdSnapshot: promotion.id,
+      promotionTitleSnapshot: promotion.title,
+      promotionPriceSnapshot: promotionPrice.promotionalPrice,
+      discountAmountSnapshot:
+        Math.round((listPrice - promotionPrice.promotionalPrice) * 100) / 100,
+    };
+  }
+
   private generateTransferCode(paymentType: string): string {
     const prefixes: Record<string, string> = {
       RENEWAL: 'GH',
@@ -56,6 +103,13 @@ export class PaymentService {
     if (plan.code === 'FREE') {
       throw new BadRequestException('Không thể tạo thanh toán cho gói Free.');
     }
+
+    const pricing = await this.getPromotionPricing(
+      userId,
+      plan.id,
+      plan.price,
+      now,
+    );
 
     const activeSubscription = await this.prisma.subscription.findFirst({
       where: {
@@ -173,8 +227,16 @@ export class PaymentService {
           planDurationDaysSnapshot: plan.durationDays,
           planCharacterLimitSnapshot: plan.characterLimit,
 
-          amount: plan.price,
+          amount: pricing.amount,
           currency: plan.currency,
+
+          promotionIdSnapshot: pricing.promotionIdSnapshot,
+          promotionTitleSnapshot: pricing.promotionTitleSnapshot,
+          promotionPriceSnapshot: pricing.promotionPriceSnapshot,
+          discountAmountSnapshot: pricing.discountAmountSnapshot,
+
+          createdAt: now,
+
           status: 'PENDING',
           provider: 'BANK_TRANSFER',
           paymentType: 'RENEWAL',
@@ -238,8 +300,16 @@ export class PaymentService {
           planDurationDaysSnapshot: plan.durationDays,
           planCharacterLimitSnapshot: plan.characterLimit,
 
-          amount: plan.price,
+          amount: pricing.amount,
           currency: plan.currency,
+
+          promotionIdSnapshot: pricing.promotionIdSnapshot,
+          promotionTitleSnapshot: pricing.promotionTitleSnapshot,
+          promotionPriceSnapshot: pricing.promotionPriceSnapshot,
+          discountAmountSnapshot: pricing.discountAmountSnapshot,
+
+          createdAt: now,
+
           status: 'PENDING',
           provider: 'BANK_TRANSFER',
           paymentType: 'NEW_PURCHASE',
@@ -309,17 +379,17 @@ export class PaymentService {
       0,
     );
 
-    let amount = plan.price;
+    let amount = pricing.amount;
     let creditAmount: number | null = null;
 
     /*
      * A. CHUYỂN TOÀN BỘ QUOTA
      *
-     * Không giảm giá.
-     * Người dùng thanh toán đầy đủ giá gói mới.
+     * Chuyển toàn bộ quota còn lại đủ điều kiện.
+     * Số tiền thanh toán áp dụng giá khuyến mại nếu có.
      */
     if (upgradeOption === 'TRANSFER_QUOTA') {
-      amount = plan.price;
+      amount = pricing.amount;
       creditAmount = null;
     }
 
@@ -335,6 +405,7 @@ export class PaymentService {
      * Số tiền phải thanh toán:
      *   giá gói mới - credit
      */
+
     if (upgradeOption === 'CONVERT_TO_CREDIT') {
       if (activeSubscription.plan.characterLimit <= 0) {
         throw new BadRequestException(
@@ -345,20 +416,14 @@ export class PaymentService {
       const pricePerCharacter =
         activeSubscription.plan.price / activeSubscription.plan.characterLimit;
 
-      creditAmount = remainingCharacters * pricePerCharacter;
-
-      amount = plan.price - creditAmount;
+      const rawCreditAmount = remainingCharacters * pricePerCharacter;
 
       /*
-       * Bảo vệ dữ liệu tài chính khỏi sai số floating point.
-       * Đơn vị tiền là VND nên làm tròn đến đồng.
+       * Làm tròn credit đến đồng trước khi tính số tiền phải thanh toán.
        */
-      creditAmount = Math.round(creditAmount);
-      amount = Math.round(amount);
+      creditAmount = Math.round(rawCreditAmount);
 
-      if (amount < 0) {
-        amount = 0;
-      }
+      amount = Math.max(0, Math.round(pricing.amount - creditAmount));
     }
 
     const payment = await this.prisma.payment.create({
@@ -379,6 +444,14 @@ export class PaymentService {
 
         amount,
         currency: plan.currency,
+
+        promotionIdSnapshot: pricing.promotionIdSnapshot,
+        promotionTitleSnapshot: pricing.promotionTitleSnapshot,
+        promotionPriceSnapshot: pricing.promotionPriceSnapshot,
+        discountAmountSnapshot: pricing.discountAmountSnapshot,
+
+        createdAt: now,
+
         status: 'PENDING',
         provider: 'BANK_TRANSFER',
         paymentType: 'UPGRADE',
@@ -532,7 +605,23 @@ export class PaymentService {
         WHERE "id" = ${payment.userId}
         FOR UPDATE
       `;
+      // Kiểm tra chống sử dụng lại cùng chiến dịch khuyến mại.
+      if (payment.promotionIdSnapshot) {
+        const existingRedemption = await tx.promotionRedemption.findUnique({
+          where: {
+            userId_promotionId: {
+              userId: payment.userId,
+              promotionId: payment.promotionIdSnapshot,
+            },
+          },
+        });
 
+        if (existingRedemption) {
+          throw new BadRequestException(
+            'Bạn đã sử dụng chương trình khuyến mại này.',
+          );
+        }
+      }
       const activeSubscription = await tx.subscription.findFirst({
         where: {
           userId: payment.userId,
@@ -711,7 +800,15 @@ export class PaymentService {
             },
           });
         }
-
+        if (payment.promotionIdSnapshot) {
+          await tx.promotionRedemption.create({
+            data: {
+              userId: payment.userId,
+              promotionId: payment.promotionIdSnapshot,
+              paymentId: payment.id,
+            },
+          });
+        }
         const updatedPayment = await tx.payment.update({
           where: {
             id: payment.id,
@@ -815,7 +912,15 @@ export class PaymentService {
             expiresAt: newSubscription.expiresAt,
           },
         });
-
+        if (payment.promotionIdSnapshot) {
+          await tx.promotionRedemption.create({
+            data: {
+              userId: payment.userId,
+              promotionId: payment.promotionIdSnapshot,
+              paymentId: payment.id,
+            },
+          });
+        }
         const updatedPayment = await tx.payment.update({
           where: {
             id: payment.id,
@@ -1101,6 +1206,15 @@ export class PaymentService {
        * Đánh dấu Payment đã thanh toán
        * ============================================================
        */
+      if (payment.promotionIdSnapshot) {
+        await tx.promotionRedemption.create({
+          data: {
+            userId: payment.userId,
+            promotionId: payment.promotionIdSnapshot,
+            paymentId: payment.id,
+          },
+        });
+      }
       const updatedPayment = await tx.payment.update({
         where: {
           id: payment.id,

@@ -8,7 +8,12 @@ describe('AudioController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AudioController],
-      providers: [AudioService],
+      providers: [
+        {
+          provide: AudioService,
+          useValue: {},
+        },
+      ],
     }).compile();
 
     controller = module.get<AudioController>(AudioController);

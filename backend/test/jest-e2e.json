@@ -10,6 +10,9 @@
     "^.+\\.(t|j)s$": "ts-jest"
   },
   "moduleNameMapper": {
+    "^@nestjs/passport$": "<rootDir>/jest-mocks/nest-passport.mock.cjs",
+    "^@nestjs/jwt$": "<rootDir>/jest-mocks/nest-jwt.mock.cjs",
+    "^@openrouter/sdk$": "<rootDir>/jest-mocks/openrouter.mock.cjs",
     "^(\\.{1,2}/.*)\\.js$": "$1"
   }
 }

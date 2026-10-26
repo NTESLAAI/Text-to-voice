@@ -8,6 +8,13 @@ datasource db {
   provider = "postgresql"
 }
 
+enum PromotionStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ENDED
+}
+
 model User {
   id        String   @id @default(uuid())
   email     String?  @unique
@@ -18,11 +25,12 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  projects            Project[]
-  subscriptions       Subscription[]
-  usages              Usage[]
-  payments            Payment[]
-  passwordResetTokens PasswordResetToken[]
+  projects             Project[]
+  subscriptions        Subscription[]
+  usages               Usage[]
+  payments             Payment[]
+  passwordResetTokens  PasswordResetToken[]
+  promotionRedemptions PromotionRedemption[]
 }
 
 model Plan {
@@ -35,8 +43,9 @@ model Plan {
   characterLimit Int
   isActive       Boolean @default(true)
 
-  subscriptions Subscription[]
-  payments      Payment[]
+  subscriptions   Subscription[]
+  payments        Payment[]
+  promotionPrices PromotionPlanPrice[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -84,6 +93,10 @@ model Payment {
   planPriceSnapshot                Float?
   planDurationDaysSnapshot         Int?
   planCharacterLimitSnapshot       Int?
+  promotionIdSnapshot              String?
+  promotionTitleSnapshot           String?
+  promotionPriceSnapshot           Float?
+  discountAmountSnapshot           Float?
   // Snapshot thông tin gói nguồn khi tạo giao dịch Upgrade
   sourcePlanPriceSnapshot          Float?
   sourcePlanCharacterLimitSnapshot Int?
@@ -326,4 +339,51 @@ model AiUsage {
   @@index([subscriptionId])
   @@index([feature])
   @@index([createdAt])
+}
+
+model Promotion {
+  id       String          @id @default(uuid())
+  title    String
+  message  String          @db.Text
+  startsAt DateTime
+  endsAt   DateTime
+  status   PromotionStatus @default(DRAFT)
+
+  planPrices  PromotionPlanPrice[]
+  redemptions PromotionRedemption[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, startsAt, endsAt])
+}
+
+model PromotionPlanPrice {
+  id               String @id @default(uuid())
+  promotionId      String
+  planId           String
+  promotionalPrice Float
+
+  promotion Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  plan      Plan      @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([promotionId, planId])
+  @@index([planId])
+}
+
+model PromotionRedemption {
+  id          String   @id @default(uuid())
+  userId      String
+  promotionId String
+  paymentId   String   @unique
+  redeemedAt  DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  promotion Promotion @relation(fields: [promotionId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, promotionId])
+  @@index([promotionId])
 }

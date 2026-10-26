@@ -272,4 +272,321 @@ describe('Payment confirmation integration safety', () => {
 
     expect(oldFreeSubscription?.status).toBe('EXPIRED');
   }, 30000);
+
+  it('giữ nguyên giá khuyến mại đã chốt khi xác nhận sau khi khuyến mại hết hạn', async () => {
+    if (!prisma || !paymentService) {
+      throw new Error('Prisma hoặc PaymentService chưa được khởi tạo.');
+    }
+
+    const dbRows = await prisma.$queryRaw<
+      Array<{ database_name: string }>
+    >`SELECT current_database() AS database_name`;
+
+    expect(dbRows[0]?.database_name).toBe('text_to_voice_test');
+
+    const freePlan = await prisma.plan.findUnique({
+      where: { code: 'FREE' },
+    });
+    const paidPlan = await prisma.plan.findUnique({
+      where: { code: 'TEST_BASIC' },
+    });
+
+    if (!freePlan?.isActive || !paidPlan?.isActive) {
+      throw new Error('Thiếu Plan FREE hoặc TEST_BASIC đang hoạt động.');
+    }
+
+    let userId: string | undefined;
+    let promotionId: string | undefined;
+
+    try {
+      const now = new Date();
+      const promoPrice = Math.round(paidPlan.price * 0.8);
+
+      const user = await prisma.user.create({
+        data: {
+          email: `promo-expired-${randomUUID()}@example.test`,
+          name: 'Promotion expiry integration test',
+        },
+      });
+      userId = user.id;
+
+      await prisma.subscription.create({
+        data: {
+          userId: user.id,
+          planId: freePlan.id,
+          startedAt: now,
+          expiresAt: new Date(now.getTime() + 7 * 86400000),
+          status: 'ACTIVE',
+          characterLimit: freePlan.characterLimit,
+          rolloverCharacters: 0,
+          pricePaid: 0,
+          currency: freePlan.currency,
+        },
+      });
+
+      const promotion = await prisma.promotion.create({
+        data: {
+          title: 'Integration test promotion',
+          message: 'Test snapshot price',
+          startsAt: new Date(now.getTime() - 60000),
+          endsAt: new Date(now.getTime() + 3600000),
+          status: 'ACTIVE',
+          planPrices: {
+            create: {
+              planId: paidPlan.id,
+              promotionalPrice: promoPrice,
+            },
+          },
+        },
+      });
+      promotionId = promotion.id;
+
+      const payment = await prisma.payment.create({
+        data: {
+          userId: user.id,
+          planId: paidPlan.id,
+          planNameSnapshot: paidPlan.name,
+          planPriceSnapshot: paidPlan.price,
+          planDurationDaysSnapshot: paidPlan.durationDays,
+          planCharacterLimitSnapshot: paidPlan.characterLimit,
+          promotionIdSnapshot: promotion.id,
+          promotionTitleSnapshot: promotion.title,
+          promotionPriceSnapshot: promoPrice,
+          discountAmountSnapshot: paidPlan.price - promoPrice,
+          amount: promoPrice,
+          currency: paidPlan.currency,
+          status: 'PENDING',
+          provider: 'BANK_TRANSFER',
+          paymentType: 'NEW_PURCHASE',
+          transferCode: `KH-${randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()}`,
+        },
+      });
+
+      // Cho khuyến mại hết hạn sau khi giao dịch đã được tạo.
+      await prisma.promotion.update({
+        where: { id: promotion.id },
+        data: {
+          status: 'ENDED',
+          endsAt: new Date(now.getTime() - 1000),
+        },
+      });
+
+      const result = await paymentService.confirmPayment(payment.id);
+
+      expect(result.payment).toMatchObject({
+        id: payment.id,
+        status: 'PAID',
+        amount: promoPrice,
+      });
+
+      const savedPayment = await prisma.payment.findUniqueOrThrow({
+        where: { id: payment.id },
+      });
+
+      expect(savedPayment).toMatchObject({
+        amount: promoPrice,
+        planPriceSnapshot: paidPlan.price,
+        promotionIdSnapshot: promotion.id,
+        promotionTitleSnapshot: promotion.title,
+        promotionPriceSnapshot: promoPrice,
+        discountAmountSnapshot: paidPlan.price - promoPrice,
+      });
+
+      const newSubscription = await prisma.subscription.findFirstOrThrow({
+        where: {
+          userId: user.id,
+          planId: paidPlan.id,
+          status: 'ACTIVE',
+        },
+      });
+
+      expect(newSubscription.pricePaid).toBe(promoPrice);
+    } finally {
+      // Chỉ xóa dữ liệu được tạo riêng cho bài test này.
+      if (userId) {
+        await prisma.user.deleteMany({ where: { id: userId } });
+      }
+
+      if (promotionId) {
+        await prisma.promotion.deleteMany({
+          where: { id: promotionId },
+        });
+      }
+    }
+  }, 30000);
+
+  it('chỉ cho phép một trong hai Payment cùng người dùng sử dụng khuyến mại', async () => {
+    if (!prisma || !paymentService) {
+      throw new Error('Prisma hoặc PaymentService chưa được khởi tạo.');
+    }
+
+    const dbRows = await prisma.$queryRaw<
+      Array<{ database_name: string }>
+    >`SELECT current_database() AS database_name`;
+
+    expect(dbRows[0]?.database_name).toBe('text_to_voice_test');
+
+    const freePlan = await prisma.plan.findUnique({
+      where: { code: 'FREE' },
+    });
+    const paidPlan = await prisma.plan.findUnique({
+      where: { code: 'TEST_BASIC' },
+    });
+
+    if (!freePlan?.isActive || !paidPlan?.isActive) {
+      throw new Error('Thiếu Plan FREE hoặc TEST_BASIC đang hoạt động.');
+    }
+
+    let userId: string | undefined;
+    let promotionId: string | undefined;
+
+    try {
+      const now = new Date();
+      const promoPrice = Math.round(paidPlan.price * 0.8);
+
+      const user = await prisma.user.create({
+        data: {
+          email: `promo-duplicate-${randomUUID()}@example.test`,
+          name: 'Duplicate promotion payment integration test',
+        },
+      });
+      userId = user.id;
+
+      await prisma.subscription.create({
+        data: {
+          userId: user.id,
+          planId: freePlan.id,
+          startedAt: now,
+          expiresAt: new Date(now.getTime() + 7 * 86400000),
+          status: 'ACTIVE',
+          characterLimit: freePlan.characterLimit,
+          rolloverCharacters: 0,
+          pricePaid: 0,
+          currency: freePlan.currency,
+        },
+      });
+
+      const promotion = await prisma.promotion.create({
+        data: {
+          title: 'Duplicate redemption integration test',
+          message: 'Only one payment may redeem this promotion',
+          startsAt: new Date(now.getTime() - 60000),
+          endsAt: new Date(now.getTime() + 3600000),
+          status: 'ACTIVE',
+          planPrices: {
+            create: {
+              planId: paidPlan.id,
+              promotionalPrice: promoPrice,
+            },
+          },
+        },
+      });
+      promotionId = promotion.id;
+
+      const createPayment = () =>
+        prisma!.payment.create({
+          data: {
+            userId: user.id,
+            planId: paidPlan.id,
+            planNameSnapshot: paidPlan.name,
+            planPriceSnapshot: paidPlan.price,
+            planDurationDaysSnapshot: paidPlan.durationDays,
+            planCharacterLimitSnapshot: paidPlan.characterLimit,
+            promotionIdSnapshot: promotion.id,
+            promotionTitleSnapshot: promotion.title,
+            promotionPriceSnapshot: promoPrice,
+            discountAmountSnapshot: paidPlan.price - promoPrice,
+            amount: promoPrice,
+            currency: paidPlan.currency,
+            status: 'PENDING',
+            provider: 'BANK_TRANSFER',
+            paymentType: 'NEW_PURCHASE',
+            transferCode: `KH-${randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()}`,
+          },
+        });
+
+      const payment1 = await createPayment();
+      const payment2 = await createPayment();
+
+      const beforeSubscriptionCount = await prisma.subscription.count({
+        where: { userId: user.id },
+      });
+      const beforeQuotaLotCount = await prisma.quotaLot.count({
+        where: { subscription: { userId: user.id } },
+      });
+
+      const firstResult = await paymentService.confirmPayment(payment1.id);
+
+      const firstPayment =
+        'payment' in firstResult ? firstResult.payment : undefined;
+
+      if (firstPayment) {
+        expect(firstPayment.status).toBe('PAID');
+      } else if ('status' in firstResult) {
+        expect(firstResult.status).toBe('PAID');
+      } else {
+        throw new Error('Kết quả xác nhận thanh toán không có trạng thái.');
+      }
+
+      await expect(
+        paymentService.confirmPayment(payment2.id),
+      ).rejects.toThrow();
+
+      const savedPayment1 = await prisma.payment.findUniqueOrThrow({
+        where: { id: payment1.id },
+      });
+      const savedPayment2 = await prisma.payment.findUniqueOrThrow({
+        where: { id: payment2.id },
+      });
+
+      expect(savedPayment1.status).toBe('PAID');
+      expect(savedPayment2.status).not.toBe('PAID');
+
+      expect(savedPayment1).toMatchObject({
+        promotionIdSnapshot: promotion.id,
+        promotionPriceSnapshot: promoPrice,
+        amount: promoPrice,
+      });
+      expect(savedPayment2).toMatchObject({
+        promotionIdSnapshot: promotion.id,
+        promotionPriceSnapshot: promoPrice,
+        amount: promoPrice,
+      });
+
+      const redemptions = await prisma.promotionRedemption.findMany({
+        where: {
+          userId: user.id,
+          promotionId: promotion.id,
+        },
+      });
+      expect(redemptions).toHaveLength(1);
+      expect(redemptions[0].paymentId).toBe(payment1.id);
+
+      const afterSubscriptionCount = await prisma.subscription.count({
+        where: { userId: user.id },
+      });
+      const afterQuotaLotCount = await prisma.quotaLot.count({
+        where: { subscription: { userId: user.id } },
+      });
+
+      expect(afterSubscriptionCount).toBe(beforeSubscriptionCount + 1);
+      expect(afterQuotaLotCount).toBe(beforeQuotaLotCount + 1);
+    } finally {
+      if (userId) {
+        await prisma.promotionRedemption.deleteMany({
+          where: { userId },
+        });
+
+        await prisma.user.deleteMany({
+          where: { id: userId },
+        });
+      }
+
+      if (promotionId) {
+        await prisma.promotion.deleteMany({
+          where: { id: promotionId },
+        });
+      }
+    }
+  }, 30000);
 });
