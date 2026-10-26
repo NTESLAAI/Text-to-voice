@@ -130,7 +130,7 @@ export class PromotionService {
   async updatePromotion(id: string, dto: UpdatePromotionDto) {
     return this.prisma.$transaction(async (tx) => {
       // Đồng bộ tất cả thao tác thay đổi lịch và trạng thái khuyến mại.
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(726314159, 1)`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(726314159, 1)`;
 
       const existing = await tx.promotion.findUnique({
         where: { id },
@@ -229,7 +229,7 @@ export class PromotionService {
   async changeStatus(id: string, status: PromotionStatus) {
     return this.prisma.$transaction(async (tx) => {
       // Phải dùng cùng khóa với updatePromotion().
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(726314159, 1)`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(726314159, 1)`;
 
       const existing = await tx.promotion.findUnique({
         where: { id },

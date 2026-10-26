@@ -25,7 +25,7 @@ describe('PromotionService', () => {
   };
 
   const txMock = {
-    $queryRaw: jest.fn(),
+    $executeRaw: jest.fn(),
     promotion: {
       findUnique: jest.fn(),
       findFirst: jest.fn(),
@@ -111,6 +111,90 @@ describe('PromotionService', () => {
       },
       select: { id: true, title: true },
     });
+
+    expect(txMock.promotion.update).not.toHaveBeenCalled();
+  });
+
+  it('should reject updating an ENDED promotion', async () => {
+    const now = new Date();
+
+    txMock.promotion.findUnique.mockResolvedValue({
+      id: 'promotion-ended',
+      status: PromotionStatus.ENDED,
+      startsAt: new Date(now.getTime() - 2 * 24 * 60 * 60_000),
+      endsAt: new Date(now.getTime() - 24 * 60 * 60_000),
+    });
+
+    await expect(
+      service.updatePromotion('promotion-ended', { title: 'Updated title' }),
+    ).rejects.toThrow();
+
+    expect(txMock.promotion.update).not.toHaveBeenCalled();
+  });
+
+  it('should reject updating an ACTIVE promotion that has already started', async () => {
+    const now = new Date();
+
+    txMock.promotion.findUnique.mockResolvedValue({
+      id: 'promotion-running',
+      status: PromotionStatus.ACTIVE,
+      startsAt: new Date(now.getTime() - 60_000),
+      endsAt: new Date(now.getTime() + 60 * 60_000),
+    });
+
+    await expect(
+      service.updatePromotion('promotion-running', { title: 'Updated title' }),
+    ).rejects.toThrow();
+
+    expect(txMock.promotion.update).not.toHaveBeenCalled();
+  });
+
+  it('should allow updating a valid DRAFT promotion', async () => {
+    const now = new Date();
+    const promotion = {
+      id: 'promotion-draft',
+      status: PromotionStatus.DRAFT,
+      startsAt: new Date(now.getTime() + 60 * 60_000),
+      endsAt: new Date(now.getTime() + 24 * 60 * 60_000),
+    };
+
+    txMock.promotion.findUnique.mockResolvedValue(promotion);
+    txMock.promotion.update.mockResolvedValue({
+      ...promotion,
+      title: 'Updated title',
+    });
+
+    await service.updatePromotion('promotion-draft', {
+      title: 'Updated title',
+    });
+
+    expect(txMock.promotion.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'promotion-draft' },
+        data: expect.objectContaining({ title: 'Updated title' }),
+      }),
+    );
+  });
+
+  it('should reject an invalid promotional price above list price', async () => {
+    const now = new Date();
+    const promotion = {
+      id: 'promotion-draft',
+      status: PromotionStatus.DRAFT,
+      startsAt: new Date(now.getTime() + 60 * 60_000),
+      endsAt: new Date(now.getTime() + 24 * 60 * 60_000),
+    };
+
+    txMock.promotion.findUnique.mockResolvedValue(promotion);
+    prismaMock.plan.findMany.mockResolvedValue([
+      { id: 'plan-basic', name: 'Basic', price: 100_000 },
+    ]);
+
+    await expect(
+      service.updatePromotion('promotion-draft', {
+        planPrices: [{ planId: 'plan-basic', promotionalPrice: 120_000 }],
+      }),
+    ).rejects.toThrow();
 
     expect(txMock.promotion.update).not.toHaveBeenCalled();
   });
