@@ -424,6 +424,11 @@ describe('PaymentService', () => {
 
     const tx = {
       $queryRaw: jest.fn().mockResolvedValue([]),
+      paymentTransaction: {
+        aggregate: jest.fn().mockResolvedValue({
+          _sum: { amount: 10000 },
+        }),
+      },
       payment: {
         findUnique: jest.fn().mockResolvedValue(payment),
         update: jest.fn(),
@@ -631,6 +636,11 @@ describe('PaymentService', () => {
         create: jest.fn().mockResolvedValue({}),
         update: jest.fn().mockResolvedValue({}),
       },
+      paymentTransaction: {
+        aggregate: jest.fn().mockResolvedValue({
+          _sum: { amount: 20000 },
+        }),
+      },
     };
 
     prismaMock.$transaction.mockImplementation(
@@ -785,6 +795,11 @@ describe('PaymentService', () => {
         create: jest.fn().mockResolvedValue({}),
         update: jest.fn().mockResolvedValue({}),
       },
+      paymentTransaction: {
+        aggregate: jest.fn().mockResolvedValue({
+          _sum: { amount: 20000 },
+        }),
+      },
     };
 
     prismaMock.$transaction.mockImplementation(
@@ -901,6 +916,11 @@ describe('PaymentService', () => {
         create: jest.fn().mockResolvedValue({}),
         update: jest.fn().mockResolvedValue({}),
       },
+      paymentTransaction: {
+        aggregate: jest.fn().mockResolvedValue({
+          _sum: { amount: 20000 },
+        }),
+      },
     };
 
     prismaMock.$transaction.mockImplementation(
@@ -922,6 +942,102 @@ describe('PaymentService', () => {
         rolloverCount: 1,
         expiresAt: expect.any(Date),
       },
+    });
+  });
+
+  describe('cancelPayment', () => {
+    const payment = {
+      id: 'payment-cancel-1',
+      userId: 'user-1',
+      status: 'PENDING',
+    };
+
+    const createTransactionMock = (
+      receivedTransaction: { id: string; status?: string } | null = null,
+      ownerId = 'user-1',
+    ) => {
+      const tx = {
+        $queryRaw: jest.fn().mockResolvedValue([]),
+        payment: {
+          findUnique: jest
+            .fn()
+            .mockResolvedValueOnce({
+              ...payment,
+              userId: ownerId,
+            })
+            .mockResolvedValueOnce({
+              ...payment,
+              status: 'CANCELLED',
+              userId: ownerId,
+            }),
+          update: jest.fn().mockResolvedValue({
+            ...payment,
+            status: 'CANCELLED',
+          }),
+        },
+        paymentTransaction: {
+          findFirst: jest.fn().mockResolvedValue(receivedTransaction),
+        },
+      };
+
+      prismaMock.$transaction.mockImplementation(
+        async (callback: (tx: any) => Promise<unknown>) => callback(tx),
+      );
+
+      return tx;
+    };
+
+    it('should cancel a pending payment without received transactions', async () => {
+      const tx = createTransactionMock(null);
+
+      const result = await service.cancelPayment('user-1', payment.id);
+
+      expect(tx.paymentTransaction.findFirst).toHaveBeenCalledWith({
+        where: {
+          paymentId: payment.id,
+          status: {
+            in: ['RECEIVED', 'MATCHED'],
+          },
+        },
+        select: { id: true },
+      });
+
+      expect(tx.payment.update).toHaveBeenCalledWith({
+        where: { id: payment.id },
+        data: { status: 'CANCELLED' },
+      });
+
+      expect(result).not.toBeNull();
+      expect(result).toMatchObject({
+        status: 'CANCELLED',
+      });
+    });
+
+    it.each(['RECEIVED', 'MATCHED'])(
+      'should reject cancellation when a transaction is %s',
+      async (status) => {
+        const tx = createTransactionMock({
+          id: 'transaction-1',
+          status,
+        });
+
+        await expect(
+          service.cancelPayment('user-1', payment.id),
+        ).rejects.toThrow(BadRequestException);
+
+        expect(tx.payment.update).not.toHaveBeenCalled();
+      },
+    );
+
+    it('should reject cancellation by a different user', async () => {
+      const tx = createTransactionMock(null, 'another-user');
+
+      await expect(service.cancelPayment('user-1', payment.id)).rejects.toThrow(
+        BadRequestException,
+      );
+
+      expect(tx.paymentTransaction.findFirst).not.toHaveBeenCalled();
+      expect(tx.payment.update).not.toHaveBeenCalled();
     });
   });
 });

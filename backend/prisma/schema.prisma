@@ -121,8 +121,9 @@ model Payment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  plan Plan @relation(fields: [planId], references: [id])
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan         Plan                 @relation(fields: [planId], references: [id])
+  transactions PaymentTransaction[]
 
   @@index([userId])
   @@index([planId])
@@ -386,4 +387,42 @@ model PromotionRedemption {
 
   @@unique([userId, promotionId])
   @@index([promotionId])
+}
+
+model PaymentTransaction {
+  id String @id @default(uuid())
+
+  // Null khi chưa xác định hoặc chưa liên kết được đơn hàng.
+  paymentId String?
+
+  // Nhà cung cấp: BANK_TRANSFER, hoặc mã nhà cung cấp khác.
+  provider String
+
+  // Mã giao dịch do ngân hàng hoặc nhà cung cấp cấp.
+  providerTransactionId String?
+
+  // Số tiền thực nhận của lần chuyển khoản.
+  amount   Float
+  currency String @default("VND")
+
+  // UNMATCHED, RECEIVED, MATCHED, REJECTED,
+  // REFUND_PENDING, REFUNDED.
+  status String @default("UNMATCHED")
+
+  // Nội dung chuyển khoản hoặc ghi chú phục vụ đối soát.
+  reference String?
+  note      String?
+
+  receivedAt DateTime?
+  matchedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payment Payment? @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  @@unique([provider, providerTransactionId])
+  @@index([paymentId])
+  @@index([status])
+  @@index([receivedAt])
 }

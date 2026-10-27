@@ -523,19 +523,16 @@ export class PaymentService {
   }
 
   async cancelPayment(userId: string, paymentId: string) {
-    const result = await this.prisma.payment.updateMany({
-      where: {
-        id: paymentId,
-        userId,
-        status: 'PENDING',
-      },
-      data: {
-        status: 'CANCELLED',
-      },
-    });
+    return this.prisma.$transaction(async (tx) => {
+      // Khóa Payment để tránh hủy đồng thời với việc ghi nhận tiền.
+      await tx.$queryRaw`
+        SELECT "id"
+        FROM "Payment"
+        WHERE "id" = ${paymentId}
+        FOR UPDATE
+      `;
 
-    if (result.count === 0) {
-      const payment = await this.prisma.payment.findUnique({
+      const payment = await tx.payment.findUnique({
         where: { id: paymentId },
       });
 
@@ -547,13 +544,40 @@ export class PaymentService {
         throw new BadRequestException('Bạn không có quyền hủy giao dịch này.');
       }
 
-      throw new BadRequestException(
-        'Chỉ có thể hủy giao dịch đang chờ thanh toán.',
-      );
-    }
+      if (payment.status !== 'PENDING') {
+        throw new BadRequestException(
+          'Chỉ có thể hủy giao dịch đang chờ thanh toán.',
+        );
+      }
 
-    return this.prisma.payment.findUnique({
-      where: { id: paymentId },
+      // Không cho hủy nếu đã có giao dịch được ghi nhận là đã nhận tiền
+      // hoặc đã đối soát với đơn thanh toán.
+      const receivedTransaction = await tx.paymentTransaction.findFirst({
+        where: {
+          paymentId: payment.id,
+          status: {
+            in: ['RECEIVED', 'MATCHED'],
+          },
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (receivedTransaction) {
+        throw new BadRequestException(
+          'Không thể hủy đơn vì đã ghi nhận tiền thanh toán. Vui lòng hoàn tất đối soát hoặc xử lý hoàn tiền.',
+        );
+      }
+
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: { status: 'CANCELLED' },
+      });
+
+      return tx.payment.findUnique({
+        where: { id: payment.id },
+      });
     });
   }
 
@@ -584,7 +608,27 @@ export class PaymentService {
           'Giao dịch không ở trạng thái chờ xác nhận.',
         );
       }
+      // Chỉ kích hoạt gói khi tổng tiền đã đối soát đủ.
+      // Đơn có số tiền phải trả bằng 0 vẫn được xử lý bình thường.
+      if (payment.amount > 0) {
+        const matchedTransactions = await tx.paymentTransaction.aggregate({
+          where: {
+            paymentId: payment.id,
+            status: 'MATCHED',
+          },
+          _sum: {
+            amount: true,
+          },
+        });
 
+        const totalMatched = matchedTransactions._sum.amount ?? 0;
+
+        if (totalMatched < payment.amount) {
+          throw new BadRequestException(
+            `Chưa nhận đủ tiền thanh toán. Đã đối soát: ${totalMatched.toLocaleString('vi-VN')} / ${payment.amount.toLocaleString('vi-VN')} VND.`,
+          );
+        }
+      }
       // Ưu tiên thông tin gói đã lưu tại thời điểm tạo giao dịch.
       // Dùng thông tin Plan hiện tại làm dự phòng cho giao dịch cũ.
       const planName = payment.planNameSnapshot ?? payment.plan.name;
