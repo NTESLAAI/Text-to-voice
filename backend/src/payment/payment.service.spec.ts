@@ -377,6 +377,72 @@ describe('PaymentService', () => {
     expect(prismaMock.payment.create).not.toHaveBeenCalled();
   });
 
+  it('should reject payment confirmation when matched transactions are insufficient', async () => {
+    const payment = {
+      id: 'payment-underpaid',
+      userId: 'user-1',
+      planId: 'plan-basic',
+      plan: {
+        id: 'plan-basic',
+        code: 'BASIC',
+        name: 'Basic',
+        price: 10000,
+        characterLimit: 1000,
+        durationDays: 30,
+        currency: 'VND',
+      },
+      amount: 10000,
+      currency: 'VND',
+      status: 'PENDING',
+      paymentType: 'NEW_PURCHASE',
+      planNameSnapshot: 'Basic',
+      planPriceSnapshot: 10000,
+      planDurationDaysSnapshot: 30,
+      planCharacterLimitSnapshot: 1000,
+    };
+
+    const tx = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      paymentTransaction: {
+        aggregate: jest.fn().mockResolvedValue({
+          _sum: { amount: 5000 },
+        }),
+      },
+      payment: {
+        findUnique: jest.fn().mockResolvedValue(payment),
+        update: jest.fn(),
+      },
+      subscription: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        updateMany: jest.fn(),
+        create: jest.fn(),
+      },
+      quotaLot: {
+        create: jest.fn(),
+      },
+    };
+
+    prismaMock.$transaction.mockImplementation(
+      async (callback: (tx: any) => Promise<unknown>) => callback(tx),
+    );
+
+    await expect(service.confirmPayment('payment-underpaid')).rejects.toThrow(
+      BadRequestException,
+    );
+
+    expect(tx.paymentTransaction.aggregate).toHaveBeenCalledWith({
+      where: {
+        paymentId: 'payment-underpaid',
+        status: 'MATCHED',
+      },
+      _sum: { amount: true },
+    });
+
+    expect(tx.payment.update).not.toHaveBeenCalled();
+    expect(tx.subscription.create).not.toHaveBeenCalled();
+    expect(tx.quotaLot.create).not.toHaveBeenCalled();
+  });
+
   it('should reject Free-to-Paid confirmation when the Free subscription was already processed', async () => {
     const now = new Date();
 
