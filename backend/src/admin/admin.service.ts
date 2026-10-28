@@ -13,12 +13,47 @@ export class AdminService {
   ) {}
 
   async getPayments() {
-    return this.prisma.payment.findMany({
+    const payments = await this.prisma.payment.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
         user: { select: { id: true, name: true, email: true } },
         plan: { select: { id: true, code: true, name: true } },
+        transactions: {
+          orderBy: { createdAt: 'asc' },
+          select: {
+            id: true,
+            provider: true,
+            providerTransactionId: true,
+            amount: true,
+            currency: true,
+            status: true,
+            reference: true,
+            note: true,
+            receivedAt: true,
+            matchedAt: true,
+            createdAt: true,
+          },
+        },
       },
+    });
+
+    return payments.map((payment) => {
+      const matchedTransactions = payment.transactions.filter(
+        (transaction) => transaction.status === 'MATCHED',
+      );
+
+      const matchedAmount = matchedTransactions.reduce(
+        (total, transaction) => total + transaction.amount,
+        0,
+      );
+
+      const surplusAmount = Math.max(0, matchedAmount - payment.amount);
+
+      return {
+        ...payment,
+        matchedAmount,
+        surplusAmount,
+      };
     });
   }
 

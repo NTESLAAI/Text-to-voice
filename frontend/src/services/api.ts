@@ -644,6 +644,7 @@ export async function resetPassword(
 
   return response.data;
 }
+
 export interface AdminPayment {
   id: string;
   user: {
@@ -666,6 +667,23 @@ export interface AdminPayment {
   creditAmount?: number | null;
   createdAt: string;
   paidAt?: string | null;
+
+  matchedAmount: number;
+  surplusAmount: number;
+
+  transactions: {
+    id: string;
+    provider: string;
+    providerTransactionId: string | null;
+    amount: number;
+    currency: string;
+    status: string;
+    reference: string | null;
+    note: string | null;
+    receivedAt: string | null;
+    matchedAt: string | null;
+    createdAt: string;
+  }[];
 }
 
 export async function getAdminPayments(): Promise<AdminPayment[]> {
@@ -677,3 +695,96 @@ export async function confirmAdminPayment(paymentId: string) {
   return response.data;
 }
 export default api;
+
+export type PromotionStatus = "DRAFT" | "ACTIVE" | "PAUSED" | "ENDED";
+
+export interface PromotionPlan {
+  id: string;
+  code: string;
+  name: string;
+  price: number;
+}
+
+export interface PromotionPlanPrice {
+  id?: string;
+  planId: string;
+  promotionalPrice: number;
+  plan: PromotionPlan;
+}
+
+export interface AdminPromotion {
+  id: string;
+  title: string;
+  message: string;
+  startsAt: string;
+  endsAt: string;
+  status: PromotionStatus;
+  effectiveStatus?: PromotionStatus;
+  createdAt: string;
+  updatedAt: string;
+  planPrices: PromotionPlanPrice[];
+}
+
+export interface PromotionAvailablePlan {
+  id: string;
+  code: string;
+  name: string;
+  price: number;
+  isActive: boolean;
+}
+
+export interface PromotionPlanPriceInput {
+  planId: string;
+  promotionalPrice: number;
+}
+
+export interface CreatePromotionInput {
+  title: string;
+  message: string;
+  startsAt: string;
+  endsAt: string;
+  planPrices: PromotionPlanPriceInput[];
+}
+
+export async function getAdminPromotions(): Promise<AdminPromotion[]> {
+  const response = await api.get<AdminPromotion[]>("/admin/promotions");
+  return response.data;
+}
+
+export async function getPromotionAvailablePlans(): Promise<
+  PromotionAvailablePlan[]
+> {
+  const response = await api.get<PromotionAvailablePlan[]>(
+    "/admin/promotions/plans",
+  );
+  return response.data;
+}
+
+export async function createAdminPromotion(
+  data: CreatePromotionInput,
+): Promise<AdminPromotion> {
+  const response = await api.post<AdminPromotion>("/admin/promotions", data);
+  return response.data;
+}
+
+export async function updateAdminPromotion(
+  id: string,
+  data: Partial<CreatePromotionInput>,
+): Promise<AdminPromotion> {
+  const response = await api.patch<AdminPromotion>(
+    `/admin/promotions/${id}`,
+    data,
+  );
+  return response.data;
+}
+
+export async function changeAdminPromotionStatus(
+  id: string,
+  status: PromotionStatus,
+): Promise<AdminPromotion> {
+  const response = await api.patch<AdminPromotion>(
+    `/admin/promotions/${id}/status`,
+    { status },
+  );
+  return response.data;
+}

@@ -20,6 +20,7 @@ import {
 } from "./services/api";
 import AdminPayments from "./components/admin/AdminPayments";
 import AdminPlans from "./components/admin/AdminPlans";
+import AdminPromotions from "./components/admin/AdminPromotions";
 
 function App() {
   const [checkingAuth, setCheckingAuth] = useState(true);
@@ -28,7 +29,9 @@ function App() {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetToken, setResetToken] = useState("");
   const [showAccount, setShowAccount] = useState(false);
-  const [showAdmin, setShowAdmin] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(
+    () => sessionStorage.getItem("ttv-show-admin") === "true",
+  );
   const [webView, setWebView] = useState<
     "tts" | "audio-history" | "dialogue-history"
   >("tts");
@@ -81,7 +84,18 @@ function App() {
   };
 
   const [historyAudioUrl, setHistoryAudioUrl] = useState<string | null>(null);
-  const [adminItem, setAdminItem] = useState("users");
+  const [adminItem, setAdminItem] = useState(
+    () => sessionStorage.getItem("ttv-admin-item") || "users",
+  );
+  useEffect(() => {
+    if (showAdmin) {
+      sessionStorage.setItem("ttv-show-admin", "true");
+    } else {
+      sessionStorage.removeItem("ttv-show-admin");
+    }
+
+    sessionStorage.setItem("ttv-admin-item", adminItem);
+  }, [showAdmin, adminItem]);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get("token");
@@ -283,9 +297,11 @@ function App() {
               <AdminPayments />
             ) : adminItem === "plans" ? (
               <AdminPlans />
+            ) : adminItem === "promotions" ? (
+              <AdminPromotions />
             ) : (
               <div className="admin-empty-state">
-                Chức năng quản lý khuyến mại đang được phát triển.
+                Chức năng này đang được phát triển.
               </div>
             )}
           </AdminLayout>

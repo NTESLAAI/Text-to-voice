@@ -15,6 +15,10 @@ interface PaymentDetail {
   statusCode: string;
   provider: string;
   createdAt: string;
+  matchedAmount: number;
+  surplusAmount: number;
+  transactions: AdminPayment["transactions"];
+  currency: string;
 }
 
 function formatAmount(amount: number, currency: string) {
@@ -82,6 +86,10 @@ function toPaymentDetail(payment: AdminPayment): PaymentDetail {
     statusCode: payment.status,
     provider: payment.provider || "—",
     createdAt: formatDate(payment.createdAt),
+    matchedAmount: payment.matchedAmount,
+    surplusAmount: payment.surplusAmount,
+    transactions: payment.transactions,
+    currency: payment.currency,
   };
 }
 
@@ -270,7 +278,71 @@ export default function AdminPayments() {
                 <span>Số tiền</span>
                 <strong>{selectedPayment.amount}</strong>
               </div>
+              <div>
+                <span>Tổng tiền đã đối soát</span>
+                <strong>
+                  {formatAmount(
+                    selectedPayment.matchedAmount,
+                    selectedPayment.currency,
+                  )}
+                </strong>
+              </div>
 
+              <div>
+                <span>Tiền chuyển thừa</span>
+                <strong
+                  className={
+                    selectedPayment.surplusAmount > 0
+                      ? "admin-payment-surplus"
+                      : undefined
+                  }
+                >
+                  {formatAmount(
+                    selectedPayment.surplusAmount,
+                    selectedPayment.currency,
+                  )}
+                </strong>
+              </div>
+              <div className="admin-payment-transactions">
+                <h4>Giao dịch ngân hàng</h4>
+
+                {selectedPayment.transactions.length === 0 ? (
+                  <p>Chưa có giao dịch ngân hàng liên kết.</p>
+                ) : (
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Số tiền</th>
+                        <th>Trạng thái</th>
+                        <th>Thời điểm đối soát</th>
+                        <th>Nội dung</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {selectedPayment.transactions.map((transaction) => (
+                        <tr key={transaction.id}>
+                          <td>
+                            {formatAmount(
+                              transaction.amount,
+                              transaction.currency,
+                            )}
+                          </td>
+                          <td>{transaction.status}</td>
+                          <td>
+                            {transaction.matchedAt
+                              ? formatDate(transaction.matchedAt)
+                              : "—"}
+                          </td>
+                          <td>
+                            {transaction.reference || transaction.note || "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
               <div>
                 <span>Mã chuyển khoản</span>
                 <strong>{selectedPayment.transferCode}</strong>
