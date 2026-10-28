@@ -377,6 +377,157 @@ describe('PaymentService', () => {
     expect(prismaMock.payment.create).not.toHaveBeenCalled();
   });
 
+  it('should confirm Free-to-Paid payment when matched transactions exceed the order amount', async () => {
+    const now = new Date();
+
+    const freePlan = {
+      id: 'plan-free',
+      code: 'FREE',
+      name: 'Free',
+      price: 0,
+      characterLimit: 50,
+      durationDays: 30,
+    };
+
+    const paidPlan = {
+      id: 'plan-basic',
+      code: 'BASIC',
+      name: 'Basic',
+      price: 10000,
+      characterLimit: 1000,
+      durationDays: 30,
+      currency: 'VND',
+    };
+
+    const payment = {
+      id: 'payment-overpaid',
+      userId: 'user-1',
+      planId: paidPlan.id,
+      plan: paidPlan,
+      amount: 10000,
+      currency: 'VND',
+      status: 'PENDING',
+      paymentType: 'NEW_PURCHASE',
+      planNameSnapshot: paidPlan.name,
+      planPriceSnapshot: paidPlan.price,
+      planDurationDaysSnapshot: paidPlan.durationDays,
+      planCharacterLimitSnapshot: paidPlan.characterLimit,
+    };
+
+    const activeFreeSubscription = {
+      id: 'subscription-free',
+      userId: 'user-1',
+      planId: freePlan.id,
+      plan: freePlan,
+      quotaLots: [],
+    };
+
+    const tx = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      paymentTransaction: {
+        aggregate: jest.fn().mockResolvedValue({
+          _sum: { amount: 12000 },
+        }),
+      },
+      payment: {
+        findUnique: jest.fn().mockResolvedValue(payment),
+        update: jest.fn().mockResolvedValue({
+          ...payment,
+          status: 'PAID',
+          paidAt: now,
+        }),
+      },
+      subscription: {
+        findFirst: jest.fn().mockResolvedValue(activeFreeSubscription),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        create: jest.fn().mockResolvedValue({
+          id: 'subscription-basic',
+          plan: paidPlan,
+          status: 'ACTIVE',
+          characterLimit: 1000,
+          rolloverCharacters: 0,
+          startedAt: now,
+          expiresAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+        }),
+      },
+      quotaLot: {
+        create: jest.fn().mockResolvedValue({}),
+      },
+    };
+
+    prismaMock.$transaction.mockImplementation(
+      async (callback: (tx: any) => Promise<unknown>) => callback(tx),
+    );
+
+    const result = await service.confirmPayment(payment.id);
+
+    expect(tx.paymentTransaction.aggregate).toHaveBeenCalledWith({
+      where: {
+        paymentId: payment.id,
+        status: 'MATCHED',
+      },
+      _sum: { amount: true },
+    });
+
+    expect(tx.subscription.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: activeFreeSubscription.id,
+        userId: payment.userId,
+        status: 'ACTIVE',
+      },
+      data: {
+        status: 'EXPIRED',
+      },
+    });
+
+    expect(tx.subscription.create).toHaveBeenCalledWith({
+      data: {
+        userId: payment.userId,
+        planId: payment.planId,
+        startedAt: expect.any(Date),
+        expiresAt: expect.any(Date),
+        status: 'ACTIVE',
+        characterLimit: 1000,
+        rolloverCharacters: 0,
+        pricePaid: 10000,
+        currency: 'VND',
+      },
+      include: {
+        plan: true,
+      },
+    });
+
+    expect(tx.quotaLot.create).toHaveBeenCalledWith({
+      data: {
+        subscriptionId: 'subscription-basic',
+        charactersGranted: 1000,
+        charactersRemaining: 1000,
+        rolloverCount: 0,
+        expiresAt: expect.any(Date),
+      },
+    });
+
+    expect(tx.payment.update).toHaveBeenCalledWith({
+      where: { id: payment.id },
+      data: {
+        status: 'PAID',
+        paidAt: expect.any(Date),
+      },
+    });
+
+    expect(result).toMatchObject({
+      payment: {
+        status: 'PAID',
+      },
+      subscription: {
+        plan: 'BASIC',
+      },
+    });
+    expect(tx.payment.update.mock.calls[0][0].data).not.toHaveProperty(
+      'creditAmount',
+    );
+  });
+
   it('should reject payment confirmation when matched transactions are insufficient', async () => {
     const payment = {
       id: 'payment-underpaid',
