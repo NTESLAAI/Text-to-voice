@@ -390,5 +390,17 @@ describe('PaymentTransactionService', () => {
 
       expect(tx.paymentTransaction.update).not.toHaveBeenCalled();
     });
+    it('rejects when the transaction is already MATCHED', async () => {
+      tx.$queryRaw
+        .mockReset()
+        .mockResolvedValueOnce([{ id: 'payment-001', status: 'PENDING' }])
+        .mockResolvedValueOnce([{ ...transaction, status: 'MATCHED' }]);
+
+      await expect(
+        service.reconcileBankTransaction('transaction-001'),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(tx.paymentTransaction.update).not.toHaveBeenCalled();
+    });
   });
 });
