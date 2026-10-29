@@ -3,14 +3,98 @@ import 'dotenv/config';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { PaymentService } from '../src/payment/payment.service';
+import { PaymentTransactionService } from '../src/payment/payment-transaction.service';
 
 describe('Payment confirmation integration safety', () => {
   let prisma: PrismaService | undefined;
   let paymentService: PaymentService | undefined;
+  let paymentTransactionService: PaymentTransactionService | undefined;
   let originalDatabaseUrl: string | undefined;
 
   let testUserId: string | undefined;
   let testFreePlanId: string | undefined;
+
+  // Tạo giao dịch MATCHED qua đúng luồng nghiệp vụ, không tự cập nhật trạng thái bằng SQL.
+  async function createMatchedBankTransaction(
+    paymentId: string,
+    amount: number,
+    currency = 'VND',
+  ) {
+    if (!paymentTransactionService) {
+      throw new Error('PaymentTransactionService chưa được khởi tạo.');
+    }
+
+    const transaction = await paymentTransactionService.recordBankTransaction({
+      providerTransactionId: `IT-${randomUUID()}`,
+      amount,
+      currency,
+      receivedAt: new Date().toISOString(),
+      reference: `Integration test ${paymentId}`,
+      note: 'Giao dịch do bài test tích hợp tạo',
+    });
+
+    await paymentTransactionService.linkBankTransaction(transaction.id, {
+      paymentId,
+    });
+    await paymentTransactionService.confirmTransactionReceived(transaction.id);
+    return paymentTransactionService.reconcileBankTransaction(transaction.id);
+  }
+
+  async function createLinkedBankTransaction(
+    paymentId: string,
+    amount: number,
+    currency = 'VND',
+  ) {
+    if (!paymentTransactionService) {
+      throw new Error('PaymentTransactionService chưa được khởi tạo.');
+    }
+
+    const transaction = await paymentTransactionService.recordBankTransaction({
+      providerTransactionId: `IT-${randomUUID()}`,
+      amount,
+      currency,
+      receivedAt: new Date().toISOString(),
+      reference: `Integration test ${paymentId}`,
+      note: 'Giao dịch do bài test tích hợp tạo',
+    });
+
+    await paymentTransactionService.linkBankTransaction(transaction.id, {
+      paymentId,
+    });
+    return transaction;
+  }
+
+  async function cleanupTestUser(userId: string) {
+    if (!prisma) {
+      return;
+    }
+
+    const rows = await prisma.$queryRaw<
+      Array<{ database_name: string }>
+    >`SELECT current_database() AS database_name`;
+    if (rows[0]?.database_name !== 'text_to_voice_test') {
+      throw new Error(
+        'Sai database khi dọn dữ liệu test. Không thực hiện xóa.',
+      );
+    }
+
+    const payments = await prisma.payment.findMany({
+      where: { userId },
+      select: { id: true },
+    });
+    const paymentIds = payments.map((payment) => payment.id);
+
+    // PaymentTransaction có onDelete: Restrict, nên xóa giao dịch test trước Payment/User.
+    if (paymentIds.length > 0) {
+      await prisma.paymentTransaction.deleteMany({
+        where: { paymentId: { in: paymentIds } },
+      });
+    }
+
+    await prisma.user.deleteMany({
+      where: { id: userId },
+    });
+  }
 
   beforeAll(async () => {
     originalDatabaseUrl = process.env.DATABASE_URL;
@@ -38,6 +122,7 @@ describe('Payment confirmation integration safety', () => {
       }
 
       paymentService = new PaymentService(prisma);
+      paymentTransactionService = new PaymentTransactionService(prisma);
     } catch (error) {
       await prisma.$disconnect().catch(() => undefined);
       prisma = undefined;
@@ -63,9 +148,7 @@ describe('Payment confirmation integration safety', () => {
       // Chỉ xóa User do chính bài test này tạo.
       // Các quan hệ có onDelete: Cascade sẽ được dọn theo.
       if (testUserId) {
-        await prisma.user.deleteMany({
-          where: { id: testUserId },
-        });
+        await cleanupTestUser(testUserId);
 
         testUserId = undefined;
       }
@@ -115,6 +198,7 @@ describe('Payment confirmation integration safety', () => {
       }
 
       paymentService = undefined;
+      paymentTransactionService = undefined;
 
       if (originalDatabaseUrl !== undefined) {
         process.env.DATABASE_URL = originalDatabaseUrl;
@@ -211,6 +295,25 @@ describe('Payment confirmation integration safety', () => {
         transferCode: `KH-${randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()}`,
       },
     });
+
+    if (payment.amount < 2) {
+      throw new Error(
+        'TEST_BASIC cần có giá lớn hơn 1 VND để kiểm tra nhiều giao dịch.',
+      );
+    }
+
+    const firstTransferAmount = Math.floor(payment.amount / 2);
+    const secondTransferAmount = payment.amount - firstTransferAmount;
+    await createMatchedBankTransaction(
+      payment.id,
+      firstTransferAmount,
+      payment.currency,
+    );
+    await createMatchedBankTransaction(
+      payment.id,
+      secondTransferAmount,
+      payment.currency,
+    );
 
     const beforeSubscriptionCount = await prisma.subscription.count({
       where: { userId: user.id },
@@ -362,6 +465,12 @@ describe('Payment confirmation integration safety', () => {
         },
       });
 
+      await createMatchedBankTransaction(
+        payment.id,
+        payment.amount,
+        payment.currency,
+      );
+
       // Cho khuyến mại hết hạn sau khi giao dịch đã được tạo.
       await prisma.promotion.update({
         where: { id: promotion.id },
@@ -404,7 +513,7 @@ describe('Payment confirmation integration safety', () => {
     } finally {
       // Chỉ xóa dữ liệu được tạo riêng cho bài test này.
       if (userId) {
-        await prisma.user.deleteMany({ where: { id: userId } });
+        await cleanupTestUser(userId);
       }
 
       if (promotionId) {
@@ -508,6 +617,17 @@ describe('Payment confirmation integration safety', () => {
       const payment1 = await createPayment();
       const payment2 = await createPayment();
 
+      await createMatchedBankTransaction(
+        payment1.id,
+        payment1.amount,
+        payment1.currency,
+      );
+      await createMatchedBankTransaction(
+        payment2.id,
+        payment2.amount,
+        payment2.currency,
+      );
+
       const beforeSubscriptionCount = await prisma.subscription.count({
         where: { userId: user.id },
       });
@@ -577,15 +697,183 @@ describe('Payment confirmation integration safety', () => {
           where: { userId },
         });
 
-        await prisma.user.deleteMany({
-          where: { id: userId },
-        });
+        await cleanupTestUser(userId);
       }
 
       if (promotionId) {
         await prisma.promotion.deleteMany({
           where: { id: promotionId },
         });
+      }
+    }
+  }, 30000);
+
+  it('từ chối xác nhận khi tổng hai giao dịch MATCHED vẫn thiếu tiền', async () => {
+    if (!prisma || !paymentService) {
+      throw new Error('Prisma hoặc PaymentService chưa được khởi tạo.');
+    }
+
+    const dbRows = await prisma.$queryRaw<
+      Array<{ database_name: string }>
+    >`SELECT current_database() AS database_name`;
+    expect(dbRows[0]?.database_name).toBe('text_to_voice_test');
+
+    const paidPlan = await prisma.plan.findUnique({
+      where: { code: 'TEST_BASIC' },
+    });
+    if (!paidPlan?.isActive || paidPlan.price <= 2) {
+      throw new Error(
+        'Cần Plan TEST_BASIC đang hoạt động với giá lớn hơn 2 VND.',
+      );
+    }
+
+    let userId: string | undefined;
+    try {
+      const user = await prisma.user.create({
+        data: {
+          email: `payment-underpaid-${randomUUID()}@example.test`,
+          name: 'Underpaid integration test',
+        },
+      });
+      userId = user.id;
+
+      const payment = await prisma.payment.create({
+        data: {
+          userId: user.id,
+          planId: paidPlan.id,
+          planNameSnapshot: paidPlan.name,
+          planPriceSnapshot: paidPlan.price,
+          planDurationDaysSnapshot: paidPlan.durationDays,
+          planCharacterLimitSnapshot: paidPlan.characterLimit,
+          amount: paidPlan.price,
+          currency: paidPlan.currency,
+          status: 'PENDING',
+          provider: 'BANK_TRANSFER',
+          paymentType: 'NEW_PURCHASE',
+          transferCode: `KH-${randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()}`,
+        },
+      });
+
+      const totalMatched = payment.amount - 1;
+      const firstAmount = Math.floor(totalMatched / 2);
+      const secondAmount = totalMatched - firstAmount;
+      await createMatchedBankTransaction(
+        payment.id,
+        firstAmount,
+        payment.currency,
+      );
+      await createMatchedBankTransaction(
+        payment.id,
+        secondAmount,
+        payment.currency,
+      );
+
+      await expect(paymentService.confirmPayment(payment.id)).rejects.toThrow(
+        /Chưa nhận đủ tiền thanh toán/,
+      );
+
+      const savedPayment = await prisma.payment.findUniqueOrThrow({
+        where: { id: payment.id },
+      });
+      expect(savedPayment.status).toBe('PENDING');
+
+      const matched = await prisma.paymentTransaction.aggregate({
+        where: { paymentId: payment.id, status: 'MATCHED' },
+        _sum: { amount: true },
+      });
+      expect(matched._sum.amount).toBe(totalMatched);
+    } finally {
+      if (userId) {
+        await cleanupTestUser(userId);
+      }
+    }
+  }, 30000);
+
+  it('không tính giao dịch UNMATCHED hoặc RECEIVED vào tổng tiền xác nhận', async () => {
+    if (!prisma || !paymentService || !paymentTransactionService) {
+      throw new Error('Các service thanh toán chưa được khởi tạo.');
+    }
+
+    const dbRows = await prisma.$queryRaw<
+      Array<{ database_name: string }>
+    >`SELECT current_database() AS database_name`;
+    expect(dbRows[0]?.database_name).toBe('text_to_voice_test');
+
+    const paidPlan = await prisma.plan.findUnique({
+      where: { code: 'TEST_BASIC' },
+    });
+    if (!paidPlan?.isActive || paidPlan.price <= 0) {
+      throw new Error('Cần Plan TEST_BASIC đang hoạt động với giá lớn hơn 0.');
+    }
+
+    let userId: string | undefined;
+    try {
+      const user = await prisma.user.create({
+        data: {
+          email: `payment-unmatched-${randomUUID()}@example.test`,
+          name: 'Unmatched transaction integration test',
+        },
+      });
+      userId = user.id;
+
+      const createPayment = (transferCode: string) =>
+        prisma!.payment.create({
+          data: {
+            userId: user.id,
+            planId: paidPlan.id,
+            planNameSnapshot: paidPlan.name,
+            planPriceSnapshot: paidPlan.price,
+            planDurationDaysSnapshot: paidPlan.durationDays,
+            planCharacterLimitSnapshot: paidPlan.characterLimit,
+            amount: paidPlan.price,
+            currency: paidPlan.currency,
+            status: 'PENDING',
+            provider: 'BANK_TRANSFER',
+            paymentType: 'NEW_PURCHASE',
+            transferCode,
+          },
+        });
+
+      const receivedPayment = await createPayment(
+        `KH-${randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()}`,
+      );
+      const receivedTransaction = await createLinkedBankTransaction(
+        receivedPayment.id,
+        receivedPayment.amount,
+        receivedPayment.currency,
+      );
+      await paymentTransactionService.confirmTransactionReceived(
+        receivedTransaction.id,
+      );
+
+      await expect(
+        paymentService.confirmPayment(receivedPayment.id),
+      ).rejects.toThrow(/Chưa nhận đủ tiền thanh toán/);
+
+      const unmatchedPayment = await createPayment(
+        `KH-${randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()}`,
+      );
+      await createLinkedBankTransaction(
+        unmatchedPayment.id,
+        unmatchedPayment.amount,
+        unmatchedPayment.currency,
+      );
+
+      await expect(
+        paymentService.confirmPayment(unmatchedPayment.id),
+      ).rejects.toThrow(/Chưa nhận đủ tiền thanh toán/);
+
+      const savedReceivedPayment = await prisma.payment.findUniqueOrThrow({
+        where: { id: receivedPayment.id },
+      });
+      const savedUnmatchedPayment = await prisma.payment.findUniqueOrThrow({
+        where: { id: unmatchedPayment.id },
+      });
+      expect(savedReceivedPayment.status).toBe('PENDING');
+      expect(savedUnmatchedPayment.status).toBe('PENDING');
+    } finally {
+      if (userId) {
+        await cleanupTestUser(userId);
       }
     }
   }, 30000);

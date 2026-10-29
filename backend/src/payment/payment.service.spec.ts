@@ -528,6 +528,119 @@ describe('PaymentService', () => {
     );
   });
 
+  it('should confirm payment when multiple matched transactions cover the order amount', async () => {
+    const now = new Date();
+
+    const freePlan = {
+      id: 'plan-free',
+      code: 'FREE',
+      name: 'Free',
+      price: 0,
+      characterLimit: 50,
+      durationDays: 30,
+    };
+
+    const paidPlan = {
+      id: 'plan-basic',
+      code: 'BASIC',
+      name: 'Basic',
+      price: 10000,
+      characterLimit: 1000,
+      durationDays: 30,
+      currency: 'VND',
+    };
+
+    const payment = {
+      id: 'payment-split',
+      userId: 'user-1',
+      planId: paidPlan.id,
+      plan: paidPlan,
+      amount: 10000,
+      currency: 'VND',
+      status: 'PENDING',
+      paymentType: 'NEW_PURCHASE',
+      planNameSnapshot: paidPlan.name,
+      planPriceSnapshot: paidPlan.price,
+      planDurationDaysSnapshot: paidPlan.durationDays,
+      planCharacterLimitSnapshot: paidPlan.characterLimit,
+    };
+
+    const activeFreeSubscription = {
+      id: 'subscription-free',
+      userId: 'user-1',
+      planId: freePlan.id,
+      plan: freePlan,
+      quotaLots: [],
+    };
+
+    // Hai giao dịch MATCHED: 4.000 + 6.000 = 10.000 VND.
+    const tx = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      paymentTransaction: {
+        aggregate: jest.fn().mockResolvedValue({
+          _sum: { amount: 10000 },
+        }),
+      },
+      payment: {
+        findUnique: jest.fn().mockResolvedValue(payment),
+        update: jest.fn().mockResolvedValue({
+          ...payment,
+          status: 'PAID',
+          paidAt: now,
+        }),
+      },
+      subscription: {
+        findFirst: jest.fn().mockResolvedValue(activeFreeSubscription),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        create: jest.fn().mockResolvedValue({
+          id: 'subscription-basic',
+          plan: paidPlan,
+          status: 'ACTIVE',
+          characterLimit: 1000,
+          rolloverCharacters: 0,
+          startedAt: now,
+          expiresAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+        }),
+      },
+      quotaLot: {
+        create: jest.fn().mockResolvedValue({}),
+      },
+    };
+
+    prismaMock.$transaction.mockImplementation(
+      async (callback: (tx: any) => Promise<unknown>) => callback(tx),
+    );
+
+    const result = await service.confirmPayment(payment.id);
+
+    expect(tx.paymentTransaction.aggregate).toHaveBeenCalledWith({
+      where: {
+        paymentId: payment.id,
+        status: 'MATCHED',
+      },
+      _sum: { amount: true },
+    });
+
+    expect(tx.subscription.create).toHaveBeenCalled();
+    expect(tx.quotaLot.create).toHaveBeenCalled();
+    expect(tx.payment.update).toHaveBeenCalledWith({
+      where: { id: payment.id },
+      data: {
+        status: 'PAID',
+        paidAt: expect.any(Date),
+      },
+    });
+
+    expect(result).toMatchObject({
+      payment: {
+        status: 'PAID',
+      },
+      subscription: {
+        plan: 'BASIC',
+      },
+    });
+  });
+
   it('should reject payment confirmation when matched transactions are insufficient', async () => {
     const payment = {
       id: 'payment-underpaid',
