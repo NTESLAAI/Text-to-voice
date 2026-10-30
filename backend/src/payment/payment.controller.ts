@@ -1,4 +1,17 @@
-import { Body, Controller, Param, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Headers,
+  Param,
+  Post,
+  Req,
+  UnauthorizedException,
+  UseGuards,
+} from '@nestjs/common';
+
+import type { Request } from 'express';
+import { SepayWebhookDto } from './dto/sepay-webhook.dto';
+import { SepaySignatureService } from './sepay-signature.service';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth/jwt-auth.guard';
 import { AdminGuard } from '../auth/guards/admin/admin.guard';
@@ -13,6 +26,7 @@ export class PaymentController {
   constructor(
     private readonly paymentService: PaymentService,
     private readonly paymentTransactionService: PaymentTransactionService,
+    private readonly sepaySignatureService: SepaySignatureService,
   ) {}
 
   @UseGuards(JwtAuthGuard)
@@ -72,5 +86,24 @@ export class PaymentController {
     return this.paymentTransactionService.reconcileBankTransaction(
       transactionId,
     );
+  }
+  @Post('webhook/sepay')
+  async handleSepayWebhook(
+    @Body() body: SepayWebhookDto,
+    @Req() req: Request & { rawBody?: Buffer },
+    @Headers('x-sepay-signature') signature: string,
+    @Headers('x-sepay-timestamp') timestamp: string,
+  ) {
+    if (!req.rawBody) {
+      throw new UnauthorizedException('Missing raw request body');
+    }
+
+    this.sepaySignatureService.verifySignature(
+      req.rawBody,
+      signature,
+      timestamp,
+    );
+
+    return { success: true };
   }
 }
