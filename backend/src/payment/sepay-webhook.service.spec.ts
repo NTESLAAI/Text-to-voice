@@ -93,13 +93,18 @@ describe('SepayWebhookService', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it('returns duplicate when transaction ID already exists', async () => {
-    prisma.paymentTransaction.findUnique.mockResolvedValue({ id: 'tx-1' });
+  it('returns duplicate without retry when existing transaction is unmatched', async () => {
+    prisma.paymentTransaction.findUnique.mockResolvedValue({
+      id: 'tx-1',
+      status: 'UNMATCHED',
+      paymentId: null,
+    });
 
     const result = await service.handleWebhook(makeBody());
 
     expect(result).toEqual({ success: true, duplicate: true });
     expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(paymentService.confirmPayment).not.toHaveBeenCalled();
   });
 
   it('stores incoming transfer as unmatched when no transfer code exists', async () => {
@@ -267,5 +272,75 @@ describe('SepayWebhookService', () => {
         currency: true,
       },
     });
+  });
+  it('retries confirmation when transaction creation raises P2002 and matched transaction exists', async () => {
+    const duplicateError = new Prisma.PrismaClientKnownRequestError(
+      'Unique constraint failed',
+      {
+        code: 'P2002',
+        clientVersion: 'test',
+      },
+    );
+
+    prisma.$transaction.mockRejectedValue(duplicateError);
+
+    prisma.paymentTransaction.findUnique
+      .mockResolvedValueOnce(null) // initial idempotency lookup
+      .mockResolvedValueOnce({
+        id: 'tx-1',
+        status: 'MATCHED',
+        paymentId: 'payment-1',
+      }); // lookup after P2002
+
+    prisma.payment.findUnique.mockResolvedValue({
+      id: 'payment-1',
+      status: 'PENDING',
+    });
+
+    const result = await service.handleWebhook(makeBody());
+
+    expect(result).toEqual({
+      success: true,
+      duplicate: true,
+      retried: true,
+    });
+
+    expect(prisma.paymentTransaction.findUnique).toHaveBeenCalledTimes(2);
+    expect(paymentService.confirmPayment).toHaveBeenCalledTimes(1);
+    expect(paymentService.confirmPayment).toHaveBeenCalledWith('payment-1');
+  });
+
+  it('does not retry confirmation when matched payment is already paid', async () => {
+    prisma.paymentTransaction.findUnique.mockResolvedValue({
+      id: 'tx-1',
+      status: 'MATCHED',
+      paymentId: 'payment-1',
+    });
+    prisma.payment.findUnique.mockResolvedValue({
+      id: 'payment-1',
+      status: 'PAID',
+    });
+
+    const result = await service.handleWebhook(makeBody());
+
+    expect(result).toEqual({ success: true, duplicate: true });
+    expect(paymentService.confirmPayment).not.toHaveBeenCalled();
+  });
+
+  it('does not retry when matched transaction payment is not pending', async () => {
+    prisma.paymentTransaction.findUnique.mockResolvedValue({
+      id: 'tx-1',
+      status: 'MATCHED',
+      paymentId: 'payment-1',
+    });
+    prisma.payment.findUnique.mockResolvedValue({
+      id: 'payment-1',
+      status: 'CANCELLED',
+    });
+
+    const result = await service.handleWebhook(makeBody());
+
+    expect(result).toEqual({ success: true, duplicate: true });
+    expect(paymentService.confirmPayment).not.toHaveBeenCalled();
   });
 });

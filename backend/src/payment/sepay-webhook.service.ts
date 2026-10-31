@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentService } from './payment.service';
@@ -47,7 +44,7 @@ export class SepayWebhookService {
     });
 
     if (existing) {
-      return { success: true, duplicate: true };
+      return this.handleDuplicateTransaction(existing);
     }
 
     const transferCode = this.extractTransferCode(body);
@@ -145,6 +142,19 @@ export class SepayWebhookService {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
+        const existing = await this.prisma.paymentTransaction.findUnique({
+          where: {
+            provider_providerTransactionId: {
+              provider: 'SEPAY',
+              providerTransactionId,
+            },
+          },
+        });
+
+        if (existing) {
+          return this.handleDuplicateTransaction(existing);
+        }
+
         return { success: true, duplicate: true };
       }
 
@@ -162,7 +172,35 @@ export class SepayWebhookService {
       matched: Boolean(paymentId),
     };
   }
+  private async handleDuplicateTransaction(existing: {
+    status: string;
+    paymentId: string | null;
+  }) {
+    if (existing.status !== 'MATCHED' || !existing.paymentId) {
+      return { success: true, duplicate: true };
+    }
 
+    const payment = await this.prisma.payment.findUnique({
+      where: { id: existing.paymentId },
+      select: { id: true, status: true },
+    });
+
+    if (!payment || payment.status === 'PAID') {
+      return { success: true, duplicate: true };
+    }
+
+    if (!['PENDING', 'USER_CONFIRMED'].includes(payment.status)) {
+      return { success: true, duplicate: true };
+    }
+
+    await this.paymentService.confirmPayment(payment.id);
+
+    return {
+      success: true,
+      duplicate: true,
+      retried: true,
+    };
+  }
   private async createUnmatchedTransaction(
     body: SepayWebhookDto,
     providerTransactionId: string,
