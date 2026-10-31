@@ -47,6 +47,7 @@ export class SepayWebhookDto {
   @Min(0)
   accumulated!: number;
 
+  @IsOptional()
   @IsString()
-  referenceCode!: string;
+  referenceCode?: string | null;
 }

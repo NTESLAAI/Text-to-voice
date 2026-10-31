@@ -66,4 +66,17 @@ describe('SepayWebhookDto', () => {
 
     expect(errors.some((error) => error.property === 'id')).toBe(true);
   });
+  it('accepts missing or nullable referenceCode', async () => {
+    const { referenceCode, ...payloadWithoutReferenceCode } = validPayload;
+
+    const missingErrors = await validatePayload(payloadWithoutReferenceCode);
+
+    const nullableErrors = await validatePayload({
+      ...validPayload,
+      referenceCode: null,
+    });
+
+    expect(missingErrors).toHaveLength(0);
+    expect(nullableErrors).toHaveLength(0);
+  });
 });
