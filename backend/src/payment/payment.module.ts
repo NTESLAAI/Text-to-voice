@@ -4,6 +4,7 @@ import { PaymentController } from './payment.controller';
 import { PaymentService } from './payment.service';
 import { PaymentTransactionService } from './payment-transaction.service';
 import { SepaySignatureService } from './sepay-signature.service';
+import { SepayWebhookService } from './sepay-webhook.service';
 
 @Module({
   imports: [PrismaModule],
@@ -12,6 +13,7 @@ import { SepaySignatureService } from './sepay-signature.service';
     PaymentService,
     PaymentTransactionService,
     SepaySignatureService,
+    SepayWebhookService,
   ],
   exports: [PaymentService, PaymentTransactionService],
 })

@@ -12,6 +12,7 @@ import {
 import type { Request } from 'express';
 import { SepayWebhookDto } from './dto/sepay-webhook.dto';
 import { SepaySignatureService } from './sepay-signature.service';
+import { SepayWebhookService } from './sepay-webhook.service';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth/jwt-auth.guard';
 import { AdminGuard } from '../auth/guards/admin/admin.guard';
@@ -27,6 +28,7 @@ export class PaymentController {
     private readonly paymentService: PaymentService,
     private readonly paymentTransactionService: PaymentTransactionService,
     private readonly sepaySignatureService: SepaySignatureService,
+    private readonly sepayWebhookService: SepayWebhookService,
   ) {}
 
   @UseGuards(JwtAuthGuard)
@@ -104,6 +106,6 @@ export class PaymentController {
       timestamp,
     );
 
-    return { success: true };
+    return this.sepayWebhookService.handleWebhook(body);
   }
 }

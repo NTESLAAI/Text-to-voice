@@ -11,6 +11,7 @@ import { PaymentController } from './payment.controller';
 import { PaymentService } from './payment.service';
 import { PaymentTransactionService } from './payment-transaction.service';
 import { SepaySignatureService } from './sepay-signature.service';
+import { SepayWebhookService } from './sepay-webhook.service';
 
 describe('PaymentController - SePay webhook', () => {
   let app: INestApplication;
@@ -32,6 +33,14 @@ describe('PaymentController - SePay webhook', () => {
         {
           provide: SepaySignatureService,
           useValue: { verifySignature },
+        },
+        {
+          provide: SepayWebhookService,
+          useValue: {
+            handleWebhook: jest.fn().mockResolvedValue({
+              success: true,
+            }),
+          },
         },
       ],
     }).compile();
@@ -63,7 +72,7 @@ describe('PaymentController - SePay webhook', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    await app?.close();
   });
 
   beforeEach(() => {
