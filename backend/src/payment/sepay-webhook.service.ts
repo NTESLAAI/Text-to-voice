@@ -155,7 +155,9 @@ export class SepayWebhookService {
           return this.handleDuplicateTransaction(existing);
         }
 
-        return { success: true, duplicate: true };
+        // P2002 nhưng không tìm thấy transaction cùng ID:
+        // đây có thể là lỗi unique constraint khác, không được nuốt lỗi.
+        throw error;
       }
 
       throw error;
