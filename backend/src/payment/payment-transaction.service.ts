@@ -7,10 +7,14 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBankTransactionDto } from './dto/create-bank-transaction.dto';
 import { LinkBankTransactionDto } from './dto/link-bank-transaction.dto';
+import { PaymentService } from './payment.service';
 
 @Injectable()
 export class PaymentTransactionService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly paymentService: PaymentService,
+  ) {}
 
   async recordBankTransaction(dto: CreateBankTransactionDto) {
     const provider = 'BANK_TRANSFER';
@@ -251,7 +255,7 @@ export class PaymentTransactionService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const matchedTransaction = await this.prisma.$transaction(async (tx) => {
       // Khóa đơn thanh toán trước để đồng bộ với các luồng thanh toán.
       const payments = await tx.$queryRaw<{ id: string; status: string }[]>`
         SELECT "id", "status"
@@ -304,5 +308,15 @@ export class PaymentTransactionService {
         },
       });
     });
+
+    // Chỉ kích hoạt sau khi trạng thái MATCHED đã được commit.
+    const paymentConfirmation = await this.paymentService.confirmPayment(
+      current.paymentId,
+    );
+
+    return {
+      ...matchedTransaction,
+      paymentConfirmation,
+    };
   }
 }

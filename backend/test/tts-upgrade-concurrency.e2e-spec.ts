@@ -1,4 +1,3 @@
-
 jest.mock('../src/tts/providers/openrouter-tts.provider', () => ({
   OpenRouterTtsProvider: class MockOpenRouterTtsProvider {},
 }));
@@ -84,9 +83,7 @@ describe('TTS and CONVERT_TO_CREDIT concurrency integration', () => {
           }
 
           try {
-            await fs.unlink(
-              join(process.cwd(), 'uploads', 'audio', fileName),
-            );
+            await fs.unlink(join(process.cwd(), 'uploads', 'audio', fileName));
           } catch (error) {
             if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
               throw error;
@@ -96,9 +93,27 @@ describe('TTS and CONVERT_TO_CREDIT concurrency integration', () => {
       }
 
       if (testUserId) {
+        const testPayments = await prisma.payment.findMany({
+          where: { userId: testUserId },
+          select: { id: true },
+        });
+
+        const paymentIds = testPayments.map((payment) => payment.id);
+
+        if (paymentIds.length > 0) {
+          await prisma.paymentTransaction.deleteMany({
+            where: { paymentId: { in: paymentIds } },
+          });
+
+          await prisma.payment.deleteMany({
+            where: { id: { in: paymentIds } },
+          });
+        }
+
         await prisma.user.deleteMany({
           where: { id: testUserId },
         });
+
         testUserId = undefined;
       }
     } finally {
@@ -139,9 +154,7 @@ describe('TTS and CONVERT_TO_CREDIT concurrency integration', () => {
     }
 
     const now = new Date();
-    const expiresAt = new Date(
-      now.getTime() + 7 * 24 * 60 * 60 * 1000,
-    );
+    const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
     const user = await prisma.user.create({
       data: {
@@ -256,6 +269,20 @@ describe('TTS and CONVERT_TO_CREDIT concurrency integration', () => {
       await enteredGate;
 
       // Nâng cấp trong lúc TTS đang chờ.
+      await prisma.paymentTransaction.create({
+        data: {
+          paymentId: payment.id,
+          provider: 'BANK_TRANSFER',
+          providerTransactionId: `IT-${randomUUID()}`,
+          amount: payment.amount,
+          currency: 'VND',
+          status: 'MATCHED',
+          receivedAt: new Date(),
+          matchedAt: new Date(),
+          reference: `Integration test ${payment.id}`,
+          note: 'Giao dịch MATCHED do bài test tích hợp tạo',
+        },
+      });
       const result = await paymentService.confirmPayment(payment.id);
       expect(result.payment?.status).toBe('PAID');
 

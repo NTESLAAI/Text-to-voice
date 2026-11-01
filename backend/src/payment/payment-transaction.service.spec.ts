@@ -4,6 +4,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentTransactionService } from './payment-transaction.service';
 import { LinkBankTransactionDto } from './dto/link-bank-transaction.dto';
+import { PaymentService } from './payment.service';
 
 describe('PaymentTransactionService', () => {
   let service: PaymentTransactionService;
@@ -13,6 +14,10 @@ describe('PaymentTransactionService', () => {
     paymentTransaction: {
       update: jest.fn(),
     },
+  };
+
+  const paymentService = {
+    confirmPayment: jest.fn(),
   };
 
   const prisma = {
@@ -34,6 +39,7 @@ describe('PaymentTransactionService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    paymentService.confirmPayment.mockResolvedValue({ status: 'PAID' });
     prisma.$transaction.mockImplementation(
       (callback: (transaction: typeof tx) => unknown) => callback(tx),
     );
@@ -43,6 +49,10 @@ describe('PaymentTransactionService', () => {
         {
           provide: PrismaService,
           useValue: prisma,
+        },
+        {
+          provide: PaymentService,
+          useValue: paymentService,
         },
       ],
     }).compile();
@@ -331,7 +341,7 @@ describe('PaymentTransactionService', () => {
       });
     });
 
-    it('reconciles a RECEIVED transaction as MATCHED without activating payment', async () => {
+    it('reconciles a RECEIVED transaction and confirms the linked payment', async () => {
       const result = await service.reconcileBankTransaction('transaction-001');
 
       expect(tx.paymentTransaction.update).toHaveBeenCalledWith({
@@ -343,6 +353,28 @@ describe('PaymentTransactionService', () => {
       });
 
       expect(result.status).toBe('MATCHED');
+      expect(paymentService.confirmPayment).toHaveBeenCalledWith('payment-001');
+      expect(result.paymentConfirmation).toEqual({ status: 'PAID' });
+    });
+
+    it('keeps the matched transaction committed if payment confirmation fails', async () => {
+      paymentService.confirmPayment.mockRejectedValue(
+        new Error('Payment activation failed'),
+      );
+
+      await expect(
+        service.reconcileBankTransaction('transaction-001'),
+      ).rejects.toThrow('Payment activation failed');
+
+      expect(prisma.$transaction).toHaveBeenCalled();
+      expect(tx.paymentTransaction.update).toHaveBeenCalledWith({
+        where: { id: 'transaction-001' },
+        data: {
+          status: 'MATCHED',
+          matchedAt: expect.any(Date),
+        },
+      });
+      expect(paymentService.confirmPayment).toHaveBeenCalledWith('payment-001');
     });
 
     it('rejects when the transaction does not exist', async () => {

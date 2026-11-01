@@ -15,29 +15,41 @@ describe('Payment confirmation integration safety', () => {
   let testFreePlanId: string | undefined;
 
   // Tạo giao dịch MATCHED qua đúng luồng nghiệp vụ, không tự cập nhật trạng thái bằng SQL.
+  // Tạo dữ liệu MATCHED trực tiếp trong test DB.
+  // Không gọi reconcile vì reconcile hiện tự xác nhận Payment.
   async function createMatchedBankTransaction(
     paymentId: string,
     amount: number,
     currency = 'VND',
   ) {
-    if (!paymentTransactionService) {
-      throw new Error('PaymentTransactionService chưa được khởi tạo.');
+    if (!prisma) {
+      throw new Error('PrismaService chưa được khởi tạo.');
     }
 
-    const transaction = await paymentTransactionService.recordBankTransaction({
-      providerTransactionId: `IT-${randomUUID()}`,
-      amount,
-      currency,
-      receivedAt: new Date().toISOString(),
-      reference: `Integration test ${paymentId}`,
-      note: 'Giao dịch do bài test tích hợp tạo',
-    });
+    const rows = await prisma.$queryRaw<
+      Array<{ database_name: string }>
+    >`SELECT current_database() AS database_name`;
 
-    await paymentTransactionService.linkBankTransaction(transaction.id, {
-      paymentId,
+    if (rows[0]?.database_name !== 'text_to_voice_test') {
+      throw new Error(
+        'Sai database khi tạo dữ liệu test. Không thực hiện ghi.',
+      );
+    }
+
+    return prisma.paymentTransaction.create({
+      data: {
+        paymentId,
+        provider: 'BANK_TRANSFER',
+        providerTransactionId: `IT-${randomUUID()}`,
+        amount,
+        currency,
+        status: 'MATCHED',
+        receivedAt: new Date(),
+        matchedAt: new Date(),
+        reference: `Integration test ${paymentId}`,
+        note: 'Giao dịch MATCHED do bài test tích hợp tạo',
+      },
     });
-    await paymentTransactionService.confirmTransactionReceived(transaction.id);
-    return paymentTransactionService.reconcileBankTransaction(transaction.id);
   }
 
   async function createLinkedBankTransaction(
@@ -122,7 +134,10 @@ describe('Payment confirmation integration safety', () => {
       }
 
       paymentService = new PaymentService(prisma);
-      paymentTransactionService = new PaymentTransactionService(prisma);
+      paymentTransactionService = new PaymentTransactionService(
+        prisma,
+        paymentService,
+      );
     } catch (error) {
       await prisma.$disconnect().catch(() => undefined);
       prisma = undefined;
