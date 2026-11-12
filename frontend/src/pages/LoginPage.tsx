@@ -1,4 +1,6 @@
 import { useState } from "react";
+import axios from "axios";
+import { useTranslation } from "react-i18next";
 import { login } from "../services/api";
 import { saveAuth } from "../services/authStorage";
 
@@ -13,6 +15,7 @@ function LoginPage({
   onSwitchToRegister,
   onSwitchToForgotPassword,
 }: LoginPageProps) {
+  const { t } = useTranslation();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -24,23 +27,41 @@ function LoginPage({
     event.preventDefault();
 
     if (!identifier.trim() || !password) {
-      setError("Vui lòng nhập đầy đủ thông tin.");
+      setError("auth.login.errors.required");
       return;
     }
 
     setLoading(true);
     setError("");
 
+    let phase: "request" | "storage" | "callback" = "request";
     try {
       const result = await login(identifier.trim(), password);
 
+      phase = "storage";
       await saveAuth(result.accessToken, result.user);
 
+      phase = "callback";
       onLoginSuccess();
-    } catch {
-      setError(
-        "Email/số điện thoại hoặc mật khẩu không đúng. Vui lòng kiểm tra lại.",
-      );
+    } catch (error: unknown) {
+      let key = "unexpected";
+      if (phase === "storage") {
+        key = "sessionStorage";
+      } else if (phase === "request" && axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        if (status === 400) key = "invalidRequest";
+        else if (status === 401) key = "invalidCredentials";
+        else if (status === 403) key = "forbidden";
+        else if (status === 429) key = "rateLimited";
+        else if (typeof status === "number" && status >= 500 && status <= 599)
+          key = "serverError";
+        else if (!error.response) {
+          if (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT")
+            key = "timeout";
+          else if (error.code === "ERR_NETWORK") key = "connectionError";
+        }
+      }
+      setError(`auth.login.errors.${key}`);
     } finally {
       setLoading(false);
     }
@@ -197,7 +218,7 @@ function LoginPage({
                 fontSize: "14px",
               }}
             >
-              {error}
+              {t(error)}
             </div>
           )}
 
