@@ -2,3 +2,17 @@
 backend/uploads/
 # IDE settings
 .idea/
+
+# Local PostgreSQL test cluster data and preserved copies
+/pg-test-cluster/
+/pg-test-cluster-backup-7703973401873596004/
+/pg-test-cluster-win1252-old/
+
+# Local database backups (never release database files)
+/backups/
+
+# Local environment configuration; keep non-secret example templates
+.env
+.env.*
+!.env.example
+!.env.*.example
