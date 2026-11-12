@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { resetPassword } from "../services/api";
+import { expireSession } from "../services/authSession";
 
 interface ResetPasswordPageProps {
   token: string;
@@ -34,15 +35,11 @@ function ResetPasswordPage({ token, onResetSuccess }: ResetPasswordPageProps) {
     setError("");
 
     try {
-      const result = await resetPassword(token, password);
-
-      console.log("RESET PASSWORD RESULT:", result);
+      await resetPassword(token, password);
+      await expireSession();
 
       onResetSuccess();
     } catch (error: any) {
-      console.error("RESET PASSWORD ERROR:", error);
-      console.error("RESET PASSWORD ERROR RESPONSE:", error?.response?.data);
-
       setError(
         error?.response?.data?.message ||
           "Không thể đặt lại mật khẩu. Vui lòng thử lại.",

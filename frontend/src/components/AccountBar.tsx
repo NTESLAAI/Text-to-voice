@@ -43,7 +43,7 @@ function AccountBar({ onLogout, onAccount, onAdmin }: AccountBarProps) {
   }, [open]);
 
   async function handleLogout() {
-    await clearAuth();
+    try { await clearAuth(); } catch { window.alert(t('mobile.failed')); return; }
     setShowLogoutConfirm(false);
     setOpen(false);
     onLogout();

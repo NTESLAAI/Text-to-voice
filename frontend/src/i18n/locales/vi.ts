@@ -1,5 +1,7 @@
 const vi = {
   translation: {
+    // Store prices come from native product metadata, never Plan.price.
+    mobile: { externallyManaged: "Gói này do cửa hàng ứng dụng quản lý. Vui lòng quản lý trong ứng dụng, không chuyển khoản cho gói chồng lấn.", billing: 'Gói trên cửa hàng ứng dụng', policyPending: 'Mua mới đang tạm khóa trong khi hoàn thiện chính sách gia hạn và mua nhiều nền tảng.', notConfigured: 'Chưa có sản phẩm hoặc giá đã được cửa hàng xác nhận.', buy: 'Đăng ký', restore: 'Khôi phục giao dịch', manage: 'Quản lý / hủy subscription', verified: 'Đã gửi yêu cầu xác minh. Quyền sử dụng lấy từ backend; giao dịch có thể cần xét duyệt.', failed: 'Không thể hoàn tất. Hãy kiểm tra kết nối, phiên đăng nhập hoặc liên hệ hỗ trợ.', exportAudio: 'Tải / lưu âm thanh' },
     app: {
       title: "Text to Voice",
       subtitle: "CHUYỂN CHỮ THÀNH GIỌNG NÓI",

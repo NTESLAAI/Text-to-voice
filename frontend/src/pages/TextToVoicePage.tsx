@@ -1,3 +1,4 @@
+import AudioExportButton from "../components/AudioExportButton";
 ﻿import { useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { useTranslation } from "react-i18next";
@@ -10,6 +11,7 @@ import {
   reviewText,
   getProjectUsage,
   getMyProject,
+  type ProjectUsage,
 } from "../services/api";
 import "./TextToVoice.css";
 import "./TextToVoiceDesktop.css";
@@ -66,12 +68,7 @@ export default function TextToVoicePage({
   const [correctedText, setCorrectedText] = useState("");
 
   const [refreshKey, setRefreshKey] = useState(0);
-  const [usage, setUsage] = useState<{
-    plan: string;
-    characterLimit: number;
-    usedCharacters: number;
-    remainingCharacters: number;
-  } | null>(null);
+  const [usage, setUsage] = useState<ProjectUsage | null>(null);
   const [presets, setPresets] = useState<
     Awaited<ReturnType<typeof getVoicePresets>>
   >([]);
@@ -120,8 +117,8 @@ export default function TextToVoicePage({
           setError(message);
         }
       })
-      .catch((error) => {
-        console.error("Failed to load voice presets:", error);
+      .catch(() => {
+        console.error("REQUEST_FAILED");
 
         const message = "Unable to load voice presets.";
 
@@ -182,8 +179,8 @@ export default function TextToVoicePage({
 
         const data = await getProjectUsage(project.id);
         setUsage(data);
-      } catch (error) {
-        console.error("Không thể tải thông tin dự án và hạn mức:", error);
+      } catch {
+        console.error("REQUEST_FAILED");
       }
     }
 
@@ -209,8 +206,8 @@ export default function TextToVoicePage({
       setTextReviewErrors(response.errors);
       setTextReviewSuggestion(response.suggestion);
       setCorrectedText(response.correctedText);
-    } catch (error) {
-      console.error("TEXT REVIEW ERROR:", error);
+    } catch {
+      console.error("REQUEST_FAILED");
 
       setTextReviewErrors(["Không thể kiểm tra văn bản. Vui lòng thử lại."]);
       setTextReviewSuggestion("");
@@ -355,8 +352,8 @@ export default function TextToVoicePage({
 
       setLastGeneratedFingerprint(getGenerationFingerprint());
       setRefreshKey((current) => current + 1);
-    } catch (err) {
-      console.error(err);
+    } catch {
+      console.error("REQUEST_FAILED");
       setError(t("common.error"));
     } finally {
       setIsGenerating(false);
@@ -409,13 +406,16 @@ export default function TextToVoicePage({
                   const textarea = event.currentTarget;
                   const newText = textarea.value;
 
-                  if (usage) {
+                  if (usage && !usage.unlimited) {
                     const newCharacterCount = countBillableCharacters(
                       newText,
                       language,
                     );
 
-                    if (newCharacterCount > usage.remainingCharacters) {
+                    if (
+                      usage.remainingCharacters !== null &&
+                      newCharacterCount > usage.remainingCharacters
+                    ) {
                       setError(
                         `Bạn đã sử dụng hết hạn mức còn lại (${usage.remainingCharacters.toLocaleString("vi-VN")} ký tự).`,
                       );
@@ -452,14 +452,15 @@ export default function TextToVoicePage({
         </div>
         {usage && (
           <div className="ttv-usage-info">
-            Gói {usage.plan} · Còn{" "}
-            {Math.max(
-              0,
-              usage.remainingCharacters +
-                billedTextCharacters -
-                countBillableCharacters(text, language),
-            ).toLocaleString("vi-VN")}{" "}
-            ký tự
+            Gói {usage.plan} ·{" "}
+            {usage.unlimited
+              ? "Không giới hạn"
+              : `Còn ${Math.max(
+                  0,
+                  (usage.remainingCharacters ?? 0) +
+                    billedTextCharacters -
+                    countBillableCharacters(text, language),
+                ).toLocaleString("vi-VN")} ký tự`}
           </div>
         )}
         <div className="ttv-control-grid">
@@ -884,6 +885,7 @@ export default function TextToVoicePage({
       {audioUrl && (
         <section className="ttv-audio-section">
           <audio ref={audioRef} className="ttv-audio" controls src={audioUrl} />
+<AudioExportButton url={audioUrl} />
         </section>
       )}
       <DialogueComposer

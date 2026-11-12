@@ -21,10 +21,12 @@ import {
 import AdminPayments from "./components/admin/AdminPayments";
 import AdminPlans from "./components/admin/AdminPlans";
 import AdminPromotions from "./components/admin/AdminPromotions";
+import AudioExportButton from './components/AudioExportButton';
 
 function App() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+
   const [showRegister, setShowRegister] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetToken, setResetToken] = useState("");
@@ -34,15 +36,27 @@ function App() {
   );
   const [webView, setWebView] = useState<
     "tts" | "audio-history" | "dialogue-history"
-  >("tts");
+  >(() => {
+    const saved = sessionStorage.getItem("ttv-web-view");
+    return saved === "audio-history" || saved === "dialogue-history"
+      ? saved
+      : "tts";
+  });
 
-  const [projectId, setProjectId] = useState("");
-
-  const [historyType, setHistoryType] = useState<"audio" | "dialogue" | null>(
-    null,
+  const [projectId, setProjectId] = useState(
+    () => sessionStorage.getItem("ttv-project-id") || "",
   );
 
-  const [historyId, setHistoryId] = useState<string | null>(null);
+  const [historyType, setHistoryType] = useState<"audio" | "dialogue" | null>(
+    () => {
+      const saved = sessionStorage.getItem("ttv-history-type");
+      return saved === "audio" || saved === "dialogue" ? saved : null;
+    },
+  );
+
+  const [historyId, setHistoryId] = useState<string | null>(() =>
+    sessionStorage.getItem("ttv-history-id"),
+  );
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
 
   const handleDeleteHistory = async () => {
@@ -73,8 +87,8 @@ function App() {
       setHistoryId(null);
       setHistoryType(null);
       setWebView("tts");
-    } catch (error) {
-      console.error("Failed to delete history item:", error);
+    } catch {
+      console.error("REQUEST_FAILED");
       window.alert(
         isDialogue
           ? "Không thể xóa hội thoại."
@@ -88,6 +102,21 @@ function App() {
     () => sessionStorage.getItem("ttv-admin-item") || "users",
   );
   useEffect(() => {
+    const expired = () => {
+      setIsAuthenticated(false);
+      setShowAccount(false);
+      setShowAdmin(false);
+      setShowRegister(false);
+      setShowForgotPassword(false);
+      setProjectId("");
+      setHistoryId(null);
+      setHistoryType(null);
+      setHistoryAudioUrl(null);
+    };
+    window.addEventListener("auth-session-expired", expired);
+    return () => window.removeEventListener("auth-session-expired", expired);
+  }, []);
+  useEffect(() => {
     if (showAdmin) {
       sessionStorage.setItem("ttv-show-admin", "true");
     } else {
@@ -96,6 +125,22 @@ function App() {
 
     sessionStorage.setItem("ttv-admin-item", adminItem);
   }, [showAdmin, adminItem]);
+  useEffect(() => {
+    sessionStorage.setItem("ttv-web-view", webView);
+    sessionStorage.setItem("ttv-project-id", projectId);
+
+    if (historyType) {
+      sessionStorage.setItem("ttv-history-type", historyType);
+    } else {
+      sessionStorage.removeItem("ttv-history-type");
+    }
+
+    if (historyId) {
+      sessionStorage.setItem("ttv-history-id", historyId);
+    } else {
+      sessionStorage.removeItem("ttv-history-id");
+    }
+  }, [webView, projectId, historyType, historyId]);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get("token");
@@ -109,6 +154,8 @@ function App() {
       try {
         const token = await getAuthToken();
         setIsAuthenticated(!!token);
+      } catch {
+        setIsAuthenticated(false);
       } finally {
         setCheckingAuth(false);
       }
@@ -162,8 +209,8 @@ function App() {
         if (!cancelled) {
           setHistoryAudioUrl(URL.createObjectURL(blob));
         }
-      } catch (error) {
-        console.error("Failed to load selected history audio:", error);
+      } catch {
+        console.error("REQUEST_FAILED");
 
         if (!cancelled) {
           setHistoryAudioUrl(null);
@@ -182,13 +229,14 @@ function App() {
     return null;
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || resetToken) {
     if (resetToken) {
       return (
         <ResetPasswordPage
           token={resetToken}
           onResetSuccess={() => {
             setResetToken("");
+            window.history.replaceState(null, "", window.location.pathname);
           }}
         />
       );
@@ -350,6 +398,7 @@ function App() {
             {historyAudioUrl ? (
               <div className="ttv-web-history-player-row">
                 <audio controls preload="metadata" src={historyAudioUrl} />
+                <AudioExportButton url={historyAudioUrl} />
 
                 <button
                   type="button"

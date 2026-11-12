@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 
-import { confirmAdminPayment, getAdminPayments } from "../../services/api";
+import {
+  confirmAdminPayment,
+  getAdminPayments,
+  getUnmatchedTransactions,
+} from "../../services/api";
 import type { AdminPayment } from "../../services/api";
 
 interface PaymentDetail {
@@ -15,6 +19,7 @@ interface PaymentDetail {
   statusCode: string;
   provider: string;
   createdAt: string;
+  paidAt: string | null;
   matchedAmount: number;
   surplusAmount: number;
   transactions: AdminPayment["transactions"];
@@ -86,6 +91,7 @@ function toPaymentDetail(payment: AdminPayment): PaymentDetail {
     statusCode: payment.status,
     provider: payment.provider || "—",
     createdAt: formatDate(payment.createdAt),
+    paidAt: payment.paidAt ? formatDate(payment.paidAt) : null,
     matchedAmount: payment.matchedAmount,
     surplusAmount: payment.surplusAmount,
     transactions: payment.transactions,
@@ -94,6 +100,12 @@ function toPaymentDetail(payment: AdminPayment): PaymentDetail {
 }
 
 export default function AdminPayments() {
+  const [referenceSearch, setReferenceSearch] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const [unmatched, setUnmatched] = useState<
+    Awaited<ReturnType<typeof getUnmatchedTransactions>>
+  >([]);
   const [payments, setPayments] = useState<PaymentDetail[]>([]);
   const [selectedPayment, setSelectedPayment] = useState<PaymentDetail | null>(
     null,
@@ -101,6 +113,17 @@ export default function AdminPayments() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [confirming, setConfirming] = useState(false);
+  async function searchTransactions() {
+    setSearching(true);
+    setSearchError("");
+    try {
+      setUnmatched(await getUnmatchedTransactions(referenceSearch.trim()));
+    } catch {
+      setSearchError("Không thể tra cứu giao dịch. Vui lòng thử lại.");
+    } finally {
+      setSearching(false);
+    }
+  }
   const handleConfirmPayment = async () => {
     if (!selectedPayment) return;
 
@@ -113,8 +136,7 @@ export default function AdminPayments() {
       const data = await getAdminPayments();
       setPayments(data.map(toPaymentDetail));
       setSelectedPayment(null);
-    } catch (err) {
-      console.error(err);
+    } catch {
       setError("Không thể xác nhận thanh toán.");
     } finally {
       setConfirming(false);
@@ -129,14 +151,16 @@ export default function AdminPayments() {
         setLoading(true);
         setError("");
 
-        const data = await getAdminPayments();
+        const [data, unmatchedData] = await Promise.all([
+          getAdminPayments(),
+          getUnmatchedTransactions(),
+        ]);
 
         if (mounted) {
           setPayments(data.map(toPaymentDetail));
+          setUnmatched(unmatchedData);
         }
-      } catch (err) {
-        console.error("ADMIN PAYMENTS ERROR:", err);
-
+      } catch {
         if (mounted) {
           setError("Không thể tải danh sách thanh toán.");
         }
@@ -170,6 +194,47 @@ export default function AdminPayments() {
       )}
 
       {!loading && error && <div className="admin-empty-state">{error}</div>}
+
+      {!loading && !error && (
+        <details>
+          <summary>
+            Giao dịch cần đối soát ({unmatched.length}, tối đa 100 kết quả)
+          </summary>
+          <label>
+            Mã giao dịch ngân hàng{" "}
+            <input
+              value={referenceSearch}
+              maxLength={128}
+              onChange={(event) => setReferenceSearch(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={searching}
+            onClick={() => void searchTransactions()}
+          >
+            {searching ? "Đang tra cứu..." : "Tra cứu"}
+          </button>
+          {searchError && <p role="alert">{searchError}</p>}
+          <p>
+            Các giao dịch này chưa hoàn tất đối soát. Không xác nhận đơn chỉ dựa
+            vào số tiền; cần kiểm tra mã giao dịch, đơn nhận tiền và currency
+            trước khi xử lý thủ công.
+          </p>
+          <ul>
+            {unmatched.map((transaction) => (
+              <li key={transaction.id}>
+                {transaction.providerTransactionId || transaction.id} ·{" "}
+                {transaction.provider} ·{" "}
+                {formatAmount(transaction.amount, transaction.currency)} ·{" "}
+                {transaction.status} · Đơn:{" "}
+                {transaction.paymentId || "Chưa liên kết"} · Nội dung:{" "}
+                {transaction.reference || "—"}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
 
       {!loading && !error && payments.length === 0 && (
         <div className="admin-empty-state">
@@ -361,6 +426,12 @@ export default function AdminPayments() {
               <div>
                 <span>Ngày tạo</span>
                 <strong>{selectedPayment.createdAt}</strong>
+              </div>
+              <div>
+                <span>Thời điểm ghi nhận thanh toán</span>
+                <strong>
+                  {selectedPayment.paidAt || "Chưa ghi nhận PAID"}
+                </strong>
               </div>
             </div>
 

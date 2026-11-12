@@ -1,31 +1,33 @@
-﻿import { useEffect, useRef, useState } from 'react';
+import AudioExportButton from "./AudioExportButton";
+﻿import { useEffect, useRef, useState } from "react";
 
-import { getProjectUsage, synthesizeDialogue } from '../services/api';
-import { countBillableCharacters } from '../utils/characterCount';
+import {
+  getProjectUsage,
+  synthesizeDialogue,
+  type ProjectUsage,
+} from "../services/api";
+import { countBillableCharacters } from "../utils/characterCount";
 
-type Gender='male'|'female';
-type Character=
-  |'young_male'
-  |'young_female'
-  |'adult_male'
-  |'adult_female'
-  |'elderly_male'
-  |'elderly_female'
-  |'boy'
-  |'girl';
-type Region=
-  |'north_vietnam'
-  |'central_vietnam'
-  |'south_vietnam';
-type Style=
-  |'conversation'
-  |'storytelling'
-  |'night_storytelling'
-  |'poetry'
-  |'podcast'
-  |'news'
-  |'lecture'
-  |'cinematic';
+type Gender = "male" | "female";
+type Character =
+  | "young_male"
+  | "young_female"
+  | "adult_male"
+  | "adult_female"
+  | "elderly_male"
+  | "elderly_female"
+  | "boy"
+  | "girl";
+type Region = "north_vietnam" | "central_vietnam" | "south_vietnam";
+type Style =
+  | "conversation"
+  | "storytelling"
+  | "night_storytelling"
+  | "poetry"
+  | "podcast"
+  | "news"
+  | "lecture"
+  | "cinematic";
 
 interface DialogueSpeaker {
   gender: Gender;
@@ -35,58 +37,61 @@ interface DialogueSpeaker {
 
 interface DialogueTurn {
   id: number;
-  speaker: 'A'|'B';
+  speaker: "A" | "B";
   text: string;
   style: Style;
 }
 
-const CHARACTER_OPTIONS: Record<Gender, Array<{
-  value: Character;
-  label: string;
-}>>={
+const CHARACTER_OPTIONS: Record<
+  Gender,
+  Array<{
+    value: Character;
+    label: string;
+  }>
+> = {
   male: [
-    { value: 'boy', label: 'Trẻ em' },
-    { value: 'young_male', label: 'Người trẻ' },
-    { value: 'adult_male', label: 'Người lớn' },
-    { value: 'elderly_male', label: 'Cao tuổi' },
+    { value: "boy", label: "Trẻ em" },
+    { value: "young_male", label: "Người trẻ" },
+    { value: "adult_male", label: "Người lớn" },
+    { value: "elderly_male", label: "Cao tuổi" },
   ],
   female: [
-    { value: 'girl', label: 'Trẻ em' },
-    { value: 'young_female', label: 'Người trẻ' },
-    { value: 'adult_female', label: 'Người lớn' },
-    { value: 'elderly_female', label: 'Cao tuổi' },
+    { value: "girl", label: "Trẻ em" },
+    { value: "young_female", label: "Người trẻ" },
+    { value: "adult_female", label: "Người lớn" },
+    { value: "elderly_female", label: "Cao tuổi" },
   ],
 };
 
 const REGION_OPTIONS: Array<{
   value: Region;
   label: string;
-}>=[
-    { value: 'north_vietnam', label: 'Miền Bắc' },
-    { value: 'central_vietnam', label: 'Miền Trung' },
-    { value: 'south_vietnam', label: 'Miền Nam' },
-  ];
+}> = [
+  { value: "north_vietnam", label: "Miền Bắc" },
+  { value: "central_vietnam", label: "Miền Trung" },
+  { value: "south_vietnam", label: "Miền Nam" },
+];
 
 const STYLE_OPTIONS: Array<{
   value: Style;
   label: string;
-}>=[
-    { value: 'conversation', label: 'Tự nhiên' },
-    { value: 'storytelling', label: 'Kể chuyện' },
-    { value: 'night_storytelling', label: 'Chuyện đêm' },
-    { value: 'poetry', label: 'Đọc thơ' },
-    { value: 'podcast', label: 'Podcast' },
-    { value: 'news', label: 'Tin tức' },
-    { value: 'lecture', label: 'Giảng bài' },
-    { value: 'cinematic', label: 'Điện ảnh' },
-  ];
+}> = [
+  { value: "conversation", label: "Tự nhiên" },
+  { value: "storytelling", label: "Kể chuyện" },
+  { value: "night_storytelling", label: "Chuyện đêm" },
+  { value: "poetry", label: "Đọc thơ" },
+  { value: "podcast", label: "Podcast" },
+  { value: "news", label: "Tin tức" },
+  { value: "lecture", label: "Giảng bài" },
+  { value: "cinematic", label: "Điện ảnh" },
+];
 
 function SpeakerConfig({
   label,
   speaker,
   onChange,
 }: {
-  label: 'A'|'B';
+  label: "A" | "B";
   speaker: DialogueSpeaker;
   onChange: (speaker: DialogueSpeaker) => void;
 }) {
@@ -99,11 +104,8 @@ function SpeakerConfig({
         <select
           value={speaker.gender}
           onChange={(event) => {
-            const gender=event.target.value as Gender;
-            const character=
-              gender==='male'
-                ? 'adult_male'
-                :'adult_female';
+            const gender = event.target.value as Gender;
+            const character = gender === "male" ? "adult_male" : "adult_female";
 
             onChange({
               ...speaker,
@@ -121,10 +123,12 @@ function SpeakerConfig({
         <span>Độ tuổi</span>
         <select
           value={speaker.character}
-          onChange={(event) => onChange({
-            ...speaker,
-            character: event.target.value as Character,
-          })}
+          onChange={(event) =>
+            onChange({
+              ...speaker,
+              character: event.target.value as Character,
+            })
+          }
         >
           {CHARACTER_OPTIONS[speaker.gender].map((option) => (
             <option key={option.value} value={option.value}>
@@ -138,10 +142,12 @@ function SpeakerConfig({
         <span>Vùng miền</span>
         <select
           value={speaker.region}
-          onChange={(event) => onChange({
-            ...speaker,
-            region: event.target.value as Region,
-          })}
+          onChange={(event) =>
+            onChange({
+              ...speaker,
+              region: event.target.value as Region,
+            })
+          }
         >
           {REGION_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
@@ -162,56 +168,47 @@ export default function DialogueComposer({
   onUsageUpdated,
 }: {
   projectId: string;
-  language: 'vi'|'en';
+  language: "vi" | "en";
   speed: number;
-  usage: {
-    plan: string;
-    characterLimit: number;
-    usedCharacters: number;
-    remainingCharacters: number;
-  }|null;
-  onUsageUpdated: (usage: {
-    plan: string;
-    characterLimit: number;
-    usedCharacters: number;
-    remainingCharacters: number;
-  }) => void;
+  usage: ProjectUsage | null;
+  onUsageUpdated: (usage: ProjectUsage) => void;
 }) {
-  const [isOpen, setIsOpen]=useState(false);
-  const [speakerA, setSpeakerA]=useState<DialogueSpeaker>({
-    gender: 'female',
-    character: 'adult_female',
-    region: 'north_vietnam',
+  const [isOpen, setIsOpen] = useState(false);
+  const [speakerA, setSpeakerA] = useState<DialogueSpeaker>({
+    gender: "female",
+    character: "adult_female",
+    region: "north_vietnam",
   });
-  const [speakerB, setSpeakerB]=useState<DialogueSpeaker>({
-    gender: 'male',
-    character: 'adult_male',
-    region: 'south_vietnam',
+  const [speakerB, setSpeakerB] = useState<DialogueSpeaker>({
+    gender: "male",
+    character: "adult_male",
+    region: "south_vietnam",
   });
-  const [turns, setTurns]=useState<DialogueTurn[]>([
+  const [turns, setTurns] = useState<DialogueTurn[]>([
     {
       id: 1,
-      speaker: 'A',
-      text: '',
-      style: 'conversation',
+      speaker: "A",
+      text: "",
+      style: "conversation",
     },
   ]);
-  const [isGenerating, setIsGenerating]=useState(false);
-  const [error, setError]=useState<string|null>(null);
-  const [audioUrl, setAudioUrl]=useState<string|null>(null);
-  const [lastGeneratedCharacterCount, setLastGeneratedCharacterCount]=useState(0);
-  const [lastGeneratedFingerprint, setLastGeneratedFingerprint]=
-    useState<string|null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [lastGeneratedCharacterCount, setLastGeneratedCharacterCount] =
+    useState(0);
+  const [lastGeneratedFingerprint, setLastGeneratedFingerprint] = useState<
+    string | null
+  >(null);
 
-  const [showRegenerateConfirm, setShowRegenerateConfirm]=
-    useState(false);
-  const audioRef=useRef<HTMLAudioElement|null>(null);
+  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const dialogueCharacterCount=turns.reduce(
-    (total, turn) => total+countBillableCharacters(turn.text, language),
+  const dialogueCharacterCount = turns.reduce(
+    (total, turn) => total + countBillableCharacters(turn.text, language),
     0,
   );
-  const getDialogueGenerationFingerprint=() => {
+  const getDialogueGenerationFingerprint = () => {
     return JSON.stringify({
       language,
       speed,
@@ -230,7 +227,7 @@ export default function DialogueComposer({
       return;
     }
 
-    const audio=audioRef.current;
+    const audio = audioRef.current;
 
     if (audio) {
       void audio.play().catch(() => undefined);
@@ -241,32 +238,30 @@ export default function DialogueComposer({
     };
   }, [audioUrl]);
 
-  const updateTurn=(
+  const updateTurn = (
     id: number,
-    update: Partial<Omit<DialogueTurn, 'id'>>,
+    update: Partial<Omit<DialogueTurn, "id">>,
   ) => {
-    if (typeof update.text==='string'&&usage) {
-      const newTurns=turns.map((turn) => (
-        turn.id===id
-          ? { ...turn, ...update }
-          :turn
-      ));
+    if (typeof update.text === "string" && usage && !usage.unlimited) {
+      const newTurns = turns.map((turn) =>
+        turn.id === id ? { ...turn, ...update } : turn,
+      );
 
-      const newCharacterCount=newTurns.reduce(
-        (total, turn) =>
-          total+countBillableCharacters(turn.text, language),
+      const newCharacterCount = newTurns.reduce(
+        (total, turn) => total + countBillableCharacters(turn.text, language),
         0,
       );
 
       if (
-        newCharacterCount>
-        usage.remainingCharacters+lastGeneratedCharacterCount
+        usage.remainingCharacters !== null &&
+        newCharacterCount >
+          usage.remainingCharacters + lastGeneratedCharacterCount
       ) {
         setError(
           `Bạn đã sử dụng hết hạn mức còn lại (${Math.max(
             0,
             usage.remainingCharacters,
-          ).toLocaleString('vi-VN')} ký tự).`,
+          ).toLocaleString("vi-VN")} ký tự).`,
         );
         return;
       }
@@ -274,76 +269,74 @@ export default function DialogueComposer({
       setError(null);
     }
 
-    setTurns((current) => current.map((turn) => (
-      turn.id===id
-        ? { ...turn, ...update }
-        :turn
-    )));
+    setTurns((current) =>
+      current.map((turn) => (turn.id === id ? { ...turn, ...update } : turn)),
+    );
   };
 
-  const addTurn=() => {
+  const addTurn = () => {
     setTurns((current) => [
       ...current,
       {
         id: Date.now(),
-        speaker: current.at(-1)?.speaker==='A'? 'B':'A',
-        text: '',
-        style: 'conversation',
+        speaker: current.at(-1)?.speaker === "A" ? "B" : "A",
+        text: "",
+        style: "conversation",
       },
     ]);
   };
 
-  const removeTurn=(id: number) => {
-    setTurns((current) => (
-      current.length===1
-        ? current
-        :current.filter((turn) => turn.id!==id)
-    ));
+  const removeTurn = (id: number) => {
+    setTurns((current) =>
+      current.length === 1 ? current : current.filter((turn) => turn.id !== id),
+    );
   };
 
-  const resizeTurnTextarea=(textarea: HTMLTextAreaElement) => {
-    textarea.style.height='auto';
-    textarea.style.height=`${textarea.scrollHeight}px`;
+  const resizeTurnTextarea = (textarea: HTMLTextAreaElement) => {
+    textarea.style.height = "auto";
+    textarea.style.height = `${textarea.scrollHeight}px`;
   };
 
-  const handleGenerate=async () => {
-    const cleanedTurns=turns.map((turn) => ({
+  const handleGenerate = async () => {
+    const cleanedTurns = turns.map((turn) => ({
       speaker: turn.speaker,
       text: turn.text.trim(),
       style: turn.style,
     }));
 
-    const hasEmptyTurn=cleanedTurns.some((turn) => !turn.text);
+    const hasEmptyTurn = cleanedTurns.some((turn) => !turn.text);
 
-    const characterCount=cleanedTurns.reduce(
-      (total, turn) => total+countBillableCharacters(turn.text, language),
+    const characterCount = cleanedTurns.reduce(
+      (total, turn) => total + countBillableCharacters(turn.text, language),
       0,
     );
 
     if (!projectId) {
-      setError('Không tìm thấy dự án để tạo hội thoại.');
+      setError("Không tìm thấy dự án để tạo hội thoại.");
       return;
     }
 
     if (hasEmptyTurn) {
-      setError('Vui lòng nhập nội dung cho tất cả lượt thoại.');
+      setError("Vui lòng nhập nội dung cho tất cả lượt thoại.");
       return;
     }
 
-    if (characterCount>10000) {
-      setError('Hội thoại không được vượt quá 10.000 ký tự.');
+    if (characterCount > 10000) {
+      setError("Hội thoại không được vượt quá 10.000 ký tự.");
       return;
     }
 
     if (
-      usage&&
-      characterCount>usage.remainingCharacters
+      usage &&
+      !usage.unlimited &&
+      usage.remainingCharacters !== null &&
+      characterCount > usage.remainingCharacters
     ) {
       setError(
         `Bạn đã sử dụng hết hạn mức còn lại (${Math.max(
           0,
           usage.remainingCharacters,
-        ).toLocaleString('vi-VN')} ký tự).`,
+        ).toLocaleString("vi-VN")} ký tự).`,
       );
       return;
     }
@@ -352,7 +345,7 @@ export default function DialogueComposer({
     setError(null);
 
     try {
-      const result=await synthesizeDialogue({
+      const result = await synthesizeDialogue({
         projectId,
         language,
         speakerA,
@@ -362,14 +355,13 @@ export default function DialogueComposer({
       });
 
       setAudioUrl(result.fileUrl);
-      const updatedUsage=await getProjectUsage(projectId);
+      const updatedUsage = await getProjectUsage(projectId);
       onUsageUpdated(updatedUsage);
       setLastGeneratedCharacterCount(characterCount);
       setLastGeneratedFingerprint(getDialogueGenerationFingerprint());
-
-    } catch (error) {
-      console.error('DIALOGUE TTS ERROR:', error);
-      setError('Không thể tạo hội thoại. Vui lòng thử lại.');
+    } catch {
+      console.error("REQUEST_FAILED");
+      setError("Không thể tạo hội thoại. Vui lòng thử lại.");
     } finally {
       setIsGenerating(false);
     }
@@ -385,13 +377,14 @@ export default function DialogueComposer({
       >
         <span>💬 Tạo hội thoại</span>
 
-        <span aria-hidden="true">{isOpen? '−':'+'}</span>
+        <span aria-hidden="true">{isOpen ? "−" : "+"}</span>
       </button>
 
-      {isOpen&&(
+      {isOpen && (
         <div className="dialogue-composer-content">
           <p className="dialogue-composer-description">
-            Thiết lập hai nhân vật cố định, rồi nhập từng lượt thoại theo thứ tự.
+            Thiết lập hai nhân vật cố định, rồi nhập từng lượt thoại theo thứ
+            tự.
           </p>
 
           <div className="dialogue-speakers">
@@ -429,17 +422,17 @@ export default function DialogueComposer({
 
             {turns.map((turn, index) => (
               <article className="dialogue-turn" key={turn.id}>
-                <span className="dialogue-turn-number">
-                  {index+1}
-                </span>
+                <span className="dialogue-turn-number">{index + 1}</span>
 
                 <label className="dialogue-field">
                   <select
                     value={turn.speaker}
-                    aria-label={`Nhân vật lượt thoại ${index+1}`}
-                    onChange={(event) => updateTurn(turn.id, {
-                      speaker: event.target.value as 'A'|'B',
-                    })}
+                    aria-label={`Nhân vật lượt thoại ${index + 1}`}
+                    onChange={(event) =>
+                      updateTurn(turn.id, {
+                        speaker: event.target.value as "A" | "B",
+                      })
+                    }
                   >
                     <option value="A">A</option>
                     <option value="B">B</option>
@@ -450,10 +443,12 @@ export default function DialogueComposer({
                   <textarea
                     rows={1}
                     value={turn.text}
-                    aria-label={`Nội dung lượt thoại ${index+1}`}
-                    onChange={(event) => updateTurn(turn.id, {
-                      text: event.target.value,
-                    })}
+                    aria-label={`Nội dung lượt thoại ${index + 1}`}
+                    onChange={(event) =>
+                      updateTurn(turn.id, {
+                        text: event.target.value,
+                      })
+                    }
                     onInput={(event) => {
                       resizeTurnTextarea(event.currentTarget);
                     }}
@@ -465,10 +460,12 @@ export default function DialogueComposer({
                 <label className="dialogue-field">
                   <select
                     value={turn.style}
-                    aria-label={`Phong cách lượt thoại ${index+1}`}
-                    onChange={(event) => updateTurn(turn.id, {
-                      style: event.target.value as Style,
-                    })}
+                    aria-label={`Phong cách lượt thoại ${index + 1}`}
+                    onChange={(event) =>
+                      updateTurn(turn.id, {
+                        style: event.target.value as Style,
+                      })
+                    }
                   >
                     {STYLE_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -482,8 +479,8 @@ export default function DialogueComposer({
                   type="button"
                   className="dialogue-remove-turn"
                   onClick={() => removeTurn(turn.id)}
-                  disabled={turns.length===1}
-                  aria-label={`Xóa lượt thoại ${index+1}`}
+                  disabled={turns.length === 1}
+                  aria-label={`Xóa lượt thoại ${index + 1}`}
                 >
                   ×
                 </button>
@@ -495,11 +492,11 @@ export default function DialogueComposer({
             type="button"
             className="dialogue-generate-button"
             onClick={() => {
-              const fingerprint=getDialogueGenerationFingerprint();
+              const fingerprint = getDialogueGenerationFingerprint();
 
               if (
-                lastGeneratedFingerprint&&
-                fingerprint===lastGeneratedFingerprint
+                lastGeneratedFingerprint &&
+                fingerprint === lastGeneratedFingerprint
               ) {
                 setShowRegenerateConfirm(true);
                 return;
@@ -509,48 +506,49 @@ export default function DialogueComposer({
             }}
             disabled={isGenerating}
           >
-            {isGenerating? (
-              'Đang tạo hội thoại…'
-            ):(
+            {isGenerating ? (
+              "Đang tạo hội thoại…"
+            ) : (
               <>
                 <span>🎙️ Tạo hội thoại</span>
-                {usage&&(
+                {usage && (
                   <span className="dialogue-generate-usage">
-                    Gói {usage.plan} · Còn{' '}
-                    {Math.max(
-                      0,
-                      usage.remainingCharacters+
-                      lastGeneratedCharacterCount-
-                      dialogueCharacterCount,
-                    ).toLocaleString('vi-VN')} ký tự
+                    Gói {usage.plan} ·{" "}
+                    {usage.unlimited
+                      ? "Không giới hạn"
+                      : `Còn ${Math.max(
+                          0,
+                          (usage.remainingCharacters ?? 0) +
+                            lastGeneratedCharacterCount -
+                            dialogueCharacterCount,
+                        ).toLocaleString("vi-VN")} ký tự`}
                   </span>
                 )}
               </>
             )}
           </button>
 
-          {error&&(
+          {error && (
             <p className="dialogue-error" role="alert">
               {error}
             </p>
           )}
 
-          {audioUrl&&(
+          {audioUrl && (
             <div className="dialogue-audio-result">
               <audio ref={audioRef} controls src={audioUrl} />
+<AudioExportButton url={audioUrl} />
             </div>
           )}
 
-          {showRegenerateConfirm&&(
+          {showRegenerateConfirm && (
             <div className="ttv-confirm-overlay">
               <div className="ttv-confirm-dialog">
-                <div className="ttv-confirm-title">
-                  ⚠️ Tạo lại hội thoại?
-                </div>
+                <div className="ttv-confirm-title">⚠️ Tạo lại hội thoại?</div>
 
                 <div className="ttv-confirm-message">
-                  Đoạn hội thoại không thay đổi. Bạn có muốn tiếp tục tạo
-                  hội thoại không?
+                  Đoạn hội thoại không thay đổi. Bạn có muốn tiếp tục tạo hội
+                  thoại không?
                   <br />
                   Việc tạo lại sẽ sử dụng hạn mức ký tự.
                 </div>

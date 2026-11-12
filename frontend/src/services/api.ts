@@ -2,8 +2,16 @@
 import { Capacitor, CapacitorHttp } from "@capacitor/core";
 import { countBillableCharacters } from "../utils/characterCount";
 import { getAuthToken } from "./authStorage";
+import { expireSession } from "./authSession";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+export function validateApiTarget(raw: string, requireHttps: boolean): string {
+  try {
+    const url = new URL(raw);
+    if (!['https:', 'http:'].includes(url.protocol) || (requireHttps && url.protocol !== 'https:') || url.username || url.password || url.search || url.hash) throw new Error();
+    return raw.replace(/\/$/, '');
+  } catch { throw new Error('API_HTTPS_CONFIGURATION_REQUIRED'); }
+}
+const API_BASE_URL = validateApiTarget(import.meta.env.VITE_API_BASE_URL, import.meta.env.PROD || Capacitor.isNativePlatform());
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -21,6 +29,28 @@ api.interceptors.request.use(async (config) => {
 
   return config;
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error: unknown) => {
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      const authorization = error.config?.headers?.Authorization;
+      if (
+        typeof authorization === "string" &&
+        authorization.startsWith("Bearer ")
+      ) {
+        await expireSession(authorization.slice(7));
+      }
+    }
+    return Promise.reject(error);
+  },
+);
+
+async function checkNativeStatus(status: number, token: string | null) {
+  if (status === 401 && token) await expireSession(token);
+  if (status < 200 || status >= 300)
+    throw new Error(`HTTP_REQUEST_FAILED_${status}`);
+}
 
 export interface AudioRecord {
   id: string;
@@ -188,80 +218,60 @@ export interface SynthesizeDialogueResult {
 export async function synthesizeSpeech(
   request: SynthesizeSpeechRequest,
 ): Promise<SynthesizeSpeechResult> {
-  try {
-    console.log("TTS REQUEST:", request);
+  let audioBlob: Blob;
 
-    let audioBlob: Blob;
+  if (Capacitor.isNativePlatform()) {
+    const token = await getAuthToken();
 
-    if (Capacitor.getPlatform() === "android") {
-      const token = await getAuthToken();
+    const response = await CapacitorHttp.post({
+      url: `${API_BASE_URL}/tts/synthesize`,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      data: request,
+      responseType: "blob",
+    });
+    await checkNativeStatus(response.status, token);
 
-      const response = await CapacitorHttp.post({
-        url: `${API_BASE_URL}/tts/synthesize`,
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        data: request,
-        responseType: "blob",
-      });
+    const binaryString = atob(response.data as string);
+    const bytes = new Uint8Array(binaryString.length);
 
-      const binaryString = atob(response.data as string);
-      const bytes = new Uint8Array(binaryString.length);
-
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-
-      audioBlob = new Blob([bytes], {
-        type: "audio/wav",
-      });
-    } else {
-      const response = await api.post("/tts/synthesize", request, {
-        responseType: "blob",
-      });
-
-      console.log("TTS RESPONSE:", response.status, response.headers);
-
-      audioBlob = response.data as Blob;
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
     }
 
-    const audioUrl = URL.createObjectURL(audioBlob);
+    audioBlob = new Blob([bytes], {
+      type: "audio/wav",
+    });
+  } else {
+    const response = await api.post("/tts/synthesize", request, {
+      responseType: "blob",
+    });
 
-    return {
-      id: "",
-      projectId: request.projectId,
-      text: request.text,
-      language: request.language,
-      character: request.character,
-      tone: request.tone,
-      emotion: request.emotion,
-      style: request.style,
-      voice: "Zephyr",
-      speed: request.speed,
-      provider: "openrouter",
-      model: "google/gemini-3.1-flash-tts-preview",
-      fileUrl: audioUrl,
-      format: "wav",
-      characters: countBillableCharacters(request.text, request.language),
-      duration: 0,
-    };
-  } catch (error) {
-    console.error("TTS ERROR:", error);
-
-    const axiosError = error as any;
-    const errorData = axiosError.response?.data;
-
-    if (errorData instanceof Blob) {
-      const errorText = await errorData.text();
-
-      console.error("TTS ERROR RESPONSE:", errorText);
-    } else {
-      console.error("TTS ERROR RESPONSE:", errorData);
-    }
-
-    throw error;
+    audioBlob = response.data as Blob;
   }
+
+  const audioUrl = URL.createObjectURL(audioBlob);
+
+  return {
+    id: "",
+    projectId: request.projectId,
+    text: request.text,
+    language: request.language,
+    character: request.character,
+    tone: request.tone,
+    emotion: request.emotion,
+    style: request.style,
+    voice: "Zephyr",
+    speed: request.speed,
+    provider: "openrouter",
+    model: "google/gemini-3.1-flash-tts-preview",
+    fileUrl: audioUrl,
+    format: "wav",
+    characters: countBillableCharacters(request.text, request.language),
+    duration: 0,
+  };
 }
 
 export async function synthesizeDialogue(
@@ -269,7 +279,7 @@ export async function synthesizeDialogue(
 ): Promise<SynthesizeDialogueResult> {
   let audioBlob: Blob;
 
-  if (Capacitor.getPlatform() === "android") {
+  if (Capacitor.isNativePlatform()) {
     const token = await getAuthToken();
 
     const response = await CapacitorHttp.post({
@@ -281,6 +291,7 @@ export async function synthesizeDialogue(
       data: request,
       responseType: "blob",
     });
+    await checkNativeStatus(response.status, token);
 
     const binaryString = atob(response.data as string);
     const bytes = new Uint8Array(binaryString.length);
@@ -358,6 +369,7 @@ export async function getProtectedAudioBlob(audioId: string): Promise<Blob> {
       },
       responseType: "blob",
     });
+    await checkNativeStatus(response.status, token);
 
     const binaryString = atob(response.data as string);
     const bytes = new Uint8Array(binaryString.length);
@@ -375,6 +387,7 @@ export async function getProtectedAudioBlob(audioId: string): Promise<Blob> {
     },
   });
 
+  if (response.status === 401 && token) await expireSession(token);
   if (!response.ok) {
     throw new Error(`Failed to load audio: ${response.status}`);
   }
@@ -401,6 +414,7 @@ export async function getProtectedDialogueBlob(
       },
       responseType: "blob",
     });
+    await checkNativeStatus(response.status, token);
 
     if (response.status < 200 || response.status >= 300) {
       throw new Error(`Failed to load dialogue audio: ${response.status}`);
@@ -428,6 +442,7 @@ export async function getProtectedDialogueBlob(
     },
   });
 
+  if (response.status === 401 && token) await expireSession(token);
   if (!response.ok) {
     throw new Error(`Failed to load dialogue audio: ${response.status}`);
   }
@@ -452,11 +467,12 @@ export async function reviewText(text: string): Promise<TextReviewResult> {
 
 export interface ProjectUsage {
   plan: string;
-  characterLimit: number;
+  characterLimit: number | null;
   rolloverCharacters: number;
-  totalQuota: number;
+  totalQuota: number | null;
   usedCharacters: number;
-  remainingCharacters: number;
+  remainingCharacters: number | null;
+  unlimited?: boolean;
 }
 
 export async function getProjectUsage(
@@ -534,6 +550,7 @@ export async function getMyProfile(): Promise<MyProfile> {
 }
 
 export interface MySubscription {
+  billingSource?: string;
   id: string;
   plan: string;
   planName: string;
@@ -621,11 +638,9 @@ export async function getMyProject() {
 }
 export async function forgotPassword(
   email: string,
-): Promise<{ message: string; resetToken?: string; expiresAt?: string }> {
+): Promise<{ message: string }> {
   const response = await api.post<{
     message: string;
-    resetToken?: string;
-    expiresAt?: string;
   }>("/auth/forgot-password", {
     email,
   });
@@ -688,6 +703,16 @@ export interface AdminPayment {
 
 export async function getAdminPayments(): Promise<AdminPayment[]> {
   const response = await api.get<AdminPayment[]>("/admin/payments");
+  return response.data;
+}
+export async function getUnmatchedTransactions(
+  reference?: string,
+): Promise<
+  Array<AdminPayment["transactions"][number] & { paymentId: string | null }>
+> {
+  const response = await api.get("/admin/transactions/unmatched", {
+    params: reference ? { reference } : undefined,
+  });
   return response.data;
 }
 export async function confirmAdminPayment(paymentId: string) {

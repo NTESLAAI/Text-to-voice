@@ -6,12 +6,16 @@ const config: CapacitorConfig = {
   appName: 'Text-To-Voice',
 
   webDir: 'dist',
+  loggingBehavior: 'none',
+  ios: { webContentsDebuggingEnabled: false },
 
   android: {
-    allowMixedContent: true
+    webContentsDebuggingEnabled: false,
+    allowMixedContent: false
   },
 
   plugins: {
+    NativePurchases: { autoFinishTransactions: false },
     CapacitorHttp: {
       enabled: true
     }

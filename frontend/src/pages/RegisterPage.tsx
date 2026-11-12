@@ -77,8 +77,7 @@ function RegisterPage({
     try {
       const result = await checkEmailExists(normalizedEmail);
       setEmailExists(result.exists);
-    } catch (error) {
-      console.error("CHECK EMAIL ERROR:", error);
+    } catch {
       setEmailExists(null);
     } finally {
       setCheckingEmail(false);
@@ -97,8 +96,7 @@ function RegisterPage({
     try {
       const result = await checkPhoneExists(normalizedPhone);
       setPhoneExists(result.exists);
-    } catch (error) {
-      console.error("CHECK PHONE ERROR:", error);
+    } catch {
       setPhoneExists(null);
     } finally {
       setCheckingPhone(false);
@@ -162,9 +160,6 @@ function RegisterPage({
 
       onRegisterSuccess();
     } catch (error: any) {
-      console.error("REGISTER ERROR:", error);
-      console.error("REGISTER ERROR RESPONSE:", error?.response?.data);
-
       setError(
         error?.response?.data?.message ||
           "Không thể đăng ký tài khoản. Vui lòng thử lại.",

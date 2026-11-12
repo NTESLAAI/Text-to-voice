@@ -33,16 +33,14 @@ function LoginPage({
 
     try {
       const result = await login(identifier.trim(), password);
-      console.log("LOGIN RESULT:", result);
 
       await saveAuth(result.accessToken, result.user);
-      console.log("AUTH SAVED");
 
       onLoginSuccess();
-      console.log("LOGIN SUCCESS CALLBACK");
-    } catch (error) {
-      console.error("LOGIN ERROR:", error);
-      setError("Email/số điện thoại hoặc mật khẩu không đúng. Vui lòng kiểm tra lại.");
+    } catch {
+      setError(
+        "Email/số điện thoại hoặc mật khẩu không đúng. Vui lòng kiểm tra lại.",
+      );
     } finally {
       setLoading(false);
     }

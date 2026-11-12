@@ -24,15 +24,12 @@ function ForgotPasswordPage({ onSwitchToLogin }: ForgotPasswordPageProps) {
     setMessage("");
 
     try {
-      const result = await forgotPassword(email.trim());
+      await forgotPassword(email.trim());
 
       setMessage(
         "Nếu email tồn tại trong hệ thống, yêu cầu đặt lại mật khẩu đã được tạo.",
       );
-
-      console.log("FORGOT PASSWORD RESULT:", result);
-    } catch (error) {
-      console.error("FORGOT PASSWORD ERROR:", error);
+    } catch {
       setError("Không thể gửi yêu cầu. Vui lòng thử lại.");
     } finally {
       setLoading(false);

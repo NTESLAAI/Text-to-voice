@@ -1,4 +1,8 @@
+import { Capacitor } from "@capacitor/core";
+import StoreBillingPanel from "../components/StoreBillingPanel";
+import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
+import { expireSession } from "../services/authSession";
 
 import {
   changePassword,
@@ -19,13 +23,22 @@ interface AccountPageProps {
 }
 
 function AccountPage({ onBack }: AccountPageProps) {
+  const { t } = useTranslation();
   const [profile, setProfile] = useState<MyProfile | null>(null);
   const [subscription, setSubscription] = useState<MySubscription | null>(null);
+  const [observedNow, setObservedNow] = useState(() => Date.now());
   const [availablePlans, setAvailablePlans] = useState<AvailablePlan[]>([]);
   const [payment, setPayment] = useState<CreatePaymentResult | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentError, setPaymentError] = useState("");
-  const isBusinessPlan = subscription?.plan === "BUSINESS";
+  const hasActivePaid = Boolean(
+    subscription &&
+    subscription.plan !== "FREE" &&
+    subscription.plan !== "ADMIN" &&
+    subscription.status === "ACTIVE" &&
+    new Date(subscription.expiresAt).getTime() > observedNow,
+  );
+  const isBusinessPlan = hasActivePaid && subscription?.plan === "BUSINESS";
   const [selectedUpgradePlan, setSelectedUpgradePlan] = useState<string | null>(
     null,
   );
@@ -76,22 +89,26 @@ function AccountPage({ onBack }: AccountPageProps) {
         ]);
 
         setProfile(profileData);
+        setObservedNow(Date.now());
         setSubscription(subscriptionData);
         setAvailablePlans(plansData);
 
         setProfile(profileData);
+        setObservedNow(Date.now());
         setSubscription(subscriptionData);
 
         // Trong cửa sổ gia hạn 24 giờ, tài khoản không được sử dụng
         // TTS/Dialogue nên getMyUsage() có thể không có dữ liệu.
-        if (subscriptionData.renewalAvailable) {
+        if (
+          subscriptionData.renewalAvailable ||
+          subscriptionData.status === "EXPIRED"
+        ) {
           setUsage(null);
         } else {
           const usageData = await getMyUsage();
           setUsage(usageData);
         }
-      } catch (err) {
-        console.error("Failed to load profile:", err);
+      } catch {
         setError("Không thể tải thông tin tài khoản.");
       } finally {
         setLoading(false);
@@ -99,6 +116,12 @@ function AccountPage({ onBack }: AccountPageProps) {
     }
 
     loadProfile();
+    const refresh = () => {
+      void loadProfile();
+    };
+    window.addEventListener("store-entitlement-updated", refresh);
+    return () =>
+      window.removeEventListener("store-entitlement-updated", refresh);
   }, []);
 
   async function handleChangePassword() {
@@ -131,12 +154,8 @@ function AccountPage({ onBack }: AccountPageProps) {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
+      await expireSession();
     } catch (err: any) {
-      console.error("Change password failed:", err);
-      console.error("Change password error response:", err?.response);
-      console.error("Change password error data:", err?.response?.data);
-      console.error("Change password error message:", err?.message);
-
       const message = err?.response?.data?.message || "Không thể đổi mật khẩu.";
 
       setPasswordError(Array.isArray(message) ? message.join(", ") : message);
@@ -158,6 +177,7 @@ function AccountPage({ onBack }: AccountPageProps) {
     // Paid → Paid: bắt buộc chọn một trong hai phương án Upgrade.
     if (
       !subscription?.renewalAvailable &&
+      !isFreePurchaseFlow &&
       subscription?.plan !== "FREE" &&
       !selectedUpgradeOption
     ) {
@@ -172,7 +192,7 @@ function AccountPage({ onBack }: AccountPageProps) {
 
       const result = await createPayment(
         selectedUpgradePlan,
-        subscription?.renewalAvailable || subscription?.plan === "FREE"
+        subscription?.renewalAvailable || isFreePurchaseFlow
           ? undefined
           : (selectedUpgradeOption ?? undefined),
       );
@@ -180,8 +200,6 @@ function AccountPage({ onBack }: AccountPageProps) {
       setPayment(result);
       setShowPaymentThankYou(true);
     } catch (err: any) {
-      console.error("Create payment failed:", err);
-
       const message =
         err?.response?.data?.message || "Không thể tạo yêu cầu thanh toán.";
 
@@ -199,7 +217,11 @@ function AccountPage({ onBack }: AccountPageProps) {
     availablePlans.find((plan) => plan.code === selectedUpgradePlan) ?? null;
 
   const isRenewalFlow = Boolean(subscription?.renewalAvailable);
-  const isFreePurchaseFlow = subscription?.plan === "FREE";
+  const isFreePurchaseFlow =
+    subscription?.plan === "FREE" ||
+    Boolean(
+      subscription && new Date(subscription.expiresAt).getTime() <= observedNow,
+    );
   const isUpgradeFlow =
     !isRenewalFlow && !isFreePurchaseFlow && Boolean(selectedUpgradePlan);
 
@@ -380,7 +402,9 @@ function AccountPage({ onBack }: AccountPageProps) {
             !error &&
             profile &&
             subscription &&
-            (subscription.renewalAvailable || usage) && (
+            (subscription.renewalAvailable ||
+              subscription.status === "EXPIRED" ||
+              usage) && (
               <div
                 style={{
                   marginTop: "32px",
@@ -445,6 +469,12 @@ function AccountPage({ onBack }: AccountPageProps) {
                     </div>
                   </div>
                 )}
+                {subscription.status === "EXPIRED" && (
+                  <p>
+                    Gói FREE đã hết hạn. Bạn có thể mua gói trả phí bên dưới;
+                    quota FREE không được tự cấp lại.
+                  </p>
+                )}
                 {!subscription.renewalAvailable && usage && (
                   <div
                     style={{
@@ -484,7 +514,9 @@ function AccountPage({ onBack }: AccountPageProps) {
                         Hạn mức
                       </div>
                       <div style={{ fontSize: "16px", color: "#0f172a" }}>
-                        {usage.totalQuota.toLocaleString("vi-VN")} ký tự
+                        {usage.unlimited
+                          ? "Không giới hạn"
+                          : `${(usage.totalQuota ?? 0).toLocaleString("vi-VN")} ký tự`}
                       </div>
                     </div>
 
@@ -499,7 +531,8 @@ function AccountPage({ onBack }: AccountPageProps) {
                         Đã sử dụng
                       </div>
                       <div style={{ fontSize: "16px", color: "#0f172a" }}>
-                        {usage.usedCharacters.toLocaleString("vi-VN")} ký tự
+                        {(usage.usedCharacters ?? 0).toLocaleString("vi-VN")} ký
+                        tự
                       </div>
                     </div>
 
@@ -520,40 +553,45 @@ function AccountPage({ onBack }: AccountPageProps) {
                           fontWeight: 700,
                         }}
                       >
-                        {usage.remainingCharacters.toLocaleString("vi-VN")} ký
-                        tự
+                        {usage.unlimited
+                          ? "Không giới hạn"
+                          : `${(usage.remainingCharacters ?? 0).toLocaleString("vi-VN")} ký tự`}
                       </div>
                     </div>
 
-                    <div>
-                      <div
-                        style={{
-                          fontSize: "13px",
-                          color: "#64748b",
-                          marginBottom: "6px",
-                        }}
-                      >
-                        Ngày bắt đầu
+                    {!usage.unlimited && (
+                      <div>
+                        <div
+                          style={{
+                            fontSize: "13px",
+                            color: "#64748b",
+                            marginBottom: "6px",
+                          }}
+                        >
+                          Ngày bắt đầu
+                        </div>
+                        <div style={{ fontSize: "16px", color: "#0f172a" }}>
+                          {formatDate(subscription.startedAt)}
+                        </div>
                       </div>
-                      <div style={{ fontSize: "16px", color: "#0f172a" }}>
-                        {formatDate(subscription.startedAt)}
-                      </div>
-                    </div>
+                    )}
 
-                    <div>
-                      <div
-                        style={{
-                          fontSize: "13px",
-                          color: "#64748b",
-                          marginBottom: "6px",
-                        }}
-                      >
-                        Ngày hết hạn
+                    {!usage.unlimited && (
+                      <div>
+                        <div
+                          style={{
+                            fontSize: "13px",
+                            color: "#64748b",
+                            marginBottom: "6px",
+                          }}
+                        >
+                          Ngày hết hạn
+                        </div>
+                        <div style={{ fontSize: "16px", color: "#0f172a" }}>
+                          {formatDate(subscription.expiresAt)}
+                        </div>
                       </div>
-                      <div style={{ fontSize: "16px", color: "#0f172a" }}>
-                        {formatDate(subscription.expiresAt)}
-                      </div>
-                    </div>
+                    )}
 
                     {usage.rolloverCharacters > 0 && (
                       <div>
@@ -576,578 +614,595 @@ function AccountPage({ onBack }: AccountPageProps) {
                 )}
               </div>
             )}
-          <div
-            style={{
-              marginTop: "32px",
-              paddingTop: "28px",
-              borderTop: "1px solid #e7eaf0",
-            }}
-          >
-            <h2
-              style={{
-                margin: 0,
-                fontSize: "22px",
-                fontWeight: 700,
-                color: "#111827",
-              }}
-            >
-              {isBusinessPlan
-                ? "🏆 Đẳng cấp VIP"
-                : subscription?.renewalAvailable
-                  ? "Gia hạn gói"
-                  : "Nâng cấp gói"}
-            </h2>
-
-            <p
-              style={{
-                margin: "8px 0 0",
-                color: "#6b7280",
-                fontSize: "14px",
-              }}
-            >
-              {isBusinessPlan
-                ? "Bạn đang sở hữu gói cao nhất của N.TESLA.AI."
-                : subscription?.renewalAvailable
-                  ? "Chọn một gói trả phí để tiếp tục sử dụng dịch vụ."
-                  : "Chọn gói cao hơn để tăng hạn mức sử dụng."}
+          {Capacitor.isNativePlatform() ? (
+            <StoreBillingPanel />
+          ) : hasActivePaid ? (
+            <p>
+              {subscription?.billingSource &&
+              subscription.billingSource !== "WEB"
+                ? t("mobile.externallyManaged")
+                : "Bạn đang có gói trả phí còn hiệu lực. Có thể mua gói mới sau khi gói hiện tại hết hạn."}
             </p>
-            {isBusinessPlan && (
-              <div
+          ) : (
+            <div
+              style={{
+                marginTop: "32px",
+                paddingTop: "28px",
+                borderTop: "1px solid #e7eaf0",
+              }}
+            >
+              <h2
                 style={{
-                  marginTop: "24px",
-                  padding: "28px 24px",
-                  borderRadius: "16px",
-                  border: "1px solid #f3d36b",
-                  background:
-                    "linear-gradient(135deg, #fffdf5 0%, #fff8dc 50%, #fffdf5 100%)",
-                  textAlign: "center",
-                  boxShadow: "0 6px 20px rgba(180, 140, 40, 0.08)",
+                  margin: 0,
+                  fontSize: "22px",
+                  fontWeight: 700,
+                  color: "#111827",
                 }}
               >
-                <div
-                  style={{
-                    fontSize: "36px",
-                    marginBottom: "10px",
-                  }}
-                >
-                  🏆
-                </div>
+                {isBusinessPlan
+                  ? "🏆 Đẳng cấp VIP"
+                  : subscription?.renewalAvailable
+                    ? "Gia hạn gói"
+                    : "Nâng cấp gói"}
+              </h2>
 
+              <p
+                style={{
+                  margin: "8px 0 0",
+                  color: "#6b7280",
+                  fontSize: "14px",
+                }}
+              >
+                {isBusinessPlan
+                  ? "Bạn đang sở hữu gói cao nhất của N.TESLA.AI."
+                  : subscription?.renewalAvailable
+                    ? "Chọn một gói trả phí để tiếp tục sử dụng dịch vụ."
+                    : "Chọn gói cao hơn để tăng hạn mức sử dụng."}
+              </p>
+              {isBusinessPlan && (
                 <div
                   style={{
-                    fontSize: "24px",
-                    fontWeight: 800,
-                    color: "#a16207",
-                    letterSpacing: "1px",
+                    marginTop: "24px",
+                    padding: "28px 24px",
+                    borderRadius: "16px",
+                    border: "1px solid #f3d36b",
+                    background:
+                      "linear-gradient(135deg, #fffdf5 0%, #fff8dc 50%, #fffdf5 100%)",
+                    textAlign: "center",
+                    boxShadow: "0 6px 20px rgba(180, 140, 40, 0.08)",
                   }}
                 >
-                  ĐẲNG CẤP VIP
-                </div>
-
-                <div
-                  style={{
-                    marginTop: "8px",
-                    fontSize: "18px",
-                    fontWeight: 700,
-                    color: "#713f12",
-                  }}
-                >
-                  BUSINESS
-                </div>
-
-                <div
-                  style={{
-                    marginTop: "6px",
-                    fontSize: "14px",
-                    color: "#854d0e",
-                  }}
-                >
-                  Gói cao nhất của N.TESLA.AI
-                </div>
-
-                <div
-                  style={{
-                    marginTop: "18px",
-                    fontSize: "16px",
-                    fontWeight: 600,
-                    color: "#713f12",
-                  }}
-                >
-                  ✨ Bạn đã đạt cấp độ cao nhất!
-                </div>
-
-                <div
-                  style={{
-                    marginTop: "6px",
-                    fontSize: "14px",
-                    color: "#92400e",
-                  }}
-                >
-                  Hãy tận hưởng toàn bộ đặc quyền của gói Business.
-                </div>
-              </div>
-            )}
-            {!isBusinessPlan && (
-              <>
-                {!selectedUpgradePlan && (
                   <div
                     style={{
-                      display: "grid",
-                      gap: "12px",
+                      fontSize: "36px",
+                      marginBottom: "10px",
                     }}
                   >
-                    {availablePlans
-                      .filter((plan) => plan.code !== "FREE")
-                      .sort((a, b) => a.price - b.price)
-                      .filter((plan) => {
-                        if (subscription?.renewalAvailable) {
-                          return true;
-                        }
-
-                        const currentPlan = availablePlans.find(
-                          (item) => item.code === subscription?.plan,
-                        );
-
-                        return plan.price > (currentPlan?.price ?? 0);
-                      })
-                      .map((plan) => (
-                        <div
-                          key={plan.code}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            gap: "16px",
-                            padding: "16px",
-                            border: "1px solid #e2e8f0",
-                            borderRadius: "12px",
-                            background: "#f8fafc",
-                          }}
-                        >
-                          <div>
-                            <div
-                              style={{
-                                fontSize: "16px",
-                                fontWeight: 700,
-                                color: "#0f172a",
-                              }}
-                            >
-                              {plan.name}
-                            </div>
-
-                            <div
-                              style={{
-                                marginTop: "4px",
-                                fontSize: "14px",
-                                color: "#64748b",
-                              }}
-                            >
-                              {plan.price.toLocaleString("vi-VN")}{" "}
-                              {plan.currency} / {plan.durationDays} ngày
-                            </div>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => handleCreatePayment(plan.code)}
-                            disabled={paymentLoading}
-                            style={{
-                              border: "none",
-                              borderRadius: "9px",
-                              padding: "10px 16px",
-                              background: paymentLoading
-                                ? "#94a3b8"
-                                : "#2563eb",
-                              color: "#ffffff",
-                              fontSize: "14px",
-                              fontWeight: 600,
-                              cursor: paymentLoading
-                                ? "not-allowed"
-                                : "pointer",
-                            }}
-                          >
-                            {paymentLoading
-                              ? "Đang xử lý..."
-                              : subscription?.renewalAvailable
-                                ? plan.code === subscription.plan
-                                  ? "Gia hạn"
-                                  : "Chọn gói"
-                                : "Nâng cấp"}
-                          </button>
-                        </div>
-                      ))}
+                    🏆
                   </div>
-                )}
 
-                {selectedUpgradePlan && selectedPlanInfo && !payment && (
                   <div
                     style={{
-                      marginTop: "20px",
-                      padding: "20px",
-                      border: "1px solid #bfdbfe",
-                      borderRadius: "14px",
-                      background: "#eff6ff",
+                      fontSize: "24px",
+                      fontWeight: 800,
+                      color: "#a16207",
+                      letterSpacing: "1px",
                     }}
                   >
-                    <div
-                      style={{
-                        fontSize: "18px",
-                        fontWeight: 700,
-                        color: "#0f172a",
-                        marginBottom: "16px",
-                      }}
-                    >
-                      Yêu cầu thanh toán
-                    </div>
-
-                    <div style={{ marginBottom: "10px" }}>
-                      Gói mới: <strong>{selectedPlanInfo.name}</strong>
-                    </div>
-
-                    <div style={{ marginBottom: "10px" }}>
-                      Giá niêm yết gói mới:{" "}
-                      <strong>
-                        {selectedPlanInfo.price.toLocaleString("vi-VN")} VND
-                      </strong>
-                    </div>
-
-                    <div style={{ marginBottom: "14px" }}>
-                      Trạng thái: <strong>PENDING</strong>
-                    </div>
-
-                    {isUpgradeFlow && (
-                      <div
-                        style={{
-                          marginBottom: "14px",
-                          padding: "14px",
-                          borderTop: "1px solid #bfdbfe",
-                          borderBottom: "1px solid #bfdbfe",
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: "14px",
-                            fontWeight: 700,
-                            color: "#0f172a",
-                            marginBottom: "10px",
-                          }}
-                        >
-                          Chọn phương án nâng cấp
-                        </div>
-
-                        <label
-                          style={{
-                            display: "block",
-                            padding: "12px",
-                            marginBottom: "10px",
-                            border: "1px solid #dbeafe",
-                            borderRadius: "10px",
-                            background:
-                              selectedUpgradeOption === "TRANSFER_QUOTA"
-                                ? "#dbeafe"
-                                : "#ffffff",
-                            cursor: "pointer",
-                          }}
-                        >
-                          <input
-                            type="radio"
-                            name="upgradeOption"
-                            value="TRANSFER_QUOTA"
-                            checked={selectedUpgradeOption === "TRANSFER_QUOTA"}
-                            onChange={() =>
-                              setSelectedUpgradeOption("TRANSFER_QUOTA")
-                            }
-                            style={{ marginRight: "8px" }}
-                          />
-                          <strong>Chuyển toàn bộ quota còn lại</strong>
-
-                          <div
-                            style={{
-                              marginTop: "6px",
-                              marginLeft: "24px",
-                              fontSize: "13px",
-                              color: "#64748b",
-                              lineHeight: 1.5,
-                            }}
-                          >
-                            Toàn bộ quota còn lại của gói hiện tại sẽ được
-                            chuyển sang gói mới. Không giảm giá gói mới.
-                          </div>
-                        </label>
-
-                        <label
-                          style={{
-                            display: "block",
-                            padding: "12px",
-                            border: "1px solid #dbeafe",
-                            borderRadius: "10px",
-                            background:
-                              selectedUpgradeOption === "CONVERT_TO_CREDIT"
-                                ? "#dbeafe"
-                                : "#ffffff",
-                            cursor: "pointer",
-                          }}
-                        >
-                          <input
-                            type="radio"
-                            name="upgradeOption"
-                            value="CONVERT_TO_CREDIT"
-                            checked={
-                              selectedUpgradeOption === "CONVERT_TO_CREDIT"
-                            }
-                            onChange={() =>
-                              setSelectedUpgradeOption("CONVERT_TO_CREDIT")
-                            }
-                            style={{ marginRight: "8px" }}
-                          />
-                          <strong>Quy đổi quota thành tiền</strong>
-
-                          <div
-                            style={{
-                              marginTop: "6px",
-                              marginLeft: "24px",
-                              fontSize: "13px",
-                              color: "#64748b",
-                              lineHeight: 1.5,
-                            }}
-                          >
-                            Quota còn lại sẽ được quy đổi thành tiền và trừ vào
-                            giá gói mới. Quota cũ sẽ không được chuyển sang.
-                          </div>
-                        </label>
-                      </div>
-                    )}
-
-                    <div
-                      style={{
-                        marginBottom: "16px",
-                        paddingTop: "14px",
-                        borderTop: "1px solid #bfdbfe",
-                      }}
-                    >
-                      <div style={{ marginBottom: "8px" }}>
-                        Ngân hàng: <strong>MBBank</strong>
-                      </div>
-                      <div style={{ marginBottom: "8px" }}>
-                        Số tài khoản: <strong>256668689</strong>
-                      </div>
-                      <div>
-                        Chủ tài khoản:{" "}
-                        <strong>
-                          CONG TY CO PHAN TRI TUE NHAN TAO N.TESLA.AI
-                        </strong>
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "flex-end",
-                        gap: "10px",
-                      }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedUpgradePlan(null);
-                          setSelectedUpgradeOption(null);
-                          setShowPaymentThankYou(false);
-                          setPayment(null);
-                          setPaymentError("");
-                        }}
-                        style={{
-                          border: "1px solid #cbd5e1",
-                          borderRadius: "9px",
-                          padding: "10px 18px",
-                          background: "#ffffff",
-                          color: "#475569",
-                          fontSize: "14px",
-                          fontWeight: 600,
-                          cursor: "pointer",
-                        }}
-                      >
-                        Hủy
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={
-                          paymentLoading ||
-                          (isUpgradeFlow && !selectedUpgradeOption)
-                        }
-                        onClick={handleConfirmPayment}
-                        style={{
-                          border: "none",
-                          borderRadius: "9px",
-                          padding: "10px 18px",
-                          background:
-                            paymentLoading ||
-                            (isUpgradeFlow && !selectedUpgradeOption)
-                              ? "#94a3b8"
-                              : "#2563eb",
-                          color: "#ffffff",
-                          fontSize: "14px",
-                          fontWeight: 600,
-                          cursor:
-                            paymentLoading ||
-                            (isUpgradeFlow && !selectedUpgradeOption)
-                              ? "not-allowed"
-                              : "pointer",
-                        }}
-                      >
-                        {paymentLoading ? "Đang xử lý..." : "Xác nhận"}
-                      </button>
-                    </div>
+                    ĐẲNG CẤP VIP
                   </div>
-                )}
 
-                {paymentError && (
                   <div
                     style={{
-                      marginTop: "16px",
-                      padding: "10px 12px",
-                      borderRadius: "8px",
-                      background: "#fee2e2",
-                      color: "#b91c1c",
+                      marginTop: "8px",
+                      fontSize: "18px",
+                      fontWeight: 700,
+                      color: "#713f12",
+                    }}
+                  >
+                    BUSINESS
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: "6px",
                       fontSize: "14px",
+                      color: "#854d0e",
                     }}
                   >
-                    {paymentError}
+                    Gói cao nhất của N.TESLA.AI
                   </div>
-                )}
 
-                {payment && showPaymentThankYou && (
                   <div
                     style={{
-                      marginTop: "16px",
-                      padding: "20px",
-                      borderRadius: "12px",
-                      border: "1px solid #bbf7d0",
-                      background: "#f0fdf4",
-                      color: "#166534",
+                      marginTop: "18px",
+                      fontSize: "16px",
+                      fontWeight: 600,
+                      color: "#713f12",
                     }}
                   >
-                    <div
-                      style={{
-                        fontSize: "17px",
-                        fontWeight: 700,
-                        marginBottom: "12px",
-                      }}
-                    >
-                      Cảm ơn bạn đã tin tưởng và sử dụng Text-To-Voice!
-                    </div>
-
-                    <div
-                      style={{
-                        fontSize: "14px",
-                        lineHeight: 1.6,
-                        marginBottom: "8px",
-                      }}
-                    >
-                      Yêu cầu{" "}
-                      {payment.paymentType === "RENEWAL"
-                        ? "gia hạn"
-                        : "nâng cấp"}{" "}
-                      gói <strong>{payment.planName}</strong> của bạn đã được
-                      ghi nhận.
-                    </div>
-
-                    <div
-                      style={{
-                        fontSize: "14px",
-                        lineHeight: 1.6,
-                        marginBottom: "8px",
-                      }}
-                    >
-                      Số tiền cần thanh toán:{" "}
-                      <strong>
-                        {payment.amount.toLocaleString("vi-VN")}{" "}
-                        {payment.currency}
-                      </strong>
-                    </div>
-
-                    <div
-                      style={{
-                        fontSize: "14px",
-                        lineHeight: 1.6,
-                        marginBottom: "8px",
-                      }}
-                    >
-                      Sau khi nhận được thanh toán, Admin sẽ kiểm tra và kích
-                      hoạt gói mới cho tài khoản của bạn.
-                    </div>
-
-                    <div style={{ fontSize: "14px", marginBottom: "16px" }}>
-                      Trạng thái yêu cầu: <strong>ĐANG CHỜ XÁC NHẬN</strong>
-                    </div>
-
-                    <div
-                      style={{ display: "flex", justifyContent: "flex-end" }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setShowPaymentThankYou(false)}
-                        style={{
-                          border: "none",
-                          borderRadius: "9px",
-                          padding: "10px 18px",
-                          background: "#15803d",
-                          color: "#ffffff",
-                          fontSize: "14px",
-                          fontWeight: 600,
-                          cursor: "pointer",
-                        }}
-                      >
-                        Đóng
-                      </button>
-                    </div>
+                    ✨ Bạn đã đạt cấp độ cao nhất!
                   </div>
-                )}
 
-                {payment && !showPaymentThankYou && (
                   <div
                     style={{
-                      marginTop: "16px",
-                      padding: "16px 18px",
-                      borderRadius: "12px",
-                      border: "1px solid #fde68a",
-                      background: "#fffbeb",
+                      marginTop: "6px",
+                      fontSize: "14px",
                       color: "#92400e",
                     }}
                   >
+                    Hãy tận hưởng toàn bộ đặc quyền của gói Business.
+                  </div>
+                </div>
+              )}
+              {!isBusinessPlan && (
+                <>
+                  {!selectedUpgradePlan && (
                     <div
                       style={{
-                        fontSize: "15px",
-                        fontWeight: 700,
-                        marginBottom: "8px",
+                        display: "grid",
+                        gap: "12px",
                       }}
                     >
-                      Yêu cầu{" "}
-                      {payment.paymentType === "RENEWAL"
-                        ? "gia hạn"
-                        : "nâng cấp"}
-                    </div>
+                      {availablePlans
+                        .filter((plan) => plan.code !== "FREE")
+                        .sort((a, b) => a.price - b.price)
+                        .filter((plan) => {
+                          if (
+                            subscription?.renewalAvailable ||
+                            isFreePurchaseFlow
+                          ) {
+                            return true;
+                          }
 
-                    <div style={{ fontSize: "14px", marginBottom: "6px" }}>
-                      Gói: <strong>{payment.planName}</strong>
-                    </div>
+                          const currentPlan = availablePlans.find(
+                            (item) => item.code === subscription?.plan,
+                          );
 
-                    <div style={{ fontSize: "14px", marginBottom: "6px" }}>
-                      Số tiền:{" "}
-                      <strong>
-                        {payment.amount.toLocaleString("vi-VN")}{" "}
-                        {payment.currency}
-                      </strong>
-                    </div>
+                          return plan.price > (currentPlan?.price ?? 0);
+                        })
+                        .map((plan) => (
+                          <div
+                            key={plan.code}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: "16px",
+                              padding: "16px",
+                              border: "1px solid #e2e8f0",
+                              borderRadius: "12px",
+                              background: "#f8fafc",
+                            }}
+                          >
+                            <div>
+                              <div
+                                style={{
+                                  fontSize: "16px",
+                                  fontWeight: 700,
+                                  color: "#0f172a",
+                                }}
+                              >
+                                {plan.name}
+                              </div>
 
-                    <div style={{ fontSize: "14px" }}>
-                      🟡 <strong>ĐANG CHỜ XÁC NHẬN</strong>
+                              <div
+                                style={{
+                                  marginTop: "4px",
+                                  fontSize: "14px",
+                                  color: "#64748b",
+                                }}
+                              >
+                                {plan.price.toLocaleString("vi-VN")}{" "}
+                                {plan.currency} / {plan.durationDays} ngày
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleCreatePayment(plan.code)}
+                              disabled={paymentLoading}
+                              style={{
+                                border: "none",
+                                borderRadius: "9px",
+                                padding: "10px 16px",
+                                background: paymentLoading
+                                  ? "#94a3b8"
+                                  : "#2563eb",
+                                color: "#ffffff",
+                                fontSize: "14px",
+                                fontWeight: 600,
+                                cursor: paymentLoading
+                                  ? "not-allowed"
+                                  : "pointer",
+                              }}
+                            >
+                              {paymentLoading
+                                ? "Đang xử lý..."
+                                : subscription?.renewalAvailable
+                                  ? plan.code === subscription.plan
+                                    ? "Gia hạn"
+                                    : "Chọn gói"
+                                  : "Nâng cấp"}
+                            </button>
+                          </div>
+                        ))}
                     </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
+                  )}
+
+                  {selectedUpgradePlan && selectedPlanInfo && !payment && (
+                    <div
+                      style={{
+                        marginTop: "20px",
+                        padding: "20px",
+                        border: "1px solid #bfdbfe",
+                        borderRadius: "14px",
+                        background: "#eff6ff",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: "18px",
+                          fontWeight: 700,
+                          color: "#0f172a",
+                          marginBottom: "16px",
+                        }}
+                      >
+                        Yêu cầu thanh toán
+                      </div>
+
+                      <div style={{ marginBottom: "10px" }}>
+                        Gói mới: <strong>{selectedPlanInfo.name}</strong>
+                      </div>
+
+                      <div style={{ marginBottom: "10px" }}>
+                        Giá niêm yết gói mới:{" "}
+                        <strong>
+                          {selectedPlanInfo.price.toLocaleString("vi-VN")} VND
+                        </strong>
+                      </div>
+
+                      <div style={{ marginBottom: "14px" }}>
+                        Trạng thái: <strong>PENDING</strong>
+                      </div>
+
+                      {isUpgradeFlow && (
+                        <div
+                          style={{
+                            marginBottom: "14px",
+                            padding: "14px",
+                            borderTop: "1px solid #bfdbfe",
+                            borderBottom: "1px solid #bfdbfe",
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: "14px",
+                              fontWeight: 700,
+                              color: "#0f172a",
+                              marginBottom: "10px",
+                            }}
+                          >
+                            Chọn phương án nâng cấp
+                          </div>
+
+                          <label
+                            style={{
+                              display: "block",
+                              padding: "12px",
+                              marginBottom: "10px",
+                              border: "1px solid #dbeafe",
+                              borderRadius: "10px",
+                              background:
+                                selectedUpgradeOption === "TRANSFER_QUOTA"
+                                  ? "#dbeafe"
+                                  : "#ffffff",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <input
+                              type="radio"
+                              name="upgradeOption"
+                              value="TRANSFER_QUOTA"
+                              checked={
+                                selectedUpgradeOption === "TRANSFER_QUOTA"
+                              }
+                              onChange={() =>
+                                setSelectedUpgradeOption("TRANSFER_QUOTA")
+                              }
+                              style={{ marginRight: "8px" }}
+                            />
+                            <strong>Chuyển toàn bộ quota còn lại</strong>
+
+                            <div
+                              style={{
+                                marginTop: "6px",
+                                marginLeft: "24px",
+                                fontSize: "13px",
+                                color: "#64748b",
+                                lineHeight: 1.5,
+                              }}
+                            >
+                              Toàn bộ quota còn lại của gói hiện tại sẽ được
+                              chuyển sang gói mới. Không giảm giá gói mới.
+                            </div>
+                          </label>
+
+                          <label
+                            style={{
+                              display: "block",
+                              padding: "12px",
+                              border: "1px solid #dbeafe",
+                              borderRadius: "10px",
+                              background:
+                                selectedUpgradeOption === "CONVERT_TO_CREDIT"
+                                  ? "#dbeafe"
+                                  : "#ffffff",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <input
+                              type="radio"
+                              name="upgradeOption"
+                              value="CONVERT_TO_CREDIT"
+                              checked={
+                                selectedUpgradeOption === "CONVERT_TO_CREDIT"
+                              }
+                              onChange={() =>
+                                setSelectedUpgradeOption("CONVERT_TO_CREDIT")
+                              }
+                              style={{ marginRight: "8px" }}
+                            />
+                            <strong>Quy đổi quota thành tiền</strong>
+
+                            <div
+                              style={{
+                                marginTop: "6px",
+                                marginLeft: "24px",
+                                fontSize: "13px",
+                                color: "#64748b",
+                                lineHeight: 1.5,
+                              }}
+                            >
+                              Quota còn lại sẽ được quy đổi thành tiền và trừ
+                              vào giá gói mới. Quota cũ sẽ không được chuyển
+                              sang.
+                            </div>
+                          </label>
+                        </div>
+                      )}
+
+                      <div
+                        style={{
+                          marginBottom: "16px",
+                          paddingTop: "14px",
+                          borderTop: "1px solid #bfdbfe",
+                        }}
+                      >
+                        <div style={{ marginBottom: "8px" }}>
+                          Ngân hàng: <strong>MBBank</strong>
+                        </div>
+                        <div style={{ marginBottom: "8px" }}>
+                          Số tài khoản: <strong>256668689</strong>
+                        </div>
+                        <div>
+                          Chủ tài khoản:{" "}
+                          <strong>
+                            CONG TY CO PHAN TRI TUE NHAN TAO N.TESLA.AI
+                          </strong>
+                        </div>
+                      </div>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "flex-end",
+                          gap: "10px",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedUpgradePlan(null);
+                            setSelectedUpgradeOption(null);
+                            setShowPaymentThankYou(false);
+                            setPayment(null);
+                            setPaymentError("");
+                          }}
+                          style={{
+                            border: "1px solid #cbd5e1",
+                            borderRadius: "9px",
+                            padding: "10px 18px",
+                            background: "#ffffff",
+                            color: "#475569",
+                            fontSize: "14px",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Hủy
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={
+                            paymentLoading ||
+                            (isUpgradeFlow && !selectedUpgradeOption)
+                          }
+                          onClick={handleConfirmPayment}
+                          style={{
+                            border: "none",
+                            borderRadius: "9px",
+                            padding: "10px 18px",
+                            background:
+                              paymentLoading ||
+                              (isUpgradeFlow && !selectedUpgradeOption)
+                                ? "#94a3b8"
+                                : "#2563eb",
+                            color: "#ffffff",
+                            fontSize: "14px",
+                            fontWeight: 600,
+                            cursor:
+                              paymentLoading ||
+                              (isUpgradeFlow && !selectedUpgradeOption)
+                                ? "not-allowed"
+                                : "pointer",
+                          }}
+                        >
+                          {paymentLoading ? "Đang xử lý..." : "Xác nhận"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {paymentError && (
+                    <div
+                      style={{
+                        marginTop: "16px",
+                        padding: "10px 12px",
+                        borderRadius: "8px",
+                        background: "#fee2e2",
+                        color: "#b91c1c",
+                        fontSize: "14px",
+                      }}
+                    >
+                      {paymentError}
+                    </div>
+                  )}
+
+                  {payment && showPaymentThankYou && (
+                    <div
+                      style={{
+                        marginTop: "16px",
+                        padding: "20px",
+                        borderRadius: "12px",
+                        border: "1px solid #bbf7d0",
+                        background: "#f0fdf4",
+                        color: "#166534",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: "17px",
+                          fontWeight: 700,
+                          marginBottom: "12px",
+                        }}
+                      >
+                        Cảm ơn bạn đã tin tưởng và sử dụng Text-To-Voice!
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: "14px",
+                          lineHeight: 1.6,
+                          marginBottom: "8px",
+                        }}
+                      >
+                        Yêu cầu{" "}
+                        {payment.paymentType === "RENEWAL"
+                          ? "gia hạn"
+                          : "nâng cấp"}{" "}
+                        gói <strong>{payment.planName}</strong> của bạn đã được
+                        ghi nhận.
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: "14px",
+                          lineHeight: 1.6,
+                          marginBottom: "8px",
+                        }}
+                      >
+                        Số tiền cần thanh toán:{" "}
+                        <strong>
+                          {payment.amount.toLocaleString("vi-VN")}{" "}
+                          {payment.currency}
+                        </strong>
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: "14px",
+                          lineHeight: 1.6,
+                          marginBottom: "8px",
+                        }}
+                      >
+                        Sau khi nhận được thanh toán, Admin sẽ kiểm tra và kích
+                        hoạt gói mới cho tài khoản của bạn.
+                      </div>
+
+                      <div style={{ fontSize: "14px", marginBottom: "16px" }}>
+                        Trạng thái yêu cầu: <strong>ĐANG CHỜ XÁC NHẬN</strong>
+                      </div>
+
+                      <div
+                        style={{ display: "flex", justifyContent: "flex-end" }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setShowPaymentThankYou(false)}
+                          style={{
+                            border: "none",
+                            borderRadius: "9px",
+                            padding: "10px 18px",
+                            background: "#15803d",
+                            color: "#ffffff",
+                            fontSize: "14px",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Đóng
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {payment && !showPaymentThankYou && (
+                    <div
+                      style={{
+                        marginTop: "16px",
+                        padding: "16px 18px",
+                        borderRadius: "12px",
+                        border: "1px solid #fde68a",
+                        background: "#fffbeb",
+                        color: "#92400e",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: "15px",
+                          fontWeight: 700,
+                          marginBottom: "8px",
+                        }}
+                      >
+                        Yêu cầu{" "}
+                        {payment.paymentType === "RENEWAL"
+                          ? "gia hạn"
+                          : "nâng cấp"}
+                      </div>
+
+                      <div style={{ fontSize: "14px", marginBottom: "6px" }}>
+                        Gói: <strong>{payment.planName}</strong>
+                      </div>
+
+                      <div style={{ fontSize: "14px", marginBottom: "6px" }}>
+                        Số tiền:{" "}
+                        <strong>
+                          {payment.amount.toLocaleString("vi-VN")}{" "}
+                          {payment.currency}
+                        </strong>
+                      </div>
+
+                      <div style={{ fontSize: "14px" }}>
+                        🟡 <strong>ĐANG CHỜ XÁC NHẬN</strong>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
           <div
             style={{
               marginTop: "32px",
