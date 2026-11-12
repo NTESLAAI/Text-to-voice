@@ -8,6 +8,7 @@ jest.mock('@openrouter/sdk', () => ({
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { TextReviewService } from './text-review.service';
+import { AiWorkloadService } from '../ai/ai-workload.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 describe('TextReviewService', () => {
@@ -19,6 +20,20 @@ describe('TextReviewService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TextReviewService,
+        {
+          provide: AiWorkloadService,
+          useValue: {
+            run: jest.fn(
+              (
+                _user: string,
+                _chars: number,
+                _calls: number,
+                job: (signal: AbortSignal) => Promise<unknown>,
+              ) => job(new AbortController().signal),
+            ),
+            reviewOutputTokens: 4096,
+          },
+        },
         {
           provide: PrismaService,
           useValue: {},

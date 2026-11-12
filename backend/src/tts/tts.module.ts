@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AiWorkloadModule } from '../ai/ai-workload.module';
 
 import { PrismaModule } from '../prisma/prisma.module';
 import { AudioModule } from '../audio/audio.module';
@@ -9,13 +10,9 @@ import { OpenRouterTtsProvider } from './providers/openrouter-tts.provider';
 import { VoiceDirectorService } from './voice-director.service';
 
 @Module({
-  imports: [PrismaModule, AudioModule],
+  imports: [PrismaModule, AudioModule, AiWorkloadModule],
   controllers: [TtsController],
-  providers: [
-  TtsService,
-  OpenRouterTtsProvider,
-  VoiceDirectorService,
-],
+  providers: [TtsService, OpenRouterTtsProvider, VoiceDirectorService],
   exports: [TtsService],
 })
 export class TtsModule {}

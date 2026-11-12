@@ -87,6 +87,7 @@ export class UsersService {
         name: true,
         password: true,
         role: true,
+        authVersion: true,
       },
     });
   }
@@ -105,6 +106,7 @@ export class UsersService {
         name: true,
         password: true,
         role: true,
+        authVersion: true,
       },
     });
   }
@@ -165,11 +167,15 @@ export class UsersService {
 
     const hashedPassword = await bcrypt.hash(newPassword, 12);
 
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        password: hashedPassword,
-      },
+    await this.prisma.$transaction(async (tx) => {
+      const changed = await tx.user.updateMany({
+        where: { id: userId, password: user.password },
+        data: { password: hashedPassword, authVersion: { increment: 1 } },
+      });
+      if (changed.count !== 1) {
+        throw new BadRequestException('PASSWORD_CHANGE_CONFLICT');
+      }
+      await tx.passwordResetToken.deleteMany({ where: { userId } });
     });
 
     return {

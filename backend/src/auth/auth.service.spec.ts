@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { PasswordResetMailer } from './password-reset-mailer.service';
 
 jest.mock('@nestjs/jwt', () => ({
   JwtService: class MockJwtService {
@@ -15,6 +16,7 @@ describe('AuthService', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        { provide: PasswordResetMailer, useValue: { sendReset: jest.fn() } },
         AuthService,
         {
           provide: UsersService,

@@ -15,11 +15,26 @@ enum PromotionStatus {
   ENDED
 }
 
+enum PaymentSurplusAction {
+  REFUND
+  QUOTA
+  DAYS
+  CREDIT
+}
+
+enum PaymentSurplusStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
 model User {
   id        String   @id @default(uuid())
   email     String?  @unique
   phone     String?  @unique
   password  String?
+  authVersion Int @default(0)
+  storePurchases StorePurchase[]
   name      String?
   role      String   @default("USER")
   createdAt DateTime @default(now())
@@ -31,9 +46,13 @@ model User {
   payments             Payment[]
   passwordResetTokens  PasswordResetToken[]
   promotionRedemptions PromotionRedemption[]
+  surplusHandlingsCreated   PaymentSurplusHandling[] @relation("SurplusHandlingCreatedBy")
+  surplusHandlingsCompleted PaymentSurplusHandling[] @relation("SurplusHandlingCompletedBy")
+  surplusHandlingsCancelled PaymentSurplusHandling[] @relation("SurplusHandlingCancelledBy")
 }
 
 model Plan {
+  storeCycles StoreCycle[]
   id             String  @id @default(uuid())
   code           String  @unique
   name           String
@@ -51,7 +70,45 @@ model Plan {
   updatedAt DateTime @updatedAt
 }
 
+model StorePurchase {
+  id String @id @default(uuid())
+  platform String
+  chainKey String
+  userId String
+  referenceCipher String
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  cycles StoreCycle[]
+  @@unique([platform, chainKey])
+}
+
+model StoreCycle {
+  id String @id @default(uuid())
+  platform String
+  cycleKey String
+  purchaseId String
+  planId String
+  productId String
+  environment String
+  state String
+  expiresAt DateTime
+  startedAt DateTime
+  subscriptionId String? @unique
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  autoRenew Boolean
+  refundReview Boolean @default(false)
+  observedAt DateTime
+  deliveryStatus String @default("REVIEW_REQUIRED")
+  createdAt DateTime @default(now())
+  purchase StorePurchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  @@unique([platform, cycleKey])
+  @@index([purchaseId])
+}
+
 model Subscription {
+  billingSource String @default("WEB")
+  storeCycle StoreCycle?
   id     String @id @default(uuid())
   userId String
   planId String
@@ -97,6 +154,8 @@ model Payment {
   promotionTitleSnapshot           String?
   promotionPriceSnapshot           Float?
   discountAmountSnapshot           Float?
+  // Giá sau khuyến mại, trước khấu trừ credit; không tự backfill dữ liệu cũ.
+  effectivePlanPriceSnapshot        Decimal? @db.Decimal(20, 6)
   // Snapshot thông tin gói nguồn khi tạo giao dịch Upgrade
   sourcePlanPriceSnapshot          Float?
   sourcePlanCharacterLimitSnapshot Int?
@@ -124,12 +183,52 @@ model Payment {
   user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   plan         Plan                 @relation(fields: [planId], references: [id])
   transactions PaymentTransaction[]
+  surplusHandlings PaymentSurplusHandling[]
 
   @@index([userId])
   @@index([planId])
   @@index([status])
   @@index([providerTransactionId])
   @@index([reference])
+}
+
+model PaymentSurplusHandling {
+  id             String               @id @default(uuid())
+  paymentId      String
+  action         PaymentSurplusAction
+  status         PaymentSurplusStatus @default(PENDING)
+  amount         Decimal              @db.Decimal(20, 6)
+  currency       String
+  idempotencyKey String               @unique
+
+  // Chỉ ghi nhận credit, chưa cho phép sử dụng/khấu trừ; không có hạn dùng.
+  creditRemainingAmount Decimal @default(0) @db.Decimal(20, 6)
+
+  effectivePlanPriceSnapshot  Decimal? @db.Decimal(20, 6)
+  planCharacterLimitSnapshot Int?
+  planDurationDaysSnapshot   Int?
+  convertedCharacters        Int?
+  convertedSeconds           BigInt?
+
+  note              String?
+  externalReference String?
+  createdById       String
+  completedById     String?
+  cancelledById     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  completedAt       DateTime?
+  cancelledAt       DateTime?
+
+  payment     Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  createdBy   User    @relation("SurplusHandlingCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  completedBy User?   @relation("SurplusHandlingCompletedBy", fields: [completedById], references: [id], onDelete: Restrict)
+  cancelledBy User?   @relation("SurplusHandlingCancelledBy", fields: [cancelledById], references: [id], onDelete: Restrict)
+
+  // CHECK về tiền/snapshot/trạng thái cần SQL trong migration mới.
+  // Currency khớp Payment và chống vượt dư cần kiểm tra trong transaction có khóa Payment.
+  @@index([paymentId, status])
+  @@index([action, status])
 }
 
 model Usage {

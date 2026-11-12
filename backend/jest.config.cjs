@@ -1,7 +1,8 @@
 /** @type {import('jest').Config} */
 module.exports = {
-  rootDir: './src',
-  testRegex: '.*\\.spec\\.ts$',
+  rootDir: '.',
+  roots: ['<rootDir>/src', '<rootDir>/test'],
+  testRegex: '.*\\.(spec|e2e-spec)\\.ts$',
   moduleFileExtensions: ['js', 'json', 'ts'],
   moduleNameMapper: {
     '^@nestjs/passport$': '<rootDir>/../test/jest-mocks/nest-passport.mock.cjs',

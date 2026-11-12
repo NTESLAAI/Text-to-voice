@@ -32,7 +32,7 @@ export class TtsController {
   @UseGuards(JwtAuthGuard)
   @Get('usage/me')
   async getMyUsage(@Req() req: any) {
-    return this.ttsService.getMyUsage(req.user.userId);
+    return this.ttsService.getMyUsage(req.user.userId, req.user.role);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -41,7 +41,11 @@ export class TtsController {
     @Param('projectId') projectId: string,
     @Req() req: any,
   ) {
-    return this.ttsService.getProjectUsage(projectId, req.user.userId);
+    return this.ttsService.getProjectUsage(
+      projectId,
+      req.user.userId,
+      req.user.role,
+    );
   }
 
   @UseGuards(JwtAuthGuard)
@@ -51,8 +55,11 @@ export class TtsController {
     @Req() req: any,
     @Res() res: Response,
   ): Promise<void> {
-    
-    const result = await this.ttsService.synthesize(dto, req.user.userId);
+    const result = await this.ttsService.synthesize(
+      dto,
+      req.user.userId,
+      req.user.role,
+    );
 
     res.set({
       'Content-Type': 'audio/wav',
@@ -73,6 +80,7 @@ export class TtsController {
     const result = await this.ttsService.synthesizeDialogue(
       dto,
       req.user.userId,
+      req.user.role,
     );
 
     res.set({

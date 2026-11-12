@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentService } from '../payment/payment.service';
 import { UsersService } from '../users/users.service';
@@ -59,6 +63,37 @@ export class AdminService {
 
   async confirmPayment(paymentId: string) {
     return this.paymentService.confirmPayment(paymentId);
+  }
+
+  async getUnmatchedTransactions(reference?: string) {
+    if (
+      reference !== undefined &&
+      (typeof reference !== 'string' || reference.length > 128)
+    )
+      throw new BadRequestException('INVALID_TRANSACTION_REFERENCE');
+    const value = reference?.trim();
+    return this.prisma.paymentTransaction.findMany({
+      where: {
+        status: { in: ['UNMATCHED', 'RECEIVED'] },
+        ...(value ? { providerTransactionId: value } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      select: {
+        id: true,
+        paymentId: true,
+        provider: true,
+        providerTransactionId: true,
+        amount: true,
+        currency: true,
+        status: true,
+        reference: true,
+        note: true,
+        receivedAt: true,
+        matchedAt: true,
+        createdAt: true,
+      },
+    });
   }
 
   async getUsers() {

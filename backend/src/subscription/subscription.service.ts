@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -66,7 +62,24 @@ export class SubscriptionService {
     return subscription;
   }
 
-  async getMySubscription(userId: string) {
+  async getMySubscription(userId: string, role?: string) {
+    if (role === 'ADMIN') {
+      return {
+        id: null,
+        plan: 'ADMIN',
+        planName: 'Admin - Không giới hạn',
+        price: 0,
+        currency: 'VND',
+        startedAt: null,
+        expiresAt: null,
+        status: 'ACTIVE',
+        characterLimit: null,
+        rolloverCharacters: 0,
+        renewalAvailable: false,
+        renewalExpiresAt: null,
+        unlimited: true,
+      };
+    }
     try {
       const subscription = await this.getActiveSubscription(userId);
 
@@ -74,6 +87,7 @@ export class SubscriptionService {
         id: subscription.id,
         plan: subscription.plan.code,
         planName: subscription.plan.name,
+        billingSource: subscription.billingSource,
         price: subscription.plan.price,
         currency: subscription.currency,
         startedAt: subscription.startedAt,
@@ -85,6 +99,8 @@ export class SubscriptionService {
         renewalExpiresAt: null,
       };
     } catch (error) {
+      // Catalog/network errors must not be disguised as an expired account.
+      if (!(error instanceof BadRequestException)) throw error;
       const now = new Date();
       const renewalWindowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
@@ -92,6 +108,7 @@ export class SubscriptionService {
         where: {
           userId,
           status: 'ACTIVE',
+          billingSource: 'WEB',
           plan: {
             code: {
               not: 'FREE',
@@ -111,6 +128,34 @@ export class SubscriptionService {
       });
 
       if (!renewalSubscription) {
+        const latest = await this.prisma.subscription.findFirst({
+          where: { userId },
+          include: { plan: true },
+          orderBy: { startedAt: 'desc' },
+        });
+        if (latest && latest.billingSource !== 'WEB' && latest.billingSource && (latest.expiresAt <= now || latest.status !== 'ACTIVE')) {
+          return { id: latest.id, billingSource: latest.billingSource, plan: latest.plan.code, planName: latest.plan.name, price: latest.plan.price, currency: latest.currency, startedAt: latest.startedAt, expiresAt: latest.expiresAt, status: 'EXPIRED', characterLimit: latest.characterLimit, rolloverCharacters: 0, renewalAvailable: false, renewalExpiresAt: null };
+        }
+        if (
+          latest?.plan.code === 'FREE' &&
+          latest.expiresAt <= now &&
+          ['ACTIVE', 'EXPIRED'].includes(latest.status)
+        ) {
+          return {
+            id: latest.id,
+            plan: latest.plan.code,
+            planName: latest.plan.name,
+            price: latest.plan.price,
+            currency: latest.currency,
+            startedAt: latest.startedAt,
+            expiresAt: latest.expiresAt,
+            status: 'EXPIRED',
+            characterLimit: latest.characterLimit,
+            rolloverCharacters: 0,
+            renewalAvailable: false,
+            renewalExpiresAt: null,
+          };
+        }
         throw error;
       }
 

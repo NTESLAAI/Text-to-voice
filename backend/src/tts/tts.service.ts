@@ -10,6 +10,8 @@ import { join } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
 import { characterCountRules } from './character-count';
+import { AiWorkloadService } from '../ai/ai-workload.service';
+import { ConfigService } from '@nestjs/config';
 import { AudioService } from '../audio/audio.service';
 import {
   OpenRouterTtsProvider,
@@ -57,9 +59,25 @@ export class TtsService {
     private readonly prisma: PrismaService,
     private readonly audioService: AudioService,
     private readonly ttsProvider: OpenRouterTtsProvider,
+    private readonly workload: AiWorkloadService = new AiWorkloadService(
+      new ConfigService(),
+    ),
   ) {}
 
-  async synthesize(request: TtsRequest, userId: string) {
+  async synthesize(request: TtsRequest, userId: string, role?: string) {
+    if (typeof request.text !== 'string' || request.text.length > 5000)
+      throw new BadRequestException('AI_INPUT_LIMIT_EXCEEDED');
+    return this.workload.run(userId, request.text.length, 1, (signal) =>
+      this.synthesizeInternal(request, userId, role, signal),
+    );
+  }
+
+  private async synthesizeInternal(
+    request: TtsRequest,
+    userId: string,
+    role: string | undefined,
+    signal: AbortSignal,
+  ) {
     const preset = request.preset ? VOICE_PRESETS[request.preset] : null;
 
     const ttsRequest: TtsRequest = preset
@@ -90,10 +108,15 @@ export class TtsService {
       request.language,
     );
 
-    const quota = await this.checkCharacterQuota(project.userId, characters);
+    const isAdmin = role === 'ADMIN';
+
+    const quota = isAdmin
+      ? null
+      : await this.checkCharacterQuota(project.userId, characters);
 
     // 2. Sinh PCM tá»« OpenRouter
-    const pcm = await this.ttsProvider.synthesize(ttsRequest);
+    const pcm = await this.ttsProvider.synthesize(ttsRequest, signal);
+    signal.throwIfAborted();
 
     // 3. Chuyá»ƒn PCM â†’ WAV
     const audioBuffer = this.pcmToWav(pcm);
@@ -134,43 +157,51 @@ export class TtsService {
       FOR UPDATE
     `;
 
-        // Kiểm tra lại subscription sau khi đã lấy khóa User.
-        const currentSubscription = await tx.subscription.findFirst({
-          where: {
-            id: quota.subscription.id,
-            userId: project.userId,
-            status: 'ACTIVE',
-            startedAt: {
-              lte: new Date(),
-            },
-            expiresAt: {
-              gt: new Date(),
-            },
-          },
-          include: {
-            plan: true,
-          },
-        });
+        const now = new Date();
 
-        if (!currentSubscription) {
-          throw new BadRequestException(
-            'Gói sử dụng đã thay đổi hoặc hết hiệu lực. Vui lòng kiểm tra lại gói sử dụng.',
+        let currentSubscription: any = null;
+        let allocations: any[] = [];
+
+        if (!isAdmin) {
+          if (!quota) {
+            throw new BadRequestException(
+              'Không tìm thấy thông tin quota của tài khoản.',
+            );
+          }
+
+          currentSubscription = await tx.subscription.findFirst({
+            where: {
+              id: quota.subscription.id,
+              userId: project.userId,
+              status: 'ACTIVE',
+              startedAt: { lte: now },
+              expiresAt: { gt: now },
+            },
+            include: {
+              plan: true,
+            },
+          });
+
+          if (!currentSubscription) {
+            throw new BadRequestException(
+              'Gói sử dụng đã thay đổi hoặc hết hiệu lực. Vui lòng kiểm tra lại gói sử dụng.',
+            );
+          }
+
+          if (!currentSubscription.plan.isActive) {
+            throw new BadRequestException(
+              'Gói sử dụng hiện không còn hoạt động.',
+            );
+          }
+
+          allocations = await this.allocateQuotaLots(
+            tx,
+            currentSubscription.id,
+            characters,
           );
         }
 
-        if (!currentSubscription.plan.isActive) {
-          throw new BadRequestException(
-            'Gói sử dụng hiện không còn hoạt động.',
-          );
-        }
-
-        // Khóa và phân bổ quota trước khi tạo Audio.
-        const allocations = await this.allocateQuotaLots(
-          tx,
-          currentSubscription.id,
-          characters,
-        );
-
+        // Admin và người dùng thường đều tạo Audio.
         const createdAudio = await tx.audio.create({
           data: {
             projectId: request.projectId,
@@ -191,32 +222,33 @@ export class TtsService {
           },
         });
 
-        await tx.usage.create({
-          data: {
-            userId: project.userId,
-            subscriptionId: currentSubscription.id,
-            characters,
-            type: 'tts',
-            referenceId: createdAudio.id,
-            quotaAllocations: {
-              create: allocations.map((allocation) => ({
-                quotaLotId: allocation.quotaLotId,
-                characters: allocation.characters,
-              })),
+        // Chỉ người dùng thường mới ghi Usage và trừ quota.
+        if (!isAdmin && currentSubscription) {
+          await tx.usage.create({
+            data: {
+              userId: project.userId,
+              subscriptionId: currentSubscription.id,
+              characters,
+              type: 'tts',
+              referenceId: createdAudio.id,
+              quotaAllocations: {
+                create: allocations.map((allocation) => ({
+                  quotaLotId: allocation.quotaLotId,
+                  characters: allocation.characters,
+                })),
+              },
             },
-          },
-        });
+          });
+        }
 
+        return createdAudio;
         return createdAudio;
       });
     } catch (error) {
       try {
         await fs.unlink(filePath);
-      } catch (cleanupError) {
-        console.error(
-          'Failed to clean up WAV after Audio creation/usage failed:',
-          { filePath, cleanupError },
-        );
+      } catch {
+        console.error('AUDIO_FILE_CLEANUP_FAILED');
       }
 
       throw error;
@@ -228,11 +260,8 @@ export class TtsService {
       await this.audioService.removeProjectAudioExceedingLimit(
         request.projectId,
       );
-    } catch (error) {
-      console.error('Failed to remove old project audio files:', {
-        projectId: request.projectId,
-        error,
-      });
+    } catch {
+      console.error('AUDIO_HISTORY_CLEANUP_FAILED');
     }
 
     return {
@@ -252,7 +281,39 @@ export class TtsService {
     };
   }
 
-  async synthesizeDialogue(request: SynthesizeDialogueDto, userId: string) {
+  async synthesizeDialogue(
+    request: SynthesizeDialogueDto,
+    userId: string,
+    role?: string,
+  ) {
+    if (
+      !Array.isArray(request.turns) ||
+      request.turns.length < 1 ||
+      request.turns.length > 50 ||
+      request.turns.some(
+        (turn) => typeof turn.text !== 'string' || turn.text.length > 1000,
+      )
+    )
+      throw new BadRequestException('AI_INPUT_LIMIT_EXCEEDED');
+    const rawCharacters = request.turns.reduce(
+      (sum, turn) => sum + turn.text.length,
+      0,
+    );
+    return this.workload.run(
+      userId,
+      rawCharacters,
+      request.turns.length,
+      (signal) =>
+        this.synthesizeDialogueInternal(request, userId, role, signal),
+    );
+  }
+
+  private async synthesizeDialogueInternal(
+    request: SynthesizeDialogueDto,
+    userId: string,
+    role: string | undefined,
+    signal: AbortSignal,
+  ) {
     const project = await this.prisma.project.findFirst({
       where: {
         id: request.projectId,
@@ -282,25 +343,35 @@ export class TtsService {
         `Dialogue must not exceed ${this.maxDialogueCharacters} characters`,
       );
     }
-    const quota = await this.checkCharacterQuota(project.userId, characters);
+    const isAdmin = role === 'ADMIN';
+    const quota = isAdmin
+      ? null
+      : await this.checkCharacterQuota(project.userId, characters);
     const pcmParts: Buffer[] = [];
+    let totalPcmBytes = 0;
     const pause = this.createDialoguePause();
 
     for (const [index, turn] of request.turns.entries()) {
       const speaker = speakers[turn.speaker];
 
-      const pcm = await this.ttsProvider.synthesize({
-        projectId: request.projectId,
-        text: turn.text,
-        language: request.language,
-        character: speaker.character,
-        region: speaker.region,
-        tone: 'neutral',
-        emotion: 'natural',
-        style: turn.style,
-        speed: request.speed ?? 1,
-      });
+      const pcm = await this.ttsProvider.synthesize(
+        {
+          projectId: request.projectId,
+          text: turn.text,
+          language: request.language,
+          character: speaker.character,
+          region: speaker.region,
+          tone: 'neutral',
+          emotion: 'natural',
+          style: turn.style,
+          speed: request.speed ?? 1,
+        },
+        signal,
+      );
 
+      totalPcmBytes += pcm.length;
+      if (totalPcmBytes > 64 * 1024 * 1024)
+        throw new BadRequestException('AI_AUDIO_SIZE_LIMIT_EXCEEDED');
       pcmParts.push(pcm);
 
       if (index < request.turns.length - 1) {
@@ -308,6 +379,7 @@ export class TtsService {
       }
     }
 
+    signal.throwIfAborted();
     const pcm = Buffer.concat(pcmParts);
     const audioBuffer = this.pcmToWav(pcm);
     const duration =
@@ -332,41 +404,50 @@ export class TtsService {
       FOR UPDATE
     `;
 
-        // 2. Kiểm tra lại chính xác gói đã được xác định trước đó.
-        const now = new Date();
+        let currentSubscription: any = null;
+        let allocations: any[] = [];
 
-        const currentSubscription = await tx.subscription.findFirst({
-          where: {
-            id: quota.subscription.id,
-            userId: project.userId,
-            status: 'ACTIVE',
-            startedAt: { lte: now },
-            expiresAt: { gt: now },
-          },
-          include: {
-            plan: true,
-          },
-        });
+        if (!isAdmin) {
+          if (!quota) {
+            throw new BadRequestException(
+              'Không tìm thấy thông tin quota của tài khoản.',
+            );
+          }
 
-        if (!currentSubscription) {
-          throw new BadRequestException(
-            'Gói sử dụng đã thay đổi hoặc hết hiệu lực. Vui lòng kiểm tra lại gói sử dụng.',
+          // Kiểm tra lại subscription sau khi đã lấy khóa User.
+          const now = new Date();
+          currentSubscription = await tx.subscription.findFirst({
+            where: {
+              id: quota.subscription.id,
+              userId: project.userId,
+              status: 'ACTIVE',
+              startedAt: { lte: now },
+              expiresAt: { gt: now },
+            },
+            include: {
+              plan: true,
+            },
+          });
+
+          if (!currentSubscription) {
+            throw new BadRequestException(
+              'Gói sử dụng đã thay đổi hoặc hết hiệu lực. Vui lòng kiểm tra lại gói sử dụng.',
+            );
+          }
+
+          if (!currentSubscription.plan.isActive) {
+            throw new BadRequestException(
+              'Gói sử dụng hiện không còn hoạt động.',
+            );
+          }
+
+          // Chỉ người dùng thường mới bị trừ quota.
+          allocations = await this.allocateQuotaLots(
+            tx,
+            currentSubscription.id,
+            characters,
           );
         }
-
-        if (!currentSubscription.plan.isActive) {
-          throw new BadRequestException(
-            'Gói sử dụng hiện không còn hoạt động.',
-          );
-        }
-
-        // 3. Trừ quota trước khi tạo Dialogue.
-        // Nếu thiếu quota, transaction sẽ rollback.
-        const allocations = await this.allocateQuotaLots(
-          tx,
-          currentSubscription.id,
-          characters,
-        );
 
         // 4. Tạo Dialogue và các bản ghi liên quan.
         const createdDialogue = await tx.dialogue.create({
@@ -393,22 +474,24 @@ export class TtsService {
           },
         });
 
-        // 5. Ghi Usage bằng subscription đã được xác minh lại.
-        await tx.usage.create({
-          data: {
-            userId: project.userId,
-            subscriptionId: currentSubscription.id,
-            characters,
-            type: 'dialogue',
-            referenceId: createdDialogue.id,
-            quotaAllocations: {
-              create: allocations.map((allocation) => ({
-                quotaLotId: allocation.quotaLotId,
-                characters: allocation.characters,
-              })),
+        // Chỉ người dùng thường mới ghi Usage, tương tự luồng Audio.
+        if (!isAdmin && currentSubscription) {
+          await tx.usage.create({
+            data: {
+              userId: project.userId,
+              subscriptionId: currentSubscription.id,
+              characters,
+              type: 'dialogue',
+              referenceId: createdDialogue.id,
+              quotaAllocations: {
+                create: allocations.map((allocation) => ({
+                  quotaLotId: allocation.quotaLotId,
+                  characters: allocation.characters,
+                })),
+              },
             },
-          },
-        });
+          });
+        }
 
         return createdDialogue;
       });
@@ -425,11 +508,8 @@ export class TtsService {
     } catch (error) {
       try {
         await fs.unlink(filePath);
-      } catch (cleanupError) {
-        console.error(
-          'Failed to clean up WAV after Dialogue creation/usage failed:',
-          { filePath, cleanupError },
-        );
+      } catch {
+        console.error('DIALOGUE_FILE_CLEANUP_FAILED');
       }
 
       throw error;
@@ -538,12 +618,8 @@ export class TtsService {
 
       try {
         await fs.unlink(filePath);
-      } catch (error) {
-        console.warn(
-          'Dialogue audio file could not be deleted:',
-          filePath,
-          error,
-        );
+      } catch {
+        console.warn('DIALOGUE_FILE_DELETE_FAILED');
       }
     }
 
@@ -554,7 +630,7 @@ export class TtsService {
     });
   }
 
-  async getProjectUsage(projectId: string, userId: string) {
+  async getProjectUsage(projectId: string, userId: string, role?: string) {
     const project = await this.prisma.project.findFirst({
       where: {
         id: projectId,
@@ -565,7 +641,17 @@ export class TtsService {
     if (!project) {
       throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y project.');
     }
-
+    if (role === 'ADMIN') {
+      return {
+        plan: 'ADMIN',
+        characterLimit: null,
+        rolloverCharacters: 0,
+        totalQuota: null,
+        usedCharacters: 0,
+        remainingCharacters: null,
+        unlimited: true,
+      };
+    }
     const now = new Date();
 
     const subscription = await this.prisma.subscription.findFirst({
@@ -626,7 +712,18 @@ export class TtsService {
       remainingCharacters,
     };
   }
-  async getMyUsage(userId: string) {
+  async getMyUsage(userId: string, role?: string) {
+    if (role === 'ADMIN') {
+      return {
+        plan: 'ADMIN',
+        characterLimit: null,
+        rolloverCharacters: 0,
+        totalQuota: null,
+        usedCharacters: 0,
+        remainingCharacters: null,
+        unlimited: true,
+      };
+    }
     const now = new Date();
 
     const subscription = await this.prisma.subscription.findFirst({

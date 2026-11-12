@@ -10,7 +10,10 @@ export class SubscriptionController {
   @UseGuards(JwtAuthGuard)
   @Get('me')
   getMySubscription(@Req() req: any) {
-    return this.subscriptionService.getMySubscription(req.user.userId);
+    return this.subscriptionService.getMySubscription(
+      req.user.userId,
+      req.user.role,
+    );
   }
 
   @UseGuards(JwtAuthGuard)

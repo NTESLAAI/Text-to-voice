@@ -9,18 +9,6 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  @Post()
-  create(
-    @Body()
-    body: {
-      email: string;
-      password?: string;
-      name?: string;
-    },
-  ) {
-    return this.usersService.create(body);
-  }
-
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Get()
   findAll() {

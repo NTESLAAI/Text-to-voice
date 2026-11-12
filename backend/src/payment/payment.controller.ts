@@ -7,6 +7,7 @@ import {
   Req,
   UnauthorizedException,
   UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
 
 import type { Request } from 'express';
@@ -105,6 +106,16 @@ export class PaymentController {
       signature,
       timestamp,
     );
+
+    // SePay test webhook: xác thực chữ ký nhưng không xử lý giao dịch.
+    if (body.id === 0 && body.code === 'SEPAYTEST') {
+      return { success: true, test: true };
+    }
+
+    // Giao dịch thật phải có ID hợp lệ.
+    if (body.id < 1) {
+      throw new BadRequestException('Invalid SePay transaction id');
+    }
 
     return this.sepayWebhookService.handleWebhook(body);
   }

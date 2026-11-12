@@ -6,7 +6,7 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import { Request, Response } from 'express';
+import { Response } from 'express';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -15,7 +15,6 @@ export class HttpExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
-    const request = ctx.getRequest<Request>();
 
     const status =
       exception instanceof HttpException
@@ -25,10 +24,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const exceptionResponse =
       exception instanceof HttpException ? exception.getResponse() : null;
 
-    this.logger.error(
-      `[${status}] ${request.method} ${request.url}`,
-      exception instanceof Error ? exception.stack : String(exception),
-    );
+    // Do not log URLs, query strings, bodies or raw exceptions from providers.
+    this.logger.error(`HTTP_REQUEST_FAILED status=${status}`);
 
     let message = 'Lỗi kết nối, xin vui lòng thử lại.';
 
@@ -40,8 +37,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
         typeof exceptionResponse === 'object' &&
         'message' in exceptionResponse
       ) {
-        const responseMessage = (exceptionResponse as { message: unknown })
-          .message;
+        const responseMessage = exceptionResponse.message;
 
         message = Array.isArray(responseMessage)
           ? responseMessage.join(', ')

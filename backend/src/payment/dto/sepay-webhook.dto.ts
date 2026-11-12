@@ -5,11 +5,15 @@ import {
   IsOptional,
   IsString,
   Min,
+  Max,
+  Length,
+  Matches,
 } from 'class-validator';
 
 export class SepayWebhookDto {
   @IsInt()
-  @Min(1)
+  @Min(0)
+  @Max(Number.MAX_SAFE_INTEGER)
   id!: number;
 
   @IsString()
@@ -41,7 +45,14 @@ export class SepayWebhookDto {
 
   @IsInt()
   @Min(1)
+  @Max(Number.MAX_SAFE_INTEGER)
   transferAmount!: number;
+
+  @IsOptional()
+  @IsString()
+  @Length(3, 3)
+  @Matches(/^[A-Z]{3}$/)
+  currency?: string;
 
   @IsInt()
   @Min(0)

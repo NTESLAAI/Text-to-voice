@@ -4,12 +4,50 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomInt } from 'crypto';
+import { Prisma } from '../../generated/prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class PaymentService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private async assertNoActivePaid(
+    client: Pick<PrismaService, 'subscription'>,
+    userId: string,
+    now: Date,
+  ) {
+    const count = await client.subscription.count({
+      where: {
+        userId,
+        status: 'ACTIVE',
+        expiresAt: { gt: now },
+        plan: { code: { not: 'FREE' } },
+      },
+    });
+    if (count > 0)
+      throw new BadRequestException('ACTIVE_PAID_SUBSCRIPTION_EXISTS');
+  }
+
+  private async findExpiredPurchaseSource(
+    client: Pick<PrismaService, 'subscription'>,
+    userId: string,
+    now: Date,
+  ) {
+    // Look at the latest history, not just any old FREE row. Never revive quota.
+    const latest = await client.subscription.findFirst({
+      where: { userId },
+      include: { plan: true, quotaLots: true },
+      orderBy: { startedAt: 'desc' },
+    });
+    if (
+      !latest ||
+      latest.expiresAt > now ||
+      !['ACTIVE', 'EXPIRED'].includes(latest.status)
+    )
+      return null;
+    return { ...latest, quotaLots: [] };
+  }
 
   private async getPromotionPricing(
     userId: string,
@@ -88,6 +126,8 @@ export class PaymentService {
 
     const now = new Date();
 
+    await this.assertNoActivePaid(this.prisma, userId, now);
+
     const plan = await this.prisma.plan.findUnique({
       where: {
         code: normalizedPlanCode,
@@ -111,7 +151,7 @@ export class PaymentService {
       now,
     );
 
-    const activeSubscription = await this.prisma.subscription.findFirst({
+    let activeSubscription = await this.prisma.subscription.findFirst({
       where: {
         userId,
         status: 'ACTIVE',
@@ -149,11 +189,14 @@ export class PaymentService {
      * RENEWAL:
      * Subscription Paid đã hết hạn nhưng vẫn còn trong cửa sổ 24 giờ.
      */
+    if (activeSubscription && activeSubscription.plan.code !== 'FREE')
+      throw new BadRequestException('ACTIVE_PAID_SUBSCRIPTION_EXISTS');
     const renewalSubscription = !activeSubscription
       ? await this.prisma.subscription.findFirst({
           where: {
             userId,
             status: 'ACTIVE',
+            billingSource: 'WEB',
             startedAt: {
               lte: now,
             },
@@ -191,6 +234,13 @@ export class PaymentService {
       : null;
 
     if (!activeSubscription && !renewalSubscription) {
+      activeSubscription = await this.findExpiredPurchaseSource(
+        this.prisma,
+        userId,
+        now,
+      );
+    }
+    if (!activeSubscription && !renewalSubscription) {
       throw new BadRequestException(
         'Tài khoản chưa có gói sử dụng đang hoạt động hoặc không còn trong thời gian gia hạn 24 giờ.',
       );
@@ -224,6 +274,9 @@ export class PaymentService {
           // Snapshot thông tin gói tại thời điểm tạo giao dịch
           planNameSnapshot: plan.name,
           planPriceSnapshot: plan.price,
+          effectivePlanPriceSnapshot: new Prisma.Decimal(
+            pricing.amount.toString(),
+          ),
           planDurationDaysSnapshot: plan.durationDays,
           planCharacterLimitSnapshot: plan.characterLimit,
 
@@ -272,7 +325,10 @@ export class PaymentService {
       );
     }
 
-    if (plan.id === activeSubscription.planId) {
+    if (
+      plan.id === activeSubscription.planId &&
+      activeSubscription.expiresAt > now
+    ) {
       throw new BadRequestException('Bạn đang sử dụng gói này.');
     }
 
@@ -282,7 +338,10 @@ export class PaymentService {
      * Đây là đăng ký mới, không phải Upgrade.
      * Không sử dụng upgradeOption.
      */
-    if (activeSubscription.plan.code === 'FREE') {
+    if (
+      activeSubscription.plan.code === 'FREE' ||
+      activeSubscription.expiresAt <= now
+    ) {
       if (upgradeOption) {
         throw new BadRequestException(
           'Gói Free không sử dụng lựa chọn Upgrade.',
@@ -297,6 +356,9 @@ export class PaymentService {
           // Snapshot thông tin gói tại thời điểm tạo giao dịch
           planNameSnapshot: plan.name,
           planPriceSnapshot: plan.price,
+          effectivePlanPriceSnapshot: new Prisma.Decimal(
+            pricing.amount.toString(),
+          ),
           planDurationDaysSnapshot: plan.durationDays,
           planCharacterLimitSnapshot: plan.characterLimit,
 
@@ -434,6 +496,9 @@ export class PaymentService {
         // Snapshot thông tin gói tại thời điểm tạo giao dịch
         planNameSnapshot: plan.name,
         planPriceSnapshot: plan.price,
+        effectivePlanPriceSnapshot: new Prisma.Decimal(
+          pricing.amount.toString(),
+        ),
         planDurationDaysSnapshot: plan.durationDays,
         planCharacterLimitSnapshot: plan.characterLimit,
         // Snapshot gói nguồn tại thời điểm tạo giao dịch Upgrade
@@ -583,7 +648,7 @@ export class PaymentService {
 
   async confirmPayment(paymentId: string) {
     return this.prisma.$transaction(async (tx) => {
-      const now = new Date();
+      let now = new Date();
       await tx.$queryRaw`
   SELECT "id"
   FROM "Payment"
@@ -624,9 +689,10 @@ export class PaymentService {
         const totalMatched = matchedTransactions._sum.amount ?? 0;
 
         if (totalMatched < payment.amount) {
-          throw new BadRequestException(
-            `Chưa nhận đủ tiền thanh toán. Đã đối soát: ${totalMatched.toLocaleString('vi-VN')} / ${payment.amount.toLocaleString('vi-VN')} VND.`,
-          );
+          throw new BadRequestException({
+            code: 'PAYMENT_UNDERFUNDED',
+            message: `Chưa nhận đủ tiền thanh toán. Đã đối soát: ${totalMatched.toLocaleString('vi-VN')} / ${payment.amount.toLocaleString('vi-VN')} ${payment.currency}.`,
+          });
         }
       }
       // Ưu tiên thông tin gói đã lưu tại thời điểm tạo giao dịch.
@@ -649,6 +715,8 @@ export class PaymentService {
         WHERE "id" = ${payment.userId}
         FOR UPDATE
       `;
+      now = new Date();
+      await this.assertNoActivePaid(tx, payment.userId, now);
       // Kiểm tra chống sử dụng lại cùng chiến dịch khuyến mại.
       if (payment.promotionIdSnapshot) {
         const existingRedemption = await tx.promotionRedemption.findUnique({
@@ -666,7 +734,7 @@ export class PaymentService {
           );
         }
       }
-      const activeSubscription = await tx.subscription.findFirst({
+      let activeSubscription = await tx.subscription.findFirst({
         where: {
           userId: payment.userId,
           status: 'ACTIVE',
@@ -706,6 +774,7 @@ export class PaymentService {
               where: {
                 userId: payment.userId,
                 status: 'ACTIVE',
+                billingSource: 'WEB',
                 startedAt: {
                   lte: now,
                 },
@@ -739,7 +808,24 @@ export class PaymentService {
             })
           : null;
 
-      const isFreeToPaid = activeSubscription?.plan.code === 'FREE';
+      if (!activeSubscription && payment.paymentType === 'NEW_PURCHASE') {
+        activeSubscription = await this.findExpiredPurchaseSource(
+          tx,
+          payment.userId,
+          now,
+        );
+      }
+      if (
+        activeSubscription &&
+        activeSubscription.plan.code !== 'FREE' &&
+        !(activeSubscription.expiresAt <= now)
+      )
+        throw new BadRequestException('ACTIVE_PAID_SUBSCRIPTION_EXISTS');
+      // Expired paid history is a fresh purchase, never an upgrade or quota conversion.
+      const isFreeToPaid =
+        activeSubscription?.plan.code === 'FREE' ||
+        (payment.paymentType === 'NEW_PURCHASE' &&
+          Boolean(activeSubscription && activeSubscription.expiresAt <= now));
 
       const isUpgrade = payment.paymentType === 'UPGRADE';
       const isRenewal = payment.paymentType === 'RENEWAL';
@@ -915,7 +1001,8 @@ export class PaymentService {
           where: {
             id: activeSubscription.id,
             userId: payment.userId,
-            status: 'ACTIVE',
+            status:
+              activeSubscription.status === 'EXPIRED' ? 'EXPIRED' : 'ACTIVE',
           },
           data: {
             status: 'EXPIRED',

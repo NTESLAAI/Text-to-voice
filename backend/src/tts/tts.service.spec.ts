@@ -5,6 +5,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 
 import { TtsService } from './tts.service';
+import { AiWorkloadService } from '../ai/ai-workload.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AudioService } from '../audio/audio.service';
 import { OpenRouterTtsProvider } from './providers/openrouter-tts.provider';
@@ -76,6 +77,19 @@ describe('TtsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TtsService,
+        {
+          provide: AiWorkloadService,
+          useValue: {
+            run: jest.fn(
+              (
+                _user: string,
+                _chars: number,
+                _calls: number,
+                job: (signal: AbortSignal) => Promise<unknown>,
+              ) => job(new AbortController().signal),
+            ),
+          },
+        },
         {
           provide: PrismaService,
           useValue: prismaMock,

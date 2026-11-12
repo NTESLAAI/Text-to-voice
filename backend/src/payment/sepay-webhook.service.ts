@@ -1,4 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentService } from './payment.service';
@@ -6,29 +13,48 @@ import { SepayWebhookDto } from './dto/sepay-webhook.dto';
 
 @Injectable()
 export class SepayWebhookService {
-  private readonly logger = new Logger(SepayWebhookService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly paymentService: PaymentService,
+    private readonly config: ConfigService = new ConfigService(),
   ) {}
 
   private extractTransferCode(body: SepayWebhookDto): string | null {
     const pattern = /\b(?:KH|GH|NC)-[A-HJ-NP-Z2-9]{8}\b/i;
 
-    const explicitCode = body.code?.match(pattern)?.[0];
-    if (explicitCode) {
-      return explicitCode.toUpperCase();
-    }
-
-    const contentCode = body.content.match(pattern)?.[0];
-    return contentCode ? contentCode.toUpperCase() : null;
+    const matches: string[] =
+      `${body.code ?? ''} ${body.content}`.match(
+        new RegExp(pattern.source, 'gi'),
+      ) ?? [];
+    const codes = [...new Set(matches.map((code) => code.toUpperCase()))];
+    return codes.length === 1 ? codes[0] : null;
   }
 
   async handleWebhook(body: SepayWebhookDto) {
     // Chỉ ghi nhận giao dịch tiền vào.
     if (body.transferType.toLowerCase() !== 'in') {
       return { success: true };
+    }
+
+    const account = this.config
+      .get<string>('BANK_TRANSFER_ACCOUNT_NUMBER')
+      ?.trim();
+    if (!account)
+      throw new ServiceUnavailableException('SEPAY_ACCOUNT_NOT_CONFIGURED');
+    if (body.accountNumber !== account)
+      throw new UnauthorizedException('SEPAY_ACCOUNT_MISMATCH');
+    const gateway = this.config.get<string>('SEPAY_WEBHOOK_GATEWAY')?.trim();
+    if (!gateway)
+      throw new ServiceUnavailableException('SEPAY_GATEWAY_NOT_CONFIGURED');
+    if (body.gateway.trim().toLowerCase() !== gateway.toLowerCase())
+      throw new UnauthorizedException('SEPAY_GATEWAY_MISMATCH');
+    if (
+      !Number.isSafeInteger(body.id) ||
+      body.id < 1 ||
+      !Number.isSafeInteger(body.transferAmount) ||
+      body.transferAmount < 1
+    ) {
+      throw new BadRequestException('SEPAY_INVALID_TRANSACTION');
     }
 
     const providerTransactionId = String(body.id);
@@ -44,6 +70,7 @@ export class SepayWebhookService {
     });
 
     if (existing) {
+      this.assertDuplicate(existing, body);
       return this.handleDuplicateTransaction(existing);
     }
 
@@ -70,6 +97,8 @@ export class SepayWebhookService {
 
         if (
           !payment ||
+          payment.currency !== 'VND' ||
+          (body.currency !== undefined && body.currency !== 'VND') ||
           !['PENDING', 'USER_CONFIRMED'].includes(payment.status)
         ) {
           await tx.paymentTransaction.create({
@@ -77,10 +106,15 @@ export class SepayWebhookService {
               provider: 'SEPAY',
               providerTransactionId,
               amount: body.transferAmount,
-              currency: payment?.currency ?? 'VND',
+              currency: body.currency ?? 'VND',
               status: 'UNMATCHED',
               reference: body.content,
-              note: `SePay gateway: ${body.gateway}; mã không khớp Payment đang chờ`,
+              note: !payment
+                ? 'SEPAY_PAYMENT_NOT_FOUND'
+                : payment.currency !== 'VND' ||
+                    (body.currency !== undefined && body.currency !== 'VND')
+                  ? 'SEPAY_CURRENCY_MISMATCH'
+                  : 'SEPAY_PAYMENT_NOT_PENDING',
               receivedAt: this.parseTransactionDate(body.transactionDate),
             },
           });
@@ -102,6 +136,7 @@ export class SepayWebhookService {
 
         if (
           !latestPayment ||
+          latestPayment.currency !== 'VND' ||
           !['PENDING', 'USER_CONFIRMED'].includes(latestPayment.status)
         ) {
           await tx.paymentTransaction.create({
@@ -109,10 +144,14 @@ export class SepayWebhookService {
               provider: 'SEPAY',
               providerTransactionId,
               amount: body.transferAmount,
-              currency: payment.currency,
+              currency: body.currency ?? 'VND',
               status: 'UNMATCHED',
               reference: body.content,
-              note: 'Payment không còn ở trạng thái chờ',
+              note: !latestPayment
+                ? 'SEPAY_PAYMENT_NOT_FOUND'
+                : latestPayment.currency !== 'VND'
+                  ? 'SEPAY_CURRENCY_MISMATCH'
+                  : 'SEPAY_PAYMENT_NOT_PENDING',
               receivedAt: this.parseTransactionDate(body.transactionDate),
             },
           });
@@ -125,7 +164,7 @@ export class SepayWebhookService {
             provider: 'SEPAY',
             providerTransactionId,
             amount: body.transferAmount,
-            currency: latestPayment.currency,
+            currency: 'VND',
             status: 'MATCHED',
             reference: body.content,
             note: `SePay gateway: ${body.gateway}`,
@@ -152,6 +191,7 @@ export class SepayWebhookService {
         });
 
         if (existing) {
+          this.assertDuplicate(existing, body);
           return this.handleDuplicateTransaction(existing);
         }
 
@@ -166,7 +206,7 @@ export class SepayWebhookService {
     // Gọi sau khi transaction ghi nhận tiền đã commit.
     // confirmPayment hiện tại xử lý cộng dồn và kích hoạt gói.
     if (paymentId) {
-      await this.paymentService.confirmPayment(paymentId);
+      await this.attemptConfirmation(paymentId);
     }
 
     return {
@@ -195,7 +235,7 @@ export class SepayWebhookService {
       return { success: true, duplicate: true };
     }
 
-    await this.paymentService.confirmPayment(payment.id);
+    await this.attemptConfirmation(payment.id);
 
     return {
       success: true,
@@ -213,10 +253,10 @@ export class SepayWebhookService {
           provider: 'SEPAY',
           providerTransactionId,
           amount: body.transferAmount,
-          currency: 'VND',
+          currency: body.currency ?? 'VND',
           status: 'UNMATCHED',
           reference: body.content,
-          note: `SePay gateway: ${body.gateway}; chưa xác định mã Payment`,
+          note: 'SEPAY_REFERENCE_UNMATCHED_OR_AMBIGUOUS',
           receivedAt: this.parseTransactionDate(body.transactionDate),
         },
       });
@@ -225,6 +265,16 @@ export class SepayWebhookService {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
+        const existing = await this.prisma.paymentTransaction.findUnique({
+          where: {
+            provider_providerTransactionId: {
+              provider: 'SEPAY',
+              providerTransactionId,
+            },
+          },
+        });
+        if (!existing) throw error;
+        this.assertDuplicate(existing, body);
         return;
       }
 
@@ -235,5 +285,41 @@ export class SepayWebhookService {
   private parseTransactionDate(value: string): Date {
     const parsed = new Date(value);
     return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  }
+
+  private assertDuplicate(
+    existing: { amount: number; currency: string },
+    body: SepayWebhookDto,
+  ) {
+    if (
+      existing.amount !== body.transferAmount ||
+      existing.currency !== (body.currency ?? 'VND')
+    ) {
+      throw new ConflictException('SEPAY_DUPLICATE_CONFLICT');
+    }
+  }
+
+  private async attemptConfirmation(paymentId: string) {
+    try {
+      await this.paymentService.confirmPayment(paymentId);
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        const response = error.getResponse();
+        if (
+          typeof response === 'object' &&
+          response !== null &&
+          'code' in response &&
+          response.code === 'PAYMENT_UNDERFUNDED'
+        )
+          return;
+      }
+      // A competing webhook may have completed activation under the Payment lock.
+      const latest = await this.prisma.payment.findUnique({
+        where: { id: paymentId },
+        select: { status: true },
+      });
+      if (latest?.status === 'PAID') return;
+      throw error;
+    }
   }
 }

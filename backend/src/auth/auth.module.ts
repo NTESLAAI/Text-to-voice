@@ -7,6 +7,8 @@ import { JwtStrategy } from './strategies/jwt.strategy/jwt.strategy';
 import { UsersModule } from '../users/users.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ConfigService } from '@nestjs/config';
+import { PasswordResetMailer } from './password-reset-mailer.service';
+import { AuthRateLimitGuard } from './auth-rate-limit.guard';
 
 @Module({
   imports: [
@@ -30,7 +32,12 @@ import { ConfigService } from '@nestjs/config';
       },
     }),
   ],
-  providers: [AuthService, JwtStrategy],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    PasswordResetMailer,
+    AuthRateLimitGuard,
+  ],
   controllers: [AuthController],
 })
 export class AuthModule {}

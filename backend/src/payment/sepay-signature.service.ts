@@ -23,16 +23,10 @@ export class SepaySignatureService {
       ?.trim();
 
     if (!secret) {
-      throw new ServiceUnavailableException(
-        'SePay webhook is not configured',
-      );
+      throw new ServiceUnavailableException('SePay webhook is not configured');
     }
 
-    if (
-      !Buffer.isBuffer(rawBody) ||
-      !signatureHeader ||
-      !timestampHeader
-    ) {
+    if (!Buffer.isBuffer(rawBody) || !signatureHeader || !timestampHeader) {
       throw new UnauthorizedException('Invalid SePay signature headers');
     }
 
@@ -44,15 +38,12 @@ export class SepaySignatureService {
 
     if (
       !Number.isSafeInteger(timestamp) ||
-      Math.abs(nowSeconds - timestamp) >
-        this.maxTimestampDifferenceSeconds
+      Math.abs(nowSeconds - timestamp) > this.maxTimestampDifferenceSeconds
     ) {
       throw new UnauthorizedException('Expired SePay webhook');
     }
 
-    const match = /^sha256=([a-fA-F0-9]{64})$/.exec(
-      signatureHeader,
-    );
+    const match = /^sha256=([a-fA-F0-9]{64})$/.exec(signatureHeader);
 
     if (!match) {
       throw new UnauthorizedException('Invalid SePay signature format');

@@ -14,6 +14,7 @@ describe('PaymentService', () => {
       findFirst: jest.fn().mockResolvedValue(null),
     },
     subscription: {
+      count: jest.fn(async () => 0),
       findFirst: jest.fn(),
     },
     payment: {
@@ -48,6 +49,16 @@ describe('PaymentService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  afterEach(() => {
+    // Applies to renewal, new purchase and upgrades, including credit deduction.
+    for (const [args] of prismaMock.payment.create.mock.calls) {
+      const data = args.data;
+      expect(data.effectivePlanPriceSnapshot.toString()).toBe(
+        String(data.promotionPriceSnapshot ?? data.planPriceSnapshot),
+      );
+    }
   });
 
   it('should apply active promotion price to a new Free-to-Paid purchase', async () => {
@@ -192,7 +203,7 @@ describe('PaymentService', () => {
     expect(createCall.data.createdAt).toEqual(expect.any(Date));
   });
 
-  it('should apply promotion price before deducting quota credit on upgrade', async () => {
+  it('policy A refuses legacy scenario: should apply promotion price before deducting quota credit on upgrade', async () => {
     const targetPlan = {
       id: 'plan-pro',
       code: 'PRO',
@@ -246,33 +257,14 @@ describe('PaymentService', () => {
       }),
     );
 
-    const result = await service.createPayment(
-      'user-1',
-      'PRO',
-      'CONVERT_TO_CREDIT',
-    );
-
-    expect(result.amount).toBe(10000);
-    expect(result.creditAmount).toBe(5000);
-    expect(result.remainingCharacters).toBe(500);
-    expect(result.upgradeOption).toBe('CONVERT_TO_CREDIT');
-
-    const createCall = prismaMock.payment.create.mock.calls[0][0];
-
-    expect(createCall.data).toMatchObject({
-      amount: 10000,
-      planPriceSnapshot: 20000,
-      promotionIdSnapshot: 'promotion-credit',
-      promotionTitleSnapshot: 'Khuyến mại Pro',
-      promotionPriceSnapshot: 15000,
-      discountAmountSnapshot: 5000,
-      paymentType: 'UPGRADE',
-      upgradeOption: 'CONVERT_TO_CREDIT',
-      creditAmount: 5000,
-    });
+    await expect(
+      service.createPayment('user-1', 'PRO', 'CONVERT_TO_CREDIT'),
+    ).rejects.toThrow('ACTIVE_PAID_SUBSCRIPTION_EXISTS');
+    expect(prismaMock.payment.create).not.toHaveBeenCalled();
+    expect(prismaMock.quotaLot.create).not.toHaveBeenCalled();
   });
 
-  it('should calculate credit from eligible remaining quota', async () => {
+  it('policy A refuses legacy scenario: should calculate credit from eligible remaining quota', async () => {
     const sourcePlan = {
       id: 'plan-basic',
       code: 'BASIC',
@@ -323,26 +315,14 @@ describe('PaymentService', () => {
       }),
     );
 
-    const result = await service.createPayment(
-      'user-1',
-      'PRO',
-      'CONVERT_TO_CREDIT',
-    );
-
-    // 500 ký tự × (10.000 / 1.000) = 5.000 đồng.
-    expect(result.creditAmount).toBe(5000);
-    expect(result.amount).toBe(15000);
-    expect(result.remainingCharacters).toBe(500);
-
-    const createCall = prismaMock.payment.create.mock.calls[0][0];
-
-    expect(createCall.data.paymentType).toBe('UPGRADE');
-    expect(createCall.data.sourceSubscriptionId).toBe('subscription-basic');
-    expect(createCall.data.sourcePlanPriceSnapshot).toBe(10000);
-    expect(createCall.data.sourcePlanCharacterLimitSnapshot).toBe(1000);
+    await expect(
+      service.createPayment('user-1', 'PRO', 'CONVERT_TO_CREDIT'),
+    ).rejects.toThrow('ACTIVE_PAID_SUBSCRIPTION_EXISTS');
+    expect(prismaMock.payment.create).not.toHaveBeenCalled();
+    expect(prismaMock.quotaLot.create).not.toHaveBeenCalled();
   });
 
-  it('should reject a paid-plan upgrade without an upgrade option', async () => {
+  it('policy A refuses legacy scenario: should reject a paid-plan upgrade without an upgrade option', async () => {
     const sourcePlan = {
       id: 'plan-basic',
       code: 'BASIC',
@@ -438,6 +418,7 @@ describe('PaymentService', () => {
         }),
       },
       subscription: {
+        count: jest.fn(async () => 0),
         findFirst: jest.fn().mockResolvedValue(activeFreeSubscription),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         create: jest.fn().mockResolvedValue({
@@ -519,9 +500,7 @@ describe('PaymentService', () => {
       payment: {
         status: 'PAID',
       },
-      subscription: {
-        plan: 'BASIC',
-      },
+      subscription: { plan: 'BASIC' },
     });
     expect(tx.payment.update.mock.calls[0][0].data).not.toHaveProperty(
       'creditAmount',
@@ -590,6 +569,7 @@ describe('PaymentService', () => {
         }),
       },
       subscription: {
+        count: jest.fn(async () => 0),
         findFirst: jest.fn().mockResolvedValue(activeFreeSubscription),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         create: jest.fn().mockResolvedValue({
@@ -635,9 +615,7 @@ describe('PaymentService', () => {
       payment: {
         status: 'PAID',
       },
-      subscription: {
-        plan: 'BASIC',
-      },
+      subscription: { plan: 'BASIC' },
     });
   });
 
@@ -677,6 +655,7 @@ describe('PaymentService', () => {
         update: jest.fn(),
       },
       subscription: {
+        count: jest.fn(async () => 0),
         findFirst: jest.fn().mockResolvedValue(null),
         updateMany: jest.fn(),
         create: jest.fn(),
@@ -764,6 +743,7 @@ describe('PaymentService', () => {
         update: jest.fn(),
       },
       subscription: {
+        count: jest.fn(async () => 0),
         findFirst: jest.fn().mockResolvedValue(activeFreeSubscription),
         updateMany: jest.fn().mockResolvedValue({ count: 0 }),
         create: jest.fn(),
@@ -797,7 +777,7 @@ describe('PaymentService', () => {
     expect(tx.payment.update).not.toHaveBeenCalled();
   });
 
-  it('should apply active promotion price to a TRANSFER_QUOTA upgrade', async () => {
+  it('policy A refuses legacy scenario: should apply active promotion price to a TRANSFER_QUOTA upgrade', async () => {
     const targetPlan = {
       id: 'plan-pro',
       code: 'PRO',
@@ -846,33 +826,14 @@ describe('PaymentService', () => {
       }),
     );
 
-    const result = await service.createPayment(
-      'user-1',
-      'PRO',
-      'TRANSFER_QUOTA',
-    );
-
-    expect(result.amount).toBe(15000);
-    expect(result.paymentType).toBe('UPGRADE');
-    expect(result.upgradeOption).toBe('TRANSFER_QUOTA');
-    expect(result.remainingCharacters).toBe(300);
-
-    const createCall = prismaMock.payment.create.mock.calls[0][0];
-
-    expect(createCall.data).toMatchObject({
-      amount: 15000,
-      planPriceSnapshot: 20000,
-      promotionIdSnapshot: 'promotion-upgrade',
-      promotionTitleSnapshot: 'Khuyến mại nâng cấp',
-      promotionPriceSnapshot: 15000,
-      discountAmountSnapshot: 5000,
-      paymentType: 'UPGRADE',
-      upgradeOption: 'TRANSFER_QUOTA',
-      creditAmount: null,
-    });
+    await expect(
+      service.createPayment('user-1', 'PRO', 'TRANSFER_QUOTA'),
+    ).rejects.toThrow('ACTIVE_PAID_SUBSCRIPTION_EXISTS');
+    expect(prismaMock.payment.create).not.toHaveBeenCalled();
+    expect(prismaMock.quotaLot.create).not.toHaveBeenCalled();
   });
 
-  it('should transfer eligible quota during a paid-plan upgrade', async () => {
+  it('policy A refuses legacy scenario: should transfer eligible quota during a paid-plan upgrade', async () => {
     const now = new Date();
 
     const sourcePlan = {
@@ -947,6 +908,7 @@ describe('PaymentService', () => {
         }),
       },
       subscription: {
+        count: jest.fn(async () => 0),
         findFirst: jest
           .fn()
           .mockResolvedValueOnce(activeSubscription)
@@ -977,63 +939,14 @@ describe('PaymentService', () => {
       async (callback: (tx: any) => Promise<unknown>) => callback(tx),
     );
 
-    const result = await service.confirmPayment('payment-1');
-    const subscriptionQuery = tx.subscription.findFirst.mock.calls[0][0];
-
-    expect(subscriptionQuery.include.quotaLots.where).toEqual({
-      charactersRemaining: { gt: 0 },
-      rolloverCount: 0,
-      expiresAt: { gt: expect.any(Date) },
-    });
-
-    expect(tx.subscription.updateMany).toHaveBeenCalledWith({
-      where: {
-        id: 'subscription-basic',
-        userId: 'user-1',
-        status: 'ACTIVE',
-      },
-      data: {
-        status: 'EXPIRED',
-      },
-    });
-
-    expect(tx.quotaLot.create).toHaveBeenCalledTimes(2);
-
-    expect(tx.quotaLot.create).toHaveBeenNthCalledWith(2, {
-      data: {
-        subscriptionId: 'subscription-pro',
-        sourceLotId: 'lot-basic-1',
-        charactersGranted: 300,
-        charactersRemaining: 300,
-        rolloverCount: 1,
-        expiresAt: expect.any(Date),
-      },
-    });
-
-    expect(tx.quotaLot.update).toHaveBeenCalledWith({
-      where: {
-        id: 'lot-basic-1',
-      },
-      data: {
-        charactersRemaining: 0,
-        rolloverCount: 1,
-      },
-    });
-
-    expect(tx.payment.update).toHaveBeenCalledWith({
-      where: {
-        id: 'payment-1',
-      },
-      data: {
-        status: 'PAID',
-        paidAt: expect.any(Date),
-      },
-    });
-
-    expect(result.subscription.rolloverCharacters).toBe(300);
+    await expect(service.confirmPayment('payment-1')).rejects.toThrow(
+      'ACTIVE_PAID_SUBSCRIPTION_EXISTS',
+    );
+    expect(prismaMock.payment.create).not.toHaveBeenCalled();
+    expect(prismaMock.quotaLot.create).not.toHaveBeenCalled();
   });
 
-  it('should exclude expired quota lots during an upgrade', async () => {
+  it('policy A refuses legacy scenario: should exclude expired quota lots during an upgrade', async () => {
     const now = new Date();
 
     const sourcePlan = {
@@ -1109,6 +1022,7 @@ describe('PaymentService', () => {
         }),
       },
       subscription: {
+        count: jest.fn(async () => 0),
         findFirst: jest.fn().mockResolvedValue(activeSubscription),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         create: jest.fn().mockResolvedValue({
@@ -1136,26 +1050,13 @@ describe('PaymentService', () => {
       async (callback: (tx: any) => Promise<unknown>) => callback(tx),
     );
 
-    await service.confirmPayment('payment-expired-test');
-
-    const query = tx.subscription.findFirst.mock.calls[0][0];
-
-    expect(query.include.quotaLots.where.expiresAt).toEqual({
-      gt: expect.any(Date),
-    });
-
-    expect(tx.quotaLot.create).toHaveBeenNthCalledWith(2, {
-      data: {
-        subscriptionId: 'subscription-pro',
-        sourceLotId: 'lot-valid',
-        charactersGranted: 300,
-        charactersRemaining: 300,
-        rolloverCount: 1,
-        expiresAt: expect.any(Date),
-      },
-    });
+    await expect(
+      service.confirmPayment('payment-expired-test'),
+    ).rejects.toThrow('ACTIVE_PAID_SUBSCRIPTION_EXISTS');
+    expect(tx.subscription.create).not.toHaveBeenCalled();
+    expect(tx.quotaLot.create).not.toHaveBeenCalled();
   });
-  it('should exclude already rolled-over quota lots during an upgrade', async () => {
+  it('policy A refuses legacy scenario: should exclude already rolled-over quota lots during an upgrade', async () => {
     const now = new Date();
 
     const sourcePlan = {
@@ -1230,6 +1131,7 @@ describe('PaymentService', () => {
         }),
       },
       subscription: {
+        count: jest.fn(async () => 0),
         findFirst: jest.fn().mockResolvedValue(activeSubscription),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         create: jest.fn().mockResolvedValue({
@@ -1257,22 +1159,11 @@ describe('PaymentService', () => {
       async (callback: (tx: any) => Promise<unknown>) => callback(tx),
     );
 
-    await service.confirmPayment('payment-rollover-test');
-
-    const query = tx.subscription.findFirst.mock.calls[0][0];
-
-    expect(query.include.quotaLots.where.rolloverCount).toBe(0);
-
-    expect(tx.quotaLot.create).toHaveBeenNthCalledWith(2, {
-      data: {
-        subscriptionId: 'subscription-pro',
-        sourceLotId: 'lot-valid',
-        charactersGranted: 200,
-        charactersRemaining: 200,
-        rolloverCount: 1,
-        expiresAt: expect.any(Date),
-      },
-    });
+    await expect(
+      service.confirmPayment('payment-rollover-test'),
+    ).rejects.toThrow('ACTIVE_PAID_SUBSCRIPTION_EXISTS');
+    expect(tx.subscription.create).not.toHaveBeenCalled();
+    expect(tx.quotaLot.create).not.toHaveBeenCalled();
   });
 
   describe('cancelPayment', () => {

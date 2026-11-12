@@ -14,6 +14,7 @@ import { PaymentModule } from './payment/payment.module';
 import { AdminModule } from './admin/admin.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PromotionModule } from './promotion/promotion.module';
+import { StoreBillingModule } from './store-billing/store-billing.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { PromotionModule } from './promotion/promotion.module';
     PaymentModule,
     AdminModule,
     PromotionModule,
+    StoreBillingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

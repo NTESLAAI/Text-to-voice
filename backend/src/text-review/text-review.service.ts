@@ -1,6 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadGatewayException,
+  BadRequestException,
+  GatewayTimeoutException,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { OpenRouter } from '@openrouter/sdk';
 import { PrismaService } from '../prisma/prisma.service';
+import { AiWorkloadService } from '../ai/ai-workload.service';
 
 export interface TextReviewResult {
   hasErrors: boolean;
@@ -11,9 +18,13 @@ export interface TextReviewResult {
 
 @Injectable()
 export class TextReviewService {
+  private readonly logger = new Logger(TextReviewService.name);
   private readonly client: OpenRouter;
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly workload: AiWorkloadService,
+  ) {
     const apiKey = process.env.OPENROUTER_API_KEY;
 
     if (!apiKey) {
@@ -26,21 +37,36 @@ export class TextReviewService {
   }
 
   async reviewText(text: string, userId: string): Promise<TextReviewResult> {
-    const response = await this.client.chat.send({
-      chatRequest: {
-        model: 'openai/gpt-5.2',
-        messages: [
-          {
-            role: 'system',
-            content:
-              'Bạn là trợ lý chuyên kiểm tra và sửa văn bản tiếng Việt. ' +
-              'Bạn phải trả về DUY NHẤT một JSON hợp lệ, không markdown, ' +
-              'không giải thích bên ngoài JSON. ' +
-              'Không được thay đổi ý nghĩa của người dùng.',
-          },
-          {
-            role: 'user',
-            content: `
+    if (typeof text !== 'string' || !text.trim() || text.length > 5000)
+      throw new BadRequestException('AI_INPUT_LIMIT_EXCEEDED');
+    return this.workload.run(userId, text.length, 1, (signal) =>
+      this.reviewInternal(text, userId, signal),
+    );
+  }
+
+  private async reviewInternal(
+    text: string,
+    userId: string,
+    signal: AbortSignal,
+  ): Promise<TextReviewResult> {
+    const response = await this.client.chat
+      .send(
+        {
+          chatRequest: {
+            model: 'openai/gpt-5.2',
+            maxCompletionTokens: this.workload.reviewOutputTokens,
+            messages: [
+              {
+                role: 'system',
+                content:
+                  'Bạn là trợ lý chuyên kiểm tra và sửa văn bản tiếng Việt. ' +
+                  'Bạn phải trả về DUY NHẤT một JSON hợp lệ, không markdown, ' +
+                  'không giải thích bên ngoài JSON. ' +
+                  'Không được thay đổi ý nghĩa của người dùng.',
+              },
+              {
+                role: 'user',
+                content: `
 Hãy kiểm tra văn bản sau.
 
 Yêu cầu:
@@ -73,10 +99,18 @@ Phải trả về đúng cấu trúc JSON sau:
 Văn bản cần kiểm tra:
 "${text}"
           `,
+              },
+            ],
           },
-        ],
-      },
-    });
+        },
+        { signal, retries: { strategy: 'none' } },
+      )
+      .catch(() => {
+        if (signal.aborted)
+          throw new GatewayTimeoutException('AI_REQUEST_TIMEOUT');
+        throw new BadGatewayException('AI_PROVIDER_FAILED');
+      });
+    if (signal.aborted) throw new GatewayTimeoutException('AI_REQUEST_TIMEOUT');
 
     const result = response as {
       choices?: Array<{
@@ -103,11 +137,15 @@ Văn bản cần kiểm tra:
         isByok?: boolean;
       };
     };
-    console.log('[TEXT REVIEW] OpenRouter usage:', result.usage);
 
     const usage = result.usage;
 
-    if (usage) {
+    if (
+      usage &&
+      typeof usage.cost === 'number' &&
+      Number.isFinite(usage.cost) &&
+      usage.cost >= 0
+    ) {
       try {
         const activeSubscription = await this.prisma.subscription.findFirst({
           where: {
@@ -140,7 +178,7 @@ Văn bản cần kiểm tra:
               usage.completionTokensDetails?.reasoningTokens ?? 0,
             totalTokens: usage.totalTokens ?? 0,
 
-            costUsd: usage.cost ?? 0,
+            costUsd: usage.cost,
 
             promptCostUsd: usage.costDetails?.upstreamInferencePromptCost ?? 0,
 
@@ -150,9 +188,11 @@ Văn bản cần kiểm tra:
             isByok: usage.isByok ?? false,
           },
         });
-      } catch (error) {
-        console.error('[TEXT REVIEW] Failed to save AI usage:', error);
+      } catch {
+        this.logger.warn('AI_USAGE_RECORD_FAILED');
       }
+    } else if (usage) {
+      this.logger.warn('AI_USAGE_COST_UNKNOWN');
     }
 
     const content = result.choices?.[0]?.message?.content?.trim() ?? '';

@@ -5,6 +5,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 
@@ -15,13 +16,16 @@ import { UsersService } from '../users/users.service';
 
 import { RegisterDto } from './dto/register.dto/register.dto';
 import { LoginDto } from './dto/login.dto/login.dto';
+import { PasswordResetMailer } from './password-reset-mailer.service';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
+    private readonly mailer: PasswordResetMailer,
   ) {}
 
   async register(data: RegisterDto) {
@@ -70,6 +74,7 @@ export class AuthService {
     const accessToken = await this.jwtService.signAsync({
       sub: user.id,
       email: user.email,
+      authVersion: user.authVersion,
     });
 
     return {
@@ -126,23 +131,15 @@ export class AuthService {
       },
     });
 
-    const response: {
-      message: string;
-      resetToken?: string;
-      expiresAt?: Date;
-    } = {
+    try {
+      await this.mailer.sendReset(normalizedEmail, rawToken);
+    } catch {
+      this.logger.warn('PASSWORD_RESET_MAIL_FAILED');
+    }
+    return {
       message:
         'Nếu email tồn tại trong hệ thống, yêu cầu đặt lại mật khẩu đã được tạo.',
     };
-
-    // Chỉ trả raw token trong môi trường không phải production
-    // để phục vụ kiểm thử local trước khi tích hợp email.
-    if (process.env.NODE_ENV !== 'production') {
-      response.resetToken = rawToken;
-      response.expiresAt = expiresAt;
-    }
-
-    return response;
   }
   async resetPassword(token: string, newPassword: string) {
     const tokenHash = createHash('sha256').update(token).digest('hex');
@@ -168,22 +165,22 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(newPassword, 12);
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: {
-          id: resetToken.userId,
-        },
-        data: {
-          password: hashedPassword,
-        },
-      });
-
-      await tx.passwordResetToken.update({
+      const consumed = await tx.passwordResetToken.updateMany({
         where: {
           id: resetToken.id,
+          usedAt: null,
+          expiresAt: { gt: new Date() },
         },
-        data: {
-          usedAt: new Date(),
-        },
+        data: { usedAt: new Date() },
+      });
+      if (consumed.count !== 1)
+        throw new BadRequestException('RESET_TOKEN_INVALID');
+      await tx.user.update({
+        where: { id: resetToken.userId },
+        data: { password: hashedPassword, authVersion: { increment: 1 } },
+      });
+      await tx.passwordResetToken.deleteMany({
+        where: { userId: resetToken.userId, id: { not: resetToken.id } },
       });
     });
 

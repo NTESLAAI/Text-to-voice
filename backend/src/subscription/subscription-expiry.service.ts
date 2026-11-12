@@ -23,6 +23,7 @@ export class SubscriptionExpiryService {
     const expiredSubscriptions = await this.prisma.subscription.findMany({
       where: {
         status: 'ACTIVE',
+        billingSource: 'WEB',
         plan: {
           code: {
             not: 'FREE',
@@ -38,7 +39,12 @@ export class SubscriptionExpiryService {
     });
 
     for (const subscription of expiredSubscriptions) {
-      await this.prisma.$transaction(async (tx) => {
+      const restoredFree = await this.prisma.$transaction(async (tx) => {
+        // Same User lock as activation and quota allocation; never lock Payment here.
+        await tx.$queryRaw`
+          SELECT "id" FROM "User" WHERE "id" = ${subscription.userId} FOR UPDATE
+        `;
+        const now = new Date();
         const currentSubscription = await tx.subscription.findUnique({
           where: {
             id: subscription.id,
@@ -47,6 +53,7 @@ export class SubscriptionExpiryService {
 
         if (
           !currentSubscription ||
+          (currentSubscription.billingSource && currentSubscription.billingSource !== 'WEB') ||
           currentSubscription.status !== 'ACTIVE' ||
           currentSubscription.expiresAt >=
             new Date(now.getTime() - 24 * 60 * 60 * 1000)
@@ -62,6 +69,16 @@ export class SubscriptionExpiryService {
             status: 'EXPIRED',
           },
         });
+
+        const otherActive = await tx.subscription.findFirst({
+          where: {
+            userId: currentSubscription.userId,
+            status: 'ACTIVE',
+            id: { not: currentSubscription.id },
+          },
+          select: { id: true },
+        });
+        if (otherActive) return;
 
         const freePlan = await tx.plan.findUnique({
           where: {
@@ -99,11 +116,10 @@ export class SubscriptionExpiryService {
             expiresAt: freeSubscription.expiresAt,
           },
         });
+        return true;
       });
 
-      this.logger.log(
-        `Subscription ${subscription.id} hết thời gian chuyển tiếp 24 giờ. Tài khoản ${subscription.userId} đã trở về Free.`,
-      );
+      if (restoredFree) this.logger.log('SUBSCRIPTION_EXPIRED_FREE_GRANTED');
     }
   }
 }

@@ -1,4 +1,5 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { AuthRateLimitGuard } from './auth-rate-limit.guard';
 
 import { AuthService } from './auth.service';
 
@@ -12,23 +13,23 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
+  @UseGuards(AuthRateLimitGuard)
   register(@Body() data: RegisterDto) {
     return this.authService.register(data);
   }
 
   @Post('login')
+  @UseGuards(AuthRateLimitGuard)
   login(@Body() data: LoginDto) {
     return this.authService.login(data);
   }
-    @Post('forgot-password')
+  @Post('forgot-password')
+  @UseGuards(AuthRateLimitGuard)
   forgotPassword(@Body() data: ForgotPasswordDto) {
     return this.authService.forgotPassword(data.email);
   }
-    @Post('reset-password')
+  @Post('reset-password')
   resetPassword(@Body() data: ResetPasswordDto) {
-    return this.authService.resetPassword(
-      data.token,
-      data.newPassword,
-    );
+    return this.authService.resetPassword(data.token, data.newPassword);
   }
 }

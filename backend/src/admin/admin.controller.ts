@@ -5,6 +5,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 
@@ -28,16 +29,18 @@ export class AdminController {
     return this.adminService.getUsers();
   }
 
+  @Get('transactions/unmatched')
+  getUnmatchedTransactions(@Query('reference') reference?: string) {
+    return this.adminService.getUnmatchedTransactions(reference);
+  }
+
   @Get('plans')
   async getPlans() {
     return this.adminService.getPlans();
   }
 
   @Patch('plans/:id')
-  async updatePlan(
-    @Param('id') id: string,
-    @Body() data: UpdatePlanDto,
-  ) {
+  async updatePlan(@Param('id') id: string, @Body() data: UpdatePlanDto) {
     return this.adminService.updatePlan(id, data);
   }
 
