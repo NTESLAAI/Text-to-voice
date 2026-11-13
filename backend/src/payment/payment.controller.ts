@@ -8,6 +8,9 @@ import {
   UnauthorizedException,
   UseGuards,
   BadRequestException,
+  ValidationPipe,
+  createParamDecorator,
+  ExecutionContext,
 } from '@nestjs/common';
 
 import type { Request } from 'express';
@@ -22,6 +25,14 @@ import { CreateBankTransactionDto } from './dto/create-bank-transaction.dto';
 import { LinkBankTransactionDto } from './dto/link-bank-transaction.dto';
 import { PaymentService } from './payment.service';
 import { PaymentTransactionService } from './payment-transaction.service';
+import { VerifyBankReceiptDto } from './dto/verify-bank-receipt.dto';
+
+// Preserve the original body until this endpoint's strict DTO validation runs.
+// The global pipe intentionally does not validate custom parameter decorators.
+const ReceiptBody = createParamDecorator(
+  (_data: unknown, context: ExecutionContext) =>
+    context.switchToHttp().getRequest<Request>().body,
+);
 
 @Controller('payment')
 export class PaymentController {
@@ -62,7 +73,16 @@ export class PaymentController {
 
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Post('admin/transactions')
-  recordBankTransaction(@Body() body: CreateBankTransactionDto) {
+  recordBankTransaction(
+    @ReceiptBody(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        validateCustomDecorators: true,
+      }),
+    )
+    body: CreateBankTransactionDto,
+  ) {
     return this.paymentTransactionService.recordBankTransaction(body);
   }
   @UseGuards(JwtAuthGuard, AdminGuard)
@@ -78,9 +98,16 @@ export class PaymentController {
   }
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Post('admin/transactions/:id/confirm-received')
-  confirmTransactionReceived(@Param('id') transactionId: string) {
+  confirmTransactionReceived(
+    @Param('id') transactionId: string,
+    @Req() req: { user: { userId: string } },
+    @Body(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+    body: VerifyBankReceiptDto,
+  ) {
     return this.paymentTransactionService.confirmTransactionReceived(
       transactionId,
+      req.user.userId,
+      body.evidenceReference,
     );
   }
   @UseGuards(JwtAuthGuard, AdminGuard)

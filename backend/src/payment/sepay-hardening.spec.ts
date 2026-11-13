@@ -1,3 +1,7 @@
+import {
+  isolateBankPolicy,
+  sourceFixture,
+} from '../../test/jest-mocks/receiving-bank.fixture';
 /* eslint-disable @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument, @typescript-eslint/require-await */
 // Isolated ledger/transaction fixtures; never instantiate a Prisma client.
 import { BadRequestException } from '@nestjs/common';
@@ -18,11 +22,13 @@ describe('SePay receipt validation and recoverability (mock)', () => {
     transactionDate: '2026-11-06T10:00:00+07:00',
   });
   beforeEach(() => {
+    isolateBankPolicy();
     tx = {
       payment: {
         findUnique: jest.fn(async () => ({
           id: 'p',
           status: 'PENDING',
+          receivingBankAccountId: 'bank-fixture',
           currency: 'VND',
         })),
       },
@@ -31,7 +37,7 @@ describe('SePay receipt validation and recoverability (mock)', () => {
     };
     db = {
       paymentTransaction: {
-        findUnique: jest.fn(async () => null),
+        findFirst: jest.fn(async () => null),
         create: jest.fn(),
       },
       payment: { findUnique: jest.fn(async () => ({ status: 'PENDING' })) },
@@ -51,7 +57,7 @@ describe('SePay receipt validation and recoverability (mock)', () => {
       await expect(
         service.handleWebhook({ ...body(), accountNumber }),
       ).rejects.toThrow('SEPAY_ACCOUNT_MISMATCH');
-      expect(db.paymentTransaction.findUnique).not.toHaveBeenCalled();
+      expect(db.paymentTransaction.findFirst).not.toHaveBeenCalled();
     },
   );
   it('missing receiving account configuration fails closed', async () => {
@@ -95,8 +101,12 @@ describe('SePay receipt validation and recoverability (mock)', () => {
       ...body(),
       content: 'KH-ABCDEFGH NC-ABCDEFGH',
     });
-    expect(db.paymentTransaction.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ status: 'UNMATCHED', currency: 'VND' }),
+    expect(tx.paymentTransaction.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        status: 'UNMATCHED',
+        receivingBankAccountId: 'bank-fixture',
+        currency: 'VND',
+      }),
     });
     expect(payment.confirmPayment).not.toHaveBeenCalled();
   });
@@ -106,11 +116,16 @@ describe('SePay receipt validation and recoverability (mock)', () => {
       tx.payment.findUnique.mockResolvedValue({
         id: 'p',
         status: 'PENDING',
+        receivingBankAccountId: 'bank-fixture',
         currency,
       });
       await service.handleWebhook(body());
       expect(tx.paymentTransaction.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({ status: 'UNMATCHED', currency: 'VND' }),
+        data: expect.objectContaining({
+          status: 'UNMATCHED',
+          receivingBankAccountId: 'bank-fixture',
+          currency: 'VND',
+        }),
       });
       expect(payment.confirmPayment).not.toHaveBeenCalled();
     },
@@ -118,14 +133,28 @@ describe('SePay receipt validation and recoverability (mock)', () => {
   it('explicit foreign currency is retained unmatched, not relabeled VND', async () => {
     await service.handleWebhook({ ...body(), currency: 'USD' });
     expect(tx.paymentTransaction.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ status: 'UNMATCHED', currency: 'USD' }),
+      data: expect.objectContaining({
+        status: 'UNMATCHED',
+        receivingBankAccountId: 'bank-fixture',
+        currency: 'USD',
+      }),
     });
     expect(payment.confirmPayment).not.toHaveBeenCalled();
   });
   it('currency changed while waiting for lock remains unmatched', async () => {
     tx.payment.findUnique
-      .mockResolvedValueOnce({ id: 'p', status: 'PENDING', currency: 'VND' })
-      .mockResolvedValueOnce({ id: 'p', status: 'PENDING', currency: 'USD' });
+      .mockResolvedValueOnce({
+        id: 'p',
+        status: 'PENDING',
+        receivingBankAccountId: 'bank-fixture',
+        currency: 'VND',
+      })
+      .mockResolvedValueOnce({
+        id: 'p',
+        status: 'PENDING',
+        receivingBankAccountId: 'bank-fixture',
+        currency: 'USD',
+      });
     await service.handleWebhook(body());
     expect(payment.confirmPayment).not.toHaveBeenCalled();
   });
@@ -149,10 +178,11 @@ describe('SePay receipt validation and recoverability (mock)', () => {
       'MOCK_ACTIVATION_FAILED',
     );
     expect(tx.paymentTransaction.create).toHaveBeenCalledTimes(1);
-    db.paymentTransaction.findUnique.mockResolvedValue({
+    db.paymentTransaction.findFirst.mockResolvedValue({
       amount: 100000,
       currency: 'VND',
       status: 'MATCHED',
+      receivingBankAccountId: 'bank-fixture',
       paymentId: 'p',
     });
     db.payment.findUnique.mockResolvedValue({ id: 'p', status: 'PENDING' });
@@ -187,10 +217,11 @@ describe('SePay receipt validation and recoverability (mock)', () => {
     },
   );
   it('conflicting duplicate never changes original ledger', async () => {
-    db.paymentTransaction.findUnique.mockResolvedValue({
+    db.paymentTransaction.findFirst.mockResolvedValue({
       amount: 1,
       currency: 'VND',
       status: 'MATCHED',
+      receivingBankAccountId: 'bank-fixture',
       paymentId: 'p',
     });
     await expect(service.handleWebhook(body())).rejects.toThrow(
@@ -203,7 +234,7 @@ describe('SePay receipt validation and recoverability (mock)', () => {
       code: 'P2002',
       clientVersion: 'mock',
     });
-    db.paymentTransaction.create.mockRejectedValue(error);
+    tx.paymentTransaction.create.mockRejectedValue(error);
     await expect(
       service.handleWebhook({ ...body(), code: '', content: '' }),
     ).rejects.toBe(error);

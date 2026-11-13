@@ -29,7 +29,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     let message = 'Lỗi kết nối, xin vui lòng thử lại.';
 
-    if (exception instanceof HttpException) {
+    if (exception instanceof HttpException && status < 500) {
       if (typeof exceptionResponse === 'string') {
         message = exceptionResponse;
       } else if (
@@ -45,9 +45,25 @@ export class HttpExceptionFilter implements ExceptionFilter {
       }
     }
 
+    // Explicit protocol fields only; never spread an exception response.
+    const protocol: Record<string, string> = {};
+    if (exceptionResponse && typeof exceptionResponse === 'object') {
+      const body = exceptionResponse as Record<string, unknown>;
+      if (status === 500 && body.code === 'PAYMENT_ACTIVATION_FAILED') {
+        protocol.code = 'PAYMENT_ACTIVATION_FAILED';
+        if (body.receiptStatus === 'MATCHED')
+          protocol.receiptStatus = 'MATCHED';
+        if (body.activationStatus === 'FAILED')
+          protocol.activationStatus = 'FAILED';
+      } else if (status === 400 && body.code === 'PAYMENT_UNDERFUNDED') {
+        protocol.code = 'PAYMENT_UNDERFUNDED';
+      }
+    }
+
     response.status(status).json({
       statusCode: status,
       message,
+      ...protocol,
     });
   }
 }

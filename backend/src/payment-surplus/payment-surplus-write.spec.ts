@@ -1,3 +1,4 @@
+import { sourceFixture } from '../../test/jest-mocks/receiving-bank.fixture';
 import {
   BadRequestException,
   ConflictException,
@@ -25,10 +26,11 @@ describe('Payment surplus manual writes (no database)', () => {
     rows = [];
     payment = {
       id: 'p',
+      receivingBankAccountId: 'bank-fixture',
       status: 'PAID',
       currency: 'VND',
       amount: 100,
-      transactions: [{ amount: 140.000001, currency: 'VND' }],
+      transactions: [{ ...sourceFixture, amount: 140.000001, currency: 'VND' }],
       effectivePlanPriceSnapshot: new Prisma.Decimal(80),
       planCharacterLimitSnapshot: 1000,
       planDurationDaysSnapshot: 30,
@@ -68,6 +70,41 @@ describe('Payment surplus manual writes (no database)', () => {
   });
   const create = (extra = {}, key = 'k') =>
     service.createHandling('p', key, { ...dto, ...extra }, 'admin');
+
+  it('legacy totals stay readable but cannot fund new REFUND/CREDIT', async () => {
+    payment.receivingBankAccountId = null;
+    const report = await service.getSurplus('p');
+    expect(report.totalMatched).toBe('140.000001');
+    expect(report.availableSurplus).toBe('40.000001');
+    expect(report.spendabilityStatus).toBe('UNKNOWN');
+    expect(report.spendableAmount).toBeNull();
+    await expect(create()).rejects.toThrow('SURPLUS_SOURCE_UNVERIFIED');
+    await expect(create({ action: 'CREDIT' }, 'credit')).rejects.toThrow(
+      'SURPLUS_SOURCE_UNVERIFIED',
+    );
+    expect(rows).toHaveLength(0);
+  });
+  it('unknown source blocks completion but preserves cancel PENDING and history', async () => {
+    const h = await create();
+    payment.receivingBankAccountId = null;
+    await expect(
+      service.completeHandling(
+        'p',
+        h.id,
+        { confirmation: 'Synthetic manual confirmation' },
+        'admin',
+      ),
+    ).rejects.toThrow('SURPLUS_SOURCE_UNVERIFIED');
+    expect(rows[0].status).toBe('PENDING');
+    await service.cancelHandling(
+      'p',
+      h.id,
+      { note: 'Synthetic cancellation' },
+      'admin',
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe('CANCELLED');
+  });
 
   it('locks Payment first, reads and writes within ReadCommitted, serializes Decimal', async () => {
     const result = await create();

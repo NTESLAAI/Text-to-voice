@@ -2,7 +2,9 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  ConflictException,
 } from '@nestjs/common';
+import { ReceivingBankAccountService } from './receiving-bank-account.service';
 import { randomInt } from 'crypto';
 import { Prisma } from '../../generated/prisma/client';
 
@@ -10,7 +12,10 @@ import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class PaymentService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {
+    this.accounts = new ReceivingBankAccountService(prisma);
+  }
+  private readonly accounts: ReceivingBankAccountService;
 
   private async assertNoActivePaid(
     client: Pick<PrismaService, 'subscription'>,
@@ -266,38 +271,33 @@ export class PaymentService {
         );
       }
 
-      const payment = await this.prisma.payment.create({
-        data: {
-          userId,
-          planId: plan.id,
+      const payment = await this.accounts.createPayment({
+        userId,
+        planId: plan.id,
 
-          // Snapshot thông tin gói tại thời điểm tạo giao dịch
-          planNameSnapshot: plan.name,
-          planPriceSnapshot: plan.price,
-          effectivePlanPriceSnapshot: new Prisma.Decimal(
-            pricing.amount.toString(),
-          ),
-          planDurationDaysSnapshot: plan.durationDays,
-          planCharacterLimitSnapshot: plan.characterLimit,
+        // Snapshot thông tin gói tại thời điểm tạo giao dịch
+        planNameSnapshot: plan.name,
+        planPriceSnapshot: plan.price,
+        effectivePlanPriceSnapshot: new Prisma.Decimal(
+          pricing.amount.toString(),
+        ),
+        planDurationDaysSnapshot: plan.durationDays,
+        planCharacterLimitSnapshot: plan.characterLimit,
 
-          amount: pricing.amount,
-          currency: plan.currency,
+        amount: pricing.amount,
+        currency: plan.currency,
 
-          promotionIdSnapshot: pricing.promotionIdSnapshot,
-          promotionTitleSnapshot: pricing.promotionTitleSnapshot,
-          promotionPriceSnapshot: pricing.promotionPriceSnapshot,
-          discountAmountSnapshot: pricing.discountAmountSnapshot,
+        promotionIdSnapshot: pricing.promotionIdSnapshot,
+        promotionTitleSnapshot: pricing.promotionTitleSnapshot,
+        promotionPriceSnapshot: pricing.promotionPriceSnapshot,
+        discountAmountSnapshot: pricing.discountAmountSnapshot,
 
-          createdAt: now,
+        createdAt: now,
 
-          status: 'PENDING',
-          provider: 'BANK_TRANSFER',
-          paymentType: 'RENEWAL',
-          transferCode: this.generateTransferCode('RENEWAL'),
-        },
-        include: {
-          plan: true,
-        },
+        status: 'PENDING',
+        provider: 'BANK_TRANSFER',
+        paymentType: 'RENEWAL',
+        transferCode: this.generateTransferCode('RENEWAL'),
       });
 
       return {
@@ -312,9 +312,10 @@ export class PaymentService {
         transferCode: payment.transferCode,
         upgradeOption: payment.upgradeOption,
         creditAmount: payment.creditAmount,
-        bankName: process.env.BANK_TRANSFER_BANK_NAME,
-        accountNumber: process.env.BANK_TRANSFER_ACCOUNT_NUMBER,
-        accountName: process.env.BANK_TRANSFER_ACCOUNT_NAME,
+        receivingBankAccountId: payment.receivingBankAccount.id,
+        bankName: payment.receivingBankAccount.bankCode,
+        accountNumber: payment.receivingBankAccount.accountNumber,
+        accountName: payment.receivingBankAccount.accountName,
         createdAt: payment.createdAt,
       };
     }
@@ -348,39 +349,33 @@ export class PaymentService {
         );
       }
 
-      const payment = await this.prisma.payment.create({
-        data: {
-          userId,
-          planId: plan.id,
+      const payment = await this.accounts.createPayment({
+        userId,
+        planId: plan.id,
 
-          // Snapshot thông tin gói tại thời điểm tạo giao dịch
-          planNameSnapshot: plan.name,
-          planPriceSnapshot: plan.price,
-          effectivePlanPriceSnapshot: new Prisma.Decimal(
-            pricing.amount.toString(),
-          ),
-          planDurationDaysSnapshot: plan.durationDays,
-          planCharacterLimitSnapshot: plan.characterLimit,
+        // Snapshot thông tin gói tại thời điểm tạo giao dịch
+        planNameSnapshot: plan.name,
+        planPriceSnapshot: plan.price,
+        effectivePlanPriceSnapshot: new Prisma.Decimal(
+          pricing.amount.toString(),
+        ),
+        planDurationDaysSnapshot: plan.durationDays,
+        planCharacterLimitSnapshot: plan.characterLimit,
 
-          amount: pricing.amount,
-          currency: plan.currency,
+        amount: pricing.amount,
+        currency: plan.currency,
 
-          promotionIdSnapshot: pricing.promotionIdSnapshot,
-          promotionTitleSnapshot: pricing.promotionTitleSnapshot,
-          promotionPriceSnapshot: pricing.promotionPriceSnapshot,
-          discountAmountSnapshot: pricing.discountAmountSnapshot,
+        promotionIdSnapshot: pricing.promotionIdSnapshot,
+        promotionTitleSnapshot: pricing.promotionTitleSnapshot,
+        promotionPriceSnapshot: pricing.promotionPriceSnapshot,
+        discountAmountSnapshot: pricing.discountAmountSnapshot,
 
-          createdAt: now,
+        createdAt: now,
 
-          status: 'PENDING',
-          provider: 'BANK_TRANSFER',
-          paymentType: 'NEW_PURCHASE',
-          transferCode: this.generateTransferCode('NEW_PURCHASE'),
-        },
-
-        include: {
-          plan: true,
-        },
+        status: 'PENDING',
+        provider: 'BANK_TRANSFER',
+        paymentType: 'NEW_PURCHASE',
+        transferCode: this.generateTransferCode('NEW_PURCHASE'),
       });
 
       return {
@@ -395,9 +390,10 @@ export class PaymentService {
         transferCode: payment.transferCode,
         upgradeOption: payment.upgradeOption,
         creditAmount: payment.creditAmount,
-        bankName: process.env.BANK_TRANSFER_BANK_NAME,
-        accountNumber: process.env.BANK_TRANSFER_ACCOUNT_NUMBER,
-        accountName: process.env.BANK_TRANSFER_ACCOUNT_NAME,
+        receivingBankAccountId: payment.receivingBankAccount.id,
+        bankName: payment.receivingBankAccount.bankCode,
+        accountNumber: payment.receivingBankAccount.accountNumber,
+        accountName: payment.receivingBankAccount.accountName,
         createdAt: payment.createdAt,
       };
     }
@@ -488,46 +484,37 @@ export class PaymentService {
       amount = Math.max(0, Math.round(pricing.amount - creditAmount));
     }
 
-    const payment = await this.prisma.payment.create({
-      data: {
-        userId,
-        planId: plan.id,
+    const payment = await this.accounts.createPayment({
+      userId,
+      planId: plan.id,
 
-        // Snapshot thông tin gói tại thời điểm tạo giao dịch
-        planNameSnapshot: plan.name,
-        planPriceSnapshot: plan.price,
-        effectivePlanPriceSnapshot: new Prisma.Decimal(
-          pricing.amount.toString(),
-        ),
-        planDurationDaysSnapshot: plan.durationDays,
-        planCharacterLimitSnapshot: plan.characterLimit,
-        // Snapshot gói nguồn tại thời điểm tạo giao dịch Upgrade
-        sourcePlanPriceSnapshot: activeSubscription.plan.price,
-        sourcePlanCharacterLimitSnapshot:
-          activeSubscription.plan.characterLimit,
-        sourceSubscriptionId: activeSubscription.id,
+      // Snapshot thông tin gói tại thời điểm tạo giao dịch
+      planNameSnapshot: plan.name,
+      planPriceSnapshot: plan.price,
+      effectivePlanPriceSnapshot: new Prisma.Decimal(pricing.amount.toString()),
+      planDurationDaysSnapshot: plan.durationDays,
+      planCharacterLimitSnapshot: plan.characterLimit,
+      // Snapshot gói nguồn tại thời điểm tạo giao dịch Upgrade
+      sourcePlanPriceSnapshot: activeSubscription.plan.price,
+      sourcePlanCharacterLimitSnapshot: activeSubscription.plan.characterLimit,
+      sourceSubscriptionId: activeSubscription.id,
 
-        amount,
-        currency: plan.currency,
+      amount,
+      currency: plan.currency,
 
-        promotionIdSnapshot: pricing.promotionIdSnapshot,
-        promotionTitleSnapshot: pricing.promotionTitleSnapshot,
-        promotionPriceSnapshot: pricing.promotionPriceSnapshot,
-        discountAmountSnapshot: pricing.discountAmountSnapshot,
+      promotionIdSnapshot: pricing.promotionIdSnapshot,
+      promotionTitleSnapshot: pricing.promotionTitleSnapshot,
+      promotionPriceSnapshot: pricing.promotionPriceSnapshot,
+      discountAmountSnapshot: pricing.discountAmountSnapshot,
 
-        createdAt: now,
+      createdAt: now,
 
-        status: 'PENDING',
-        provider: 'BANK_TRANSFER',
-        paymentType: 'UPGRADE',
-        transferCode: this.generateTransferCode('UPGRADE'),
-        upgradeOption,
-        creditAmount,
-      },
-
-      include: {
-        plan: true,
-      },
+      status: 'PENDING',
+      provider: 'BANK_TRANSFER',
+      paymentType: 'UPGRADE',
+      transferCode: this.generateTransferCode('UPGRADE'),
+      upgradeOption,
+      creditAmount,
     });
 
     return {
@@ -543,9 +530,10 @@ export class PaymentService {
       upgradeOption: payment.upgradeOption,
       creditAmount: payment.creditAmount,
       remainingCharacters,
-      bankName: process.env.BANK_TRANSFER_BANK_NAME,
-      accountNumber: process.env.BANK_TRANSFER_ACCOUNT_NUMBER,
-      accountName: process.env.BANK_TRANSFER_ACCOUNT_NAME,
+      receivingBankAccountId: payment.receivingBankAccount.id,
+      bankName: payment.receivingBankAccount.bankCode,
+      accountNumber: payment.receivingBankAccount.accountNumber,
+      accountName: payment.receivingBankAccount.accountName,
       createdAt: payment.createdAt,
     };
   }
@@ -646,7 +634,7 @@ export class PaymentService {
     });
   }
 
-  async confirmPayment(paymentId: string) {
+  async confirmPayment(paymentId: string, allowAlreadyPaid = false) {
     return this.prisma.$transaction(async (tx) => {
       let now = new Date();
       await tx.$queryRaw`
@@ -668,10 +656,27 @@ export class PaymentService {
         throw new NotFoundException('Không tìm thấy giao dịch thanh toán.');
       }
 
+      // Reconciliation only: decide under the existing Payment lock, before
+      // touching subscription, quota or payment audit. Public confirm stays strict.
+      if (allowAlreadyPaid && payment.status === 'PAID') {
+        return {
+          id: payment.id,
+          status: payment.status,
+          paidAt: payment.paidAt,
+          activationStatus: 'ALREADY_ACTIVATED' as const,
+        };
+      }
+
       if (payment.status !== 'PENDING' && payment.status !== 'USER_CONFIRMED') {
         throw new BadRequestException(
           'Giao dịch không ở trạng thái chờ xác nhận.',
         );
+      }
+      if (
+        payment.provider === 'BANK_TRANSFER' &&
+        !payment.receivingBankAccountId
+      ) {
+        throw new ConflictException('RECEIVING_ACCOUNT_UNKNOWN');
       }
       // Chỉ kích hoạt gói khi tổng tiền đã đối soát đủ.
       // Đơn có số tiền phải trả bằng 0 vẫn được xử lý bình thường.

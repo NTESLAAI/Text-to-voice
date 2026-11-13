@@ -6,9 +6,12 @@ import {
   IsString,
   MaxLength,
   Min,
+  IsUUID,
 } from 'class-validator';
 
 export class CreateBankTransactionDto {
+  @IsUUID()
+  receivingBankAccountId!: string;
   @IsString()
   @MaxLength(100)
   providerTransactionId!: string;

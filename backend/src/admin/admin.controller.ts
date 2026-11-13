@@ -24,6 +24,11 @@ export class AdminController {
     return this.adminService.getPayments();
   }
 
+  @Get('receiving-bank-accounts')
+  getReceivingBankAccounts() {
+    return this.adminService.getReceivingBankAccounts();
+  }
+
   @Get('users')
   async getUsers() {
     return this.adminService.getUsers();

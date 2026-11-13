@@ -3,7 +3,9 @@ import {
   INestApplication,
   ValidationPipe,
   UnauthorizedException,
+  InternalServerErrorException,
 } from '@nestjs/common';
+import { HttpExceptionFilter } from '../common/filters/http-exception.filter';
 import request from 'supertest';
 import type { Request, Response, NextFunction } from 'express';
 
@@ -12,6 +14,8 @@ import { PaymentService } from './payment.service';
 import { PaymentTransactionService } from './payment-transaction.service';
 import { SepaySignatureService } from './sepay-signature.service';
 import { SepayWebhookService } from './sepay-webhook.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth/jwt-auth.guard';
+import { AdminGuard } from '../auth/guards/admin/admin.guard';
 
 describe('PaymentController - SePay webhook', () => {
   let app: INestApplication;
@@ -19,7 +23,8 @@ describe('PaymentController - SePay webhook', () => {
   const verifySignature = jest.fn();
 
   const paymentServiceMock = {};
-  const paymentTransactionServiceMock = {};
+  const recordBankTransaction = jest.fn();
+  const paymentTransactionServiceMock = { recordBankTransaction };
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -43,9 +48,15 @@ describe('PaymentController - SePay webhook', () => {
           },
         },
       ],
-    }).compile();
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(AdminGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     app = moduleFixture.createNestApplication();
+    app.useGlobalFilters(new HttpExceptionFilter());
 
     app.useGlobalPipes(
       new ValidationPipe({
@@ -77,6 +88,79 @@ describe('PaymentController - SePay webhook', () => {
 
   beforeEach(() => {
     verifySignature.mockReset();
+    recordBankTransaction.mockReset();
+  });
+
+  const receipt = {
+    receivingBankAccountId: 'd4508350-a842-4e57-9cfb-a38cd92e32f5',
+    providerTransactionId: 'SYNTHETIC-RECEIPT',
+    amount: 140,
+    currency: 'VND',
+    receivedAt: '2026-01-01T00:00:00.000Z',
+  };
+
+  it('keeps the production HTTP error envelope and hides raw server details', async () => {
+    recordBankTransaction.mockRejectedValueOnce(
+      new InternalServerErrorException({
+        code: 'PAYMENT_ACTIVATION_FAILED',
+        receiptStatus: 'MATCHED',
+        activationStatus: 'FAILED',
+        message: 'PRIVATE_SENTINEL',
+      }),
+    );
+    const response = await request(app.getHttpServer())
+      .post('/payment/admin/transactions')
+      .send(receipt)
+      .expect(500);
+    expect(response.body).toMatchObject({
+      statusCode: 500,
+      code: 'PAYMENT_ACTIVATION_FAILED',
+      receiptStatus: 'MATCHED',
+      activationStatus: 'FAILED',
+    });
+    expect(JSON.stringify(response.body)).not.toContain('PRIVATE_SENTINEL');
+  });
+
+  it('passes a valid receipt DTO to the service once', async () => {
+    recordBankTransaction.mockResolvedValue({ status: 'UNMATCHED' });
+    await request(app.getHttpServer())
+      .post('/payment/admin/transactions')
+      .send(receipt)
+      .expect(201)
+      .expect({ status: 'UNMATCHED' });
+    expect(recordBankTransaction).toHaveBeenCalledTimes(1);
+    expect(recordBankTransaction).toHaveBeenCalledWith(receipt);
+  });
+
+  it.each([
+    'verificationSource',
+    'sourceVerifiedAt',
+    'sourceVerifiedById',
+    'policy',
+    'unknownField',
+  ])(
+    'rejects extra receipt field %s before calling the service',
+    async (field) => {
+      await request(app.getHttpServer())
+        .post('/payment/admin/transactions')
+        .send({ ...receipt, [field]: 'SYNTHETIC' })
+        .expect(400);
+      expect(recordBankTransaction).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    { receivingBankAccountId: 'invalid' },
+    { amount: 0 },
+    { currency: 'USD' },
+    { receivedAt: 'invalid' },
+    { providerTransactionId: null },
+  ])('rejects invalid receipt DTO %j', async (invalid) => {
+    await request(app.getHttpServer())
+      .post('/payment/admin/transactions')
+      .send({ ...receipt, ...invalid })
+      .expect(400);
+    expect(recordBankTransaction).not.toHaveBeenCalled();
   });
 
   const validPayload = {

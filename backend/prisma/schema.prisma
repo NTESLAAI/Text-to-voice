@@ -29,6 +29,7 @@ enum PaymentSurplusStatus {
 }
 
 model User {
+  verifiedReceipts PaymentTransaction[] @relation("ReceiptVerifier")
   id        String   @id @default(uuid())
   email     String?  @unique
   phone     String?  @unique
@@ -140,6 +141,9 @@ model Subscription {
 }
 
 model Payment {
+  receivingBankAccountId String?
+  receivingBankAccount ReceivingBankAccount? @relation(fields: [receivingBankAccountId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  @@index([receivingBankAccountId])
   id String @id @default(uuid())
 
   userId String
@@ -489,6 +493,16 @@ model PromotionRedemption {
 }
 
 model PaymentTransaction {
+  receivingBankAccountId String?
+  receivingBankAccount ReceivingBankAccount? @relation(fields: [receivingBankAccountId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  bankReference String?
+  verificationSource ReceiptVerificationSource?
+  sourceVerifiedAt DateTime?
+  sourceVerifiedById String?
+  verificationReference String?
+  sourceVerifiedBy User? @relation("ReceiptVerifier", fields: [sourceVerifiedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  @@index([receivingBankAccountId])
+  @@index([sourceVerifiedById])
   id String @id @default(uuid())
 
   // Null khi chưa xác định hoặc chưa liên kết được đơn hàng.
@@ -520,8 +534,35 @@ model PaymentTransaction {
 
   payment Payment? @relation(fields: [paymentId], references: [id], onDelete: Restrict)
 
-  @@unique([provider, providerTransactionId])
+  // Provider-specific partial unique indexes are maintained in migration SQL.
   @@index([paymentId])
   @@index([status])
   @@index([receivedAt])
+}
+
+enum ReceivingBankPolicy {
+  SEPAY_PRIMARY
+  MANUAL_ALLOWED
+}
+
+enum ReceiptVerificationSource {
+  SEPAY_WEBHOOK
+  MANUAL_ADMIN
+}
+
+model ReceivingBankAccount {
+  id String @id @default(uuid())
+  code String @unique
+  bankCode String
+  accountNumber String
+  accountName String
+  currency String @default("VND")
+  policy ReceivingBankPolicy
+  isActive Boolean @default(false)
+  deactivatedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  payments Payment[]
+  receipts PaymentTransaction[]
+  @@unique([bankCode, accountNumber])
 }

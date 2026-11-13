@@ -5,6 +5,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
+import { ReceivingBankAccountService } from '../payment/receiving-bank-account.service';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -15,7 +16,10 @@ import {
 
 @Injectable()
 export class PaymentSurplusService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {
+    this.accounts = new ReceivingBankAccountService(prisma);
+  }
+  private readonly accounts: ReceivingBankAccountService;
 
   private text(value: string) {
     if (
@@ -118,6 +122,8 @@ export class PaymentSurplusService {
         });
         if (existing) return replay(existing);
         const surplus = await this.readSurplus(tx, paymentId);
+        if (surplus.spendabilityStatus !== 'VERIFIED')
+          throw new ConflictException('SURPLUS_SOURCE_UNVERIFIED');
         if (amount.greaterThan(surplus.availableSurplus))
           throw new ConflictException('Số tiền vượt tiền dư khả dụng.');
         const row = await tx.paymentSurplusHandling.create({
@@ -222,7 +228,11 @@ export class PaymentSurplusService {
         throw new ConflictException(
           'Không thể đổi trạng thái khoản đã kết thúc.',
         );
-      if (status === 'COMPLETED') await this.readSurplus(tx, paymentId);
+      if (status === 'COMPLETED') {
+        const surplus = await this.readSurplus(tx, paymentId);
+        if (surplus.spendabilityStatus !== 'VERIFIED')
+          throw new ConflictException('SURPLUS_SOURCE_UNVERIFIED');
+      }
       // Cancelling remains possible to release a reservation even if data is over-allocated.
       const now = new Date();
       const updated = await tx.paymentSurplusHandling.update({
@@ -261,9 +271,23 @@ export class PaymentSurplusService {
         id: true,
         amount: true,
         currency: true,
+        receivingBankAccountId: true,
         transactions: {
           where: { status: 'MATCHED' },
-          select: { amount: true, currency: true },
+          select: {
+            amount: true,
+            currency: true,
+            provider: true,
+            providerTransactionId: true,
+            status: true,
+            matchedAt: true,
+            receivingBankAccountId: true,
+            receivingBankAccount: true,
+            verificationSource: true,
+            sourceVerifiedAt: true,
+            sourceVerifiedById: true,
+            verificationReference: true,
+          },
         },
       },
     });
@@ -331,7 +355,22 @@ export class PaymentSurplusService {
     }
     const availableSurplus = totalSurplus.minus(allocatedAmount);
 
+    const verified =
+      Boolean(payment.receivingBankAccountId) &&
+      payment.transactions.every((r) =>
+        this.accounts.verified(
+          r,
+          r.receivingBankAccount,
+          payment.receivingBankAccountId,
+          payment.currency,
+        ),
+      );
     return {
+      spendabilityStatus: verified
+        ? ('VERIFIED' as const)
+        : ('UNKNOWN' as const),
+      spendableAmount: verified ? availableSurplus.toString() : null,
+      spendabilityReason: verified ? null : 'SURPLUS_SOURCE_UNVERIFIED',
       paymentId: payment.id,
       currency: payment.currency,
       totalMatched: totalMatched.toString(),

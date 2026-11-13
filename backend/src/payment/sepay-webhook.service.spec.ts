@@ -1,3 +1,7 @@
+import {
+  isolateBankPolicy,
+  sourceFixture,
+} from '../../test/jest-mocks/receiving-bank.fixture';
 import { Prisma } from '../../generated/prisma/client';
 import { SepayWebhookService } from './sepay-webhook.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -10,7 +14,7 @@ describe('SepayWebhookService', () => {
 
   let prisma: {
     paymentTransaction: {
-      findUnique: jest.Mock;
+      findFirst: jest.Mock;
       create: jest.Mock;
     };
     payment: {
@@ -51,6 +55,7 @@ describe('SepayWebhookService', () => {
     }) as SepayWebhookDto;
 
   beforeEach(() => {
+    isolateBankPolicy();
     tx = {
       payment: {
         findUnique: jest.fn(),
@@ -63,7 +68,7 @@ describe('SepayWebhookService', () => {
 
     prisma = {
       paymentTransaction: {
-        findUnique: jest.fn().mockResolvedValue(null),
+        findFirst: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockResolvedValue({}),
       },
       payment: {
@@ -97,16 +102,17 @@ describe('SepayWebhookService', () => {
     );
 
     expect(result).toEqual({ success: true });
-    expect(prisma.paymentTransaction.findUnique).not.toHaveBeenCalled();
+    expect(prisma.paymentTransaction.findFirst).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('returns duplicate without retry when existing transaction is unmatched', async () => {
-    prisma.paymentTransaction.findUnique.mockResolvedValue({
+    prisma.paymentTransaction.findFirst.mockResolvedValue({
       id: 'tx-1',
       amount: 100000,
       currency: 'VND',
       status: 'UNMATCHED',
+      receivingBankAccountId: 'bank-fixture',
       paymentId: null,
     });
 
@@ -126,15 +132,16 @@ describe('SepayWebhookService', () => {
     );
 
     expect(result).toEqual({ success: true, matched: false });
-    expect(prisma.paymentTransaction.create).toHaveBeenCalledWith({
+    expect(tx.paymentTransaction.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         provider: 'SEPAY',
         providerTransactionId: '12345',
         status: 'UNMATCHED',
+        receivingBankAccountId: 'bank-fixture',
         currency: 'VND',
       }),
     });
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 
   it('stores transaction as unmatched when payment is not found', async () => {
@@ -148,6 +155,7 @@ describe('SepayWebhookService', () => {
         provider: 'SEPAY',
         providerTransactionId: '12345',
         status: 'UNMATCHED',
+        receivingBankAccountId: 'bank-fixture',
         currency: 'VND',
       }),
     });
@@ -167,6 +175,7 @@ describe('SepayWebhookService', () => {
     expect(tx.paymentTransaction.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         status: 'UNMATCHED',
+        receivingBankAccountId: 'bank-fixture',
         note: 'SEPAY_PAYMENT_NOT_PENDING',
       }),
     });
@@ -178,11 +187,13 @@ describe('SepayWebhookService', () => {
       .mockResolvedValueOnce({
         id: 'payment-1',
         status: 'PENDING',
+        receivingBankAccountId: 'bank-fixture',
         currency: 'VND',
       })
       .mockResolvedValueOnce({
         id: 'payment-1',
         status: 'PENDING',
+        receivingBankAccountId: 'bank-fixture',
         currency: 'VND',
       });
 
@@ -196,6 +207,7 @@ describe('SepayWebhookService', () => {
         provider: 'SEPAY',
         providerTransactionId: '12345',
         status: 'MATCHED',
+        receivingBankAccountId: 'bank-fixture',
         currency: 'VND',
       }),
     });
@@ -207,6 +219,7 @@ describe('SepayWebhookService', () => {
       .mockResolvedValueOnce({
         id: 'payment-1',
         status: 'PENDING',
+        receivingBankAccountId: 'bank-fixture',
         currency: 'VND',
       })
       .mockResolvedValueOnce({
@@ -221,6 +234,7 @@ describe('SepayWebhookService', () => {
     expect(tx.paymentTransaction.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         status: 'UNMATCHED',
+        receivingBankAccountId: 'bank-fixture',
         note: 'SEPAY_PAYMENT_NOT_PENDING',
       }),
     });
@@ -237,20 +251,21 @@ describe('SepayWebhookService', () => {
     );
 
     prisma.$transaction.mockRejectedValue(duplicateError);
-    prisma.paymentTransaction.findUnique
+    prisma.paymentTransaction.findFirst
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({
         id: 'tx-duplicate',
         amount: 100000,
         currency: 'VND',
         status: 'UNMATCHED',
+        receivingBankAccountId: 'bank-fixture',
         paymentId: null,
       });
 
     const result = await service.handleWebhook(makeBody());
 
     expect(result).toEqual({ success: true, duplicate: true });
-    expect(prisma.paymentTransaction.findUnique).toHaveBeenCalledTimes(2);
+    expect(prisma.paymentTransaction.findFirst).toHaveBeenCalledTimes(2);
     expect(paymentService.confirmPayment).not.toHaveBeenCalled();
   });
 
@@ -260,10 +275,10 @@ describe('SepayWebhookService', () => {
       { code: 'P2002', clientVersion: 'test' },
     );
     prisma.$transaction.mockRejectedValue(originalError);
-    prisma.paymentTransaction.findUnique.mockResolvedValue(null);
+    prisma.paymentTransaction.findFirst.mockResolvedValue(null);
 
     await expect(service.handleWebhook(makeBody())).rejects.toBe(originalError);
-    expect(prisma.paymentTransaction.findUnique).toHaveBeenCalledTimes(2);
+    expect(prisma.paymentTransaction.findFirst).toHaveBeenCalledTimes(2);
     expect(paymentService.confirmPayment).not.toHaveBeenCalled();
   });
 
@@ -281,11 +296,13 @@ describe('SepayWebhookService', () => {
       .mockResolvedValueOnce({
         id: 'payment-1',
         status: 'USER_CONFIRMED',
+        receivingBankAccountId: 'bank-fixture',
         currency: 'VND',
       })
       .mockResolvedValueOnce({
         id: 'payment-1',
         status: 'USER_CONFIRMED',
+        receivingBankAccountId: 'bank-fixture',
         currency: 'VND',
       });
 
@@ -303,6 +320,7 @@ describe('SepayWebhookService', () => {
         id: true,
         status: true,
         currency: true,
+        receivingBankAccountId: true,
       },
     });
   });
@@ -317,19 +335,21 @@ describe('SepayWebhookService', () => {
 
     prisma.$transaction.mockRejectedValue(duplicateError);
 
-    prisma.paymentTransaction.findUnique
+    prisma.paymentTransaction.findFirst
       .mockResolvedValueOnce(null) // initial idempotency lookup
       .mockResolvedValueOnce({
         id: 'tx-1',
         amount: 100000,
         currency: 'VND',
         status: 'MATCHED',
+        receivingBankAccountId: 'bank-fixture',
         paymentId: 'payment-1',
       }); // lookup after P2002
 
     prisma.payment.findUnique.mockResolvedValue({
       id: 'payment-1',
       status: 'PENDING',
+      receivingBankAccountId: 'bank-fixture',
     });
 
     const result = await service.handleWebhook(makeBody());
@@ -340,17 +360,18 @@ describe('SepayWebhookService', () => {
       retried: true,
     });
 
-    expect(prisma.paymentTransaction.findUnique).toHaveBeenCalledTimes(2);
+    expect(prisma.paymentTransaction.findFirst).toHaveBeenCalledTimes(2);
     expect(paymentService.confirmPayment).toHaveBeenCalledTimes(1);
     expect(paymentService.confirmPayment).toHaveBeenCalledWith('payment-1');
   });
 
   it('does not retry confirmation when matched payment is already paid', async () => {
-    prisma.paymentTransaction.findUnique.mockResolvedValue({
+    prisma.paymentTransaction.findFirst.mockResolvedValue({
       id: 'tx-1',
       amount: 100000,
       currency: 'VND',
       status: 'MATCHED',
+      receivingBankAccountId: 'bank-fixture',
       paymentId: 'payment-1',
     });
     prisma.payment.findUnique.mockResolvedValue({
@@ -365,11 +386,12 @@ describe('SepayWebhookService', () => {
   });
 
   it('does not retry when matched transaction payment is not pending', async () => {
-    prisma.paymentTransaction.findUnique.mockResolvedValue({
+    prisma.paymentTransaction.findFirst.mockResolvedValue({
       id: 'tx-1',
       amount: 100000,
       currency: 'VND',
       status: 'MATCHED',
+      receivingBankAccountId: 'bank-fixture',
       paymentId: 'payment-1',
     });
     prisma.payment.findUnique.mockResolvedValue({

@@ -1,3 +1,7 @@
+import {
+  isolateBankPolicy,
+  sourceFixture,
+} from '../../test/jest-mocks/receiving-bank.fixture';
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-return, @typescript-eslint/require-await */
 // Transaction delegates are isolated mock state machines, not PostgreSQL evidence.
 import { Logger } from '@nestjs/common';
@@ -30,6 +34,7 @@ describe('Expired FREE purchase, quota and activation (mock)', () => {
   });
   let db: any;
   beforeEach(() => {
+    isolateBankPolicy();
     db = {
       plan: { findUnique: jest.fn(async () => target) },
       promotion: { findFirst: jest.fn(async () => null) },
@@ -73,6 +78,45 @@ describe('Expired FREE purchase, quota and activation (mock)', () => {
     plan: target,
     amount: 100,
     currency: 'VND',
+  });
+  it('reconciliation PAID decision is under lock and writes no benefits or audit', async () => {
+    const paidAt = new Date('2026-10-27T00:00:00.000Z');
+    db.payment.findUnique.mockResolvedValue({
+      ...pending(),
+      status: 'PAID',
+      paidAt,
+    });
+    const result = await new PaymentService(db).confirmPayment('p', true);
+    expect(result).toEqual({
+      id: 'p',
+      status: 'PAID',
+      paidAt,
+      activationStatus: 'ALREADY_ACTIVATED',
+    });
+    expect(db.$queryRaw.mock.calls[0][0].join('?')).toContain('FOR UPDATE');
+    expect(db.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      db.payment.findUnique.mock.invocationCallOrder[0],
+    );
+    expect(db.payment.update).not.toHaveBeenCalled();
+    expect(db.subscription.create).not.toHaveBeenCalled();
+    expect(db.subscription.updateMany).not.toHaveBeenCalled();
+    expect(db.quotaLot.create).not.toHaveBeenCalled();
+    expect(db.quotaLot.update).not.toHaveBeenCalled();
+    expect(db.paymentTransaction.aggregate).not.toHaveBeenCalled();
+  });
+  it('reconciliation opt-in activates once then replays PAID without granting again (mock)', async () => {
+    db.payment.findUnique.mockResolvedValue(pending());
+    db.subscription.findFirst.mockResolvedValue(free());
+    const service = new PaymentService(db);
+    await service.confirmPayment('p', true);
+    db.payment.findUnique.mockResolvedValue({ ...pending(), status: 'PAID' });
+    const result = await service.confirmPayment('p', true);
+    expect(result).toEqual(
+      expect.objectContaining({ activationStatus: 'ALREADY_ACTIVATED' }),
+    );
+    expect(db.subscription.create).toHaveBeenCalledTimes(1);
+    expect(db.quotaLot.create).toHaveBeenCalledTimes(1);
+    expect(db.payment.update).toHaveBeenCalledTimes(1);
   });
   it.each(['WEB', 'APPLE', 'GOOGLE'])(
     'active %s blocks a new Web order regardless of requested plan',
@@ -325,7 +369,15 @@ it('admin can read bounded unmatched/received transactions without changing stat
   expect(findMany).toHaveBeenCalledWith(
     expect.objectContaining({
       take: 100,
-      where: { status: { in: ['UNMATCHED', 'RECEIVED'] } },
+      where: {
+        OR: [
+          { status: { in: ['UNMATCHED', 'RECEIVED'] } },
+          {
+            status: 'MATCHED',
+            payment: { status: { in: ['PENDING', 'USER_CONFIRMED'] } },
+          },
+        ],
+      },
     }),
   );
 });
@@ -341,7 +393,13 @@ it('admin can find older unmatched receipt by exact bank reference, bounded and 
     expect.objectContaining({
       take: 100,
       where: {
-        status: { in: ['UNMATCHED', 'RECEIVED'] },
+        OR: [
+          { status: { in: ['UNMATCHED', 'RECEIVED'] } },
+          {
+            status: 'MATCHED',
+            payment: { status: { in: ['PENDING', 'USER_CONFIRMED'] } },
+          },
+        ],
         providerTransactionId: 'mock-reference',
       },
     }),

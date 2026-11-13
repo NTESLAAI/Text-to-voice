@@ -1,5 +1,13 @@
 const vi = {
   translation: {
+    bankPolicy: {
+      account: "Tài khoản nhận tiền",
+      unknown: "Chưa xác định",
+      spendable: "Tiền dư được phép sử dụng",
+      unverified: "Chưa đủ bằng chứng",
+      reviewRequired:
+        "Số liệu đối soát chưa chứng minh nguồn tiền. Cần xét duyệt trước khi xác nhận hoặc xử lý tiền dư.",
+    },
     auth: {
       login: {
         errors: {

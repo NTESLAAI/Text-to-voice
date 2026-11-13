@@ -1,4 +1,12 @@
-import { ConflictException, BadRequestException } from '@nestjs/common';
+import {
+  isolateBankPolicy,
+  sourceFixture,
+} from '../../test/jest-mocks/receiving-bank.fixture';
+import {
+  ConflictException,
+  BadRequestException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -13,6 +21,8 @@ describe('PaymentTransactionService', () => {
     $queryRaw: jest.fn(),
     paymentTransaction: {
       update: jest.fn(),
+      create: jest.fn(),
+      findFirst: jest.fn(),
     },
   };
 
@@ -29,6 +39,7 @@ describe('PaymentTransactionService', () => {
   };
 
   const validDto = {
+    receivingBankAccountId: 'bank-fixture',
     providerTransactionId: 'BANK-TX-001',
     amount: 500000,
     currency: 'VND',
@@ -39,6 +50,13 @@ describe('PaymentTransactionService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    isolateBankPolicy();
+    tx.paymentTransaction.findFirst.mockImplementation((args) =>
+      prisma.paymentTransaction.findUnique(args),
+    );
+    tx.paymentTransaction.create.mockImplementation((args) =>
+      prisma.paymentTransaction.create(args),
+    );
     paymentService.confirmPayment.mockResolvedValue({ status: 'PAID' });
     prisma.$transaction.mockImplementation(
       (callback: (transaction: typeof tx) => unknown) => callback(tx),
@@ -75,6 +93,7 @@ describe('PaymentTransactionService', () => {
         amount: 500000,
         currency: 'VND',
         status: 'UNMATCHED',
+        receivingBankAccountId: 'bank-fixture',
       }),
     });
     expect(result.status).toBe('UNMATCHED');
@@ -117,9 +136,9 @@ describe('PaymentTransactionService', () => {
       code: 'P2002',
     });
 
-    await expect(
-      service.recordBankTransaction(validDto),
-    ).rejects.toBeInstanceOf(ConflictException);
+    await expect(service.recordBankTransaction(validDto)).rejects.toEqual({
+      code: 'P2002',
+    });
   });
   describe('linkBankTransaction', () => {
     const linkDto: LinkBankTransactionDto = {
@@ -129,6 +148,7 @@ describe('PaymentTransactionService', () => {
     const payment = {
       id: 'payment-001',
       status: 'PENDING',
+      receivingBankAccountId: 'bank-fixture',
       currency: 'VND',
     };
 
@@ -136,6 +156,7 @@ describe('PaymentTransactionService', () => {
       id: 'transaction-001',
       paymentId: null,
       status: 'UNMATCHED',
+      receivingBankAccountId: 'bank-fixture',
       currency: 'VND',
     };
 
@@ -235,11 +256,13 @@ describe('PaymentTransactionService', () => {
       id: 'transaction-001',
       paymentId: 'payment-001',
       status: 'UNMATCHED',
+      receivingBankAccountId: 'bank-fixture',
     };
 
     beforeEach(() => {
       prisma.paymentTransaction.findUnique.mockResolvedValue({
         id: transaction.id,
+        provider:'BANK_TRANSFER',
         paymentId: transaction.paymentId,
       });
 
@@ -249,17 +272,27 @@ describe('PaymentTransactionService', () => {
 
       tx.paymentTransaction.update.mockResolvedValue({
         ...transaction,
+        ...sourceFixture,
         status: 'RECEIVED',
       });
     });
 
     it('confirms receipt without activating the payment', async () => {
-      const result =
-        await service.confirmTransactionReceived('transaction-001');
+      const result = await service.confirmTransactionReceived(
+        'transaction-001',
+        'admin',
+        'synthetic-statement-row',
+      );
 
       expect(tx.paymentTransaction.update).toHaveBeenCalledWith({
         where: { id: 'transaction-001' },
-        data: { status: 'RECEIVED' },
+        data: {
+          status: 'RECEIVED',
+          verificationSource: 'MANUAL_ADMIN',
+          sourceVerifiedAt: expect.any(Date),
+          sourceVerifiedById: 'admin',
+          verificationReference: 'synthetic-statement-row',
+        },
       });
 
       expect(result.status).toBe('RECEIVED');
@@ -269,7 +302,11 @@ describe('PaymentTransactionService', () => {
       prisma.paymentTransaction.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.confirmTransactionReceived('transaction-missing'),
+        service.confirmTransactionReceived(
+          'transaction-missing',
+          'admin',
+          'synthetic-statement-row',
+        ),
       ).rejects.toBeInstanceOf(BadRequestException);
 
       expect(prisma.$transaction).not.toHaveBeenCalled();
@@ -282,7 +319,11 @@ describe('PaymentTransactionService', () => {
       });
 
       await expect(
-        service.confirmTransactionReceived('transaction-001'),
+        service.confirmTransactionReceived(
+          'transaction-001',
+          'admin',
+          'synthetic-statement-row',
+        ),
       ).rejects.toBeInstanceOf(ConflictException);
 
       expect(prisma.$transaction).not.toHaveBeenCalled();
@@ -297,7 +338,11 @@ describe('PaymentTransactionService', () => {
           ]);
 
         await expect(
-          service.confirmTransactionReceived('transaction-001'),
+          service.confirmTransactionReceived(
+            'transaction-001',
+            'admin',
+            'synthetic-statement-row',
+          ),
         ).rejects.toBeInstanceOf(ConflictException);
 
         expect(tx.paymentTransaction.update).not.toHaveBeenCalled();
@@ -310,7 +355,11 @@ describe('PaymentTransactionService', () => {
         .mockResolvedValueOnce([{ ...transaction, status: 'RECEIVED' }]);
 
       await expect(
-        service.confirmTransactionReceived('transaction-001'),
+        service.confirmTransactionReceived(
+          'transaction-001',
+          'admin',
+          'synthetic-statement-row',
+        ),
       ).rejects.toBeInstanceOf(ConflictException);
 
       expect(tx.paymentTransaction.update).not.toHaveBeenCalled();
@@ -321,7 +370,13 @@ describe('PaymentTransactionService', () => {
     const transaction = {
       id: 'transaction-001',
       paymentId: 'payment-001',
+      ...sourceFixture,
       status: 'RECEIVED',
+      provider: 'SEPAY',
+      providerTransactionId: '12345',
+      amount: 100,
+      currency: 'VND',
+      matchedAt: new Date('2026-10-27T00:00:00.000Z'),
     };
 
     beforeEach(() => {
@@ -331,7 +386,15 @@ describe('PaymentTransactionService', () => {
       });
 
       tx.$queryRaw
-        .mockResolvedValueOnce([{ id: 'payment-001', status: 'PENDING' }])
+        .mockReset()
+        .mockResolvedValueOnce([
+          {
+            id: 'payment-001',
+            status: 'PENDING',
+            receivingBankAccountId: 'bank-fixture',
+            currency: 'VND',
+          },
+        ])
         .mockResolvedValueOnce([transaction]);
 
       tx.paymentTransaction.update.mockResolvedValue({
@@ -353,8 +416,13 @@ describe('PaymentTransactionService', () => {
       });
 
       expect(result.status).toBe('MATCHED');
-      expect(paymentService.confirmPayment).toHaveBeenCalledWith('payment-001');
+      expect(paymentService.confirmPayment).toHaveBeenCalledWith(
+        'payment-001',
+        true,
+      );
       expect(result.paymentConfirmation).toEqual({ status: 'PAID' });
+      expect(result.activationStatus).toBe('ACTIVATED');
+      expect(result.replayed).toBe(false);
     });
 
     it('keeps the matched transaction committed if payment confirmation fails', async () => {
@@ -364,7 +432,7 @@ describe('PaymentTransactionService', () => {
 
       await expect(
         service.reconcileBankTransaction('transaction-001'),
-      ).rejects.toThrow('Payment activation failed');
+      ).rejects.toBeInstanceOf(InternalServerErrorException);
 
       expect(prisma.$transaction).toHaveBeenCalled();
       expect(tx.paymentTransaction.update).toHaveBeenCalledWith({
@@ -374,7 +442,10 @@ describe('PaymentTransactionService', () => {
           matchedAt: expect.any(Date),
         },
       });
-      expect(paymentService.confirmPayment).toHaveBeenCalledWith('payment-001');
+      expect(paymentService.confirmPayment).toHaveBeenCalledWith(
+        'payment-001',
+        true,
+      );
     });
 
     it('rejects when the transaction does not exist', async () => {
@@ -422,17 +493,175 @@ describe('PaymentTransactionService', () => {
 
       expect(tx.paymentTransaction.update).not.toHaveBeenCalled();
     });
-    it('rejects when the transaction is already MATCHED', async () => {
+    it('replays verified SEPAY MATCHED without changing audit', async () => {
       tx.$queryRaw
         .mockReset()
-        .mockResolvedValueOnce([{ id: 'payment-001', status: 'PENDING' }])
+        .mockResolvedValueOnce([
+          {
+            id: 'payment-001',
+            status: 'PENDING',
+            receivingBankAccountId: 'bank-fixture',
+            currency: 'VND',
+          },
+        ])
         .mockResolvedValueOnce([{ ...transaction, status: 'MATCHED' }]);
 
+      const result = await service.reconcileBankTransaction('transaction-001');
+      expect(result).toEqual(
+        expect.objectContaining({
+          ...transaction,
+          status: 'MATCHED',
+          replayed: true,
+          activationStatus: 'ACTIVATED',
+        }),
+      );
+      expect(tx.paymentTransaction.update).not.toHaveBeenCalled();
+    });
+
+    function locked(receipt: object, paymentStatus = 'PENDING') {
+      tx.$queryRaw
+        .mockReset()
+        .mockResolvedValueOnce([
+          {
+            id: 'payment-001',
+            status: paymentStatus,
+            currency: 'VND',
+            receivingBankAccountId: 'bank-fixture',
+          },
+        ])
+        .mockResolvedValueOnce([
+          { ...transaction, status: 'MATCHED', ...receipt },
+        ]);
+    }
+
+    it('RC17 returns ALREADY_ACTIVATED after receipt commit on a PAID payment', async () => {
+      locked({ status: 'RECEIVED' }, 'PAID');
+      paymentService.confirmPayment.mockResolvedValue({
+        id: 'payment-001',
+        status: 'PAID',
+        activationStatus: 'ALREADY_ACTIVATED',
+      });
+      const result = await service.reconcileBankTransaction('transaction-001');
+      expect(result.activationStatus).toBe('ALREADY_ACTIVATED');
+      expect(result.status).toBe('MATCHED');
+      expect(tx.paymentTransaction.update).toHaveBeenCalledTimes(1);
+      const calls = tx.$queryRaw.mock.calls as unknown as [
+        TemplateStringsArray,
+        ...unknown[],
+      ][];
+      const first = calls[0][0].join('?');
+      const next = calls[1][0].join('?');
+      expect(first).toContain('FROM "Payment"');
+      expect(first).toContain('FOR UPDATE');
+      expect(next).toContain('FROM "PaymentTransaction"');
+      expect(next).toContain('FOR UPDATE');
+    });
+
+    it.each([
+      { provider: 'BANK_TRANSFER' },
+      { provider: 'UNKNOWN' },
+      { providerTransactionId: null },
+      { providerTransactionId: 'bad' },
+      { matchedAt: null },
+      { matchedAt: new Date('invalid') },
+      { amount: 0 },
+      { amount: NaN },
+      { currency: 'USD' },
+    ])(
+      'refuses replay without existing source evidence: %p',
+      async (receipt) => {
+        locked(receipt);
+        await expect(
+          service.reconcileBankTransaction('transaction-001'),
+        ).rejects.toThrow('RECEIPT_SOURCE_VERIFICATION_REQUIRED');
+        expect(tx.paymentTransaction.update).not.toHaveBeenCalled();
+        expect(paymentService.confirmPayment).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(['CANCELLED', 'FAILED', 'UNKNOWN'])(
+      'refuses payment %s without writing receipt',
+      async (status) => {
+        locked({}, status);
+        await expect(
+          service.reconcileBankTransaction('transaction-001'),
+        ).rejects.toThrow('PAYMENT_NOT_RECONCILABLE');
+        expect(tx.paymentTransaction.update).not.toHaveBeenCalled();
+        expect(paymentService.confirmPayment).not.toHaveBeenCalled();
+      },
+    );
+
+    it('does not legitimize an unverified manual MATCHED receipt on PAID', async () => {
+      locked({ provider: 'BANK_TRANSFER' }, 'PAID');
+      await expect(
+        service.reconcileBankTransaction('transaction-001'),
+      ).rejects.toThrow('RECEIPT_SOURCE_VERIFICATION_REQUIRED');
+      expect(tx.paymentTransaction.update).not.toHaveBeenCalled();
+      expect(paymentService.confirmPayment).not.toHaveBeenCalled();
+    });
+
+    it('rejects changed payment link before activation', async () => {
+      locked({ paymentId: 'other' });
       await expect(
         service.reconcileBankTransaction('transaction-001'),
       ).rejects.toBeInstanceOf(ConflictException);
-
       expect(tx.paymentTransaction.update).not.toHaveBeenCalled();
+      expect(paymentService.confirmPayment).not.toHaveBeenCalled();
+    });
+
+    it('reports underfunding separately from MATCHED, without activation success', async () => {
+      paymentService.confirmPayment.mockRejectedValue(
+        new BadRequestException({ code: 'PAYMENT_UNDERFUNDED' }),
+      );
+      const result = await service.reconcileBankTransaction('transaction-001');
+      expect(result.status).toBe('MATCHED');
+      expect(result.activationStatus).toBe('AWAITING_FUNDS');
+      expect(result.paymentConfirmation).toBeNull();
+    });
+
+    it('filters errors after commit and retries eligible MATCHED without audit changes', async () => {
+      paymentService.confirmPayment.mockRejectedValueOnce(
+        new Error('SENSITIVE_SENTINEL'),
+      );
+      try {
+        await service.reconcileBankTransaction('transaction-001');
+        throw new Error('expected failure');
+      } catch (error) {
+        expect(error).toBeInstanceOf(InternalServerErrorException);
+        expect(
+          JSON.stringify((error as InternalServerErrorException).getResponse()),
+        ).not.toContain('SENSITIVE_SENTINEL');
+        expect((error as InternalServerErrorException).getResponse()).toEqual({
+          code: 'PAYMENT_ACTIVATION_FAILED',
+          receiptStatus: 'MATCHED',
+          activationStatus: 'FAILED',
+        });
+      }
+      expect(tx.paymentTransaction.update).toHaveBeenCalledTimes(1);
+      locked({});
+      const result = await service.reconcileBankTransaction('transaction-001');
+      expect(result.replayed).toBe(true);
+      expect(result.matchedAt).toEqual(transaction.matchedAt);
+      expect(tx.paymentTransaction.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not mask unrelated business errors as activation success', async () => {
+      paymentService.confirmPayment.mockRejectedValue(
+        new BadRequestException('ACTIVE_PAID_SUBSCRIPTION_EXISTS'),
+      );
+      await expect(
+        service.reconcileBankTransaction('transaction-001'),
+      ).rejects.toBeInstanceOf(InternalServerErrorException);
+    });
+
+    it('never activates after receipt transaction/commit failure', async () => {
+      prisma.$transaction.mockRejectedValueOnce(
+        new Error('COMMIT_OUTCOME_UNKNOWN'),
+      );
+      await expect(
+        service.reconcileBankTransaction('transaction-001'),
+      ).rejects.toThrow('COMMIT_OUTCOME_UNKNOWN');
+      expect(paymentService.confirmPayment).not.toHaveBeenCalled();
     });
   });
 });

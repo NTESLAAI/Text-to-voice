@@ -660,7 +660,18 @@ export async function resetPassword(
   return response.data;
 }
 
+export interface ReceivingBankAccountView {
+  id: string;
+  code: string;
+  bankCode: string;
+  accountNumberMasked: string;
+  policy: "SEPAY_PRIMARY" | "MANUAL_ALLOWED";
+  isActive: boolean;
+}
 export interface AdminPayment {
+  receivingBankAccount?: ReceivingBankAccountView | null;
+  spendabilityStatus?: "VERIFIED" | "UNKNOWN";
+  spendableAmount?: string | null;
   id: string;
   user: {
     id: string;
@@ -687,6 +698,10 @@ export interface AdminPayment {
   surplusAmount: number;
 
   transactions: {
+    receivingBankAccountId?: string | null;
+    receivingBankAccount?: ReceivingBankAccountView | null;
+    verificationSource?: "SEPAY_WEBHOOK" | "MANUAL_ADMIN" | null;
+    sourceVerifiedAt?: string | null;
     id: string;
     provider: string;
     providerTransactionId: string | null;
@@ -699,6 +714,14 @@ export interface AdminPayment {
     matchedAt: string | null;
     createdAt: string;
   }[];
+}
+
+export async function getReceivingBankAccounts(): Promise<
+  ReceivingBankAccountView[]
+> {
+  return (
+    await api.get<ReceivingBankAccountView[]>("/admin/receiving-bank-accounts")
+  ).data;
 }
 
 export async function getAdminPayments(): Promise<AdminPayment[]> {

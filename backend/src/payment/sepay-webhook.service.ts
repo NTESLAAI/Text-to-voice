@@ -6,6 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ReceivingBankAccountService } from './receiving-bank-account.service';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentService } from './payment.service';
@@ -17,7 +18,11 @@ export class SepayWebhookService {
     private readonly prisma: PrismaService,
     private readonly paymentService: PaymentService,
     private readonly config: ConfigService = new ConfigService(),
-  ) {}
+  ) {
+    this.accounts = new ReceivingBankAccountService(prisma);
+  }
+
+  private readonly accounts: ReceivingBankAccountService;
 
   private extractTransferCode(body: SepayWebhookDto): string | null {
     const pattern = /\b(?:KH|GH|NC)-[A-HJ-NP-Z2-9]{8}\b/i;
@@ -57,20 +62,20 @@ export class SepayWebhookService {
       throw new BadRequestException('SEPAY_INVALID_TRANSACTION');
     }
 
+    const mapped = await this.accounts.resolveSepay(
+      this.config.get<string>('SEPAY_RECEIVING_BANK_ACCOUNT_ID'),
+      body.accountNumber,
+      body.gateway,
+    );
     const providerTransactionId = String(body.id);
 
     // Idempotency: webhook gửi lại cùng transaction ID không tạo bản ghi mới.
-    const existing = await this.prisma.paymentTransaction.findUnique({
-      where: {
-        provider_providerTransactionId: {
-          provider: 'SEPAY',
-          providerTransactionId,
-        },
-      },
+    const existing = await this.prisma.paymentTransaction.findFirst({
+      where: { provider: 'SEPAY', providerTransactionId },
     });
 
     if (existing) {
-      this.assertDuplicate(existing, body);
+      await this.assertDuplicate(existing, body);
       return this.handleDuplicateTransaction(existing);
     }
 
@@ -86,12 +91,14 @@ export class SepayWebhookService {
 
     try {
       await this.prisma.$transaction(async (tx) => {
+        await this.accounts.lock(tx, mapped.id, true);
         const payment = await tx.payment.findUnique({
           where: { transferCode },
           select: {
             id: true,
             status: true,
             currency: true,
+            receivingBankAccountId: true,
           },
         });
 
@@ -99,10 +106,16 @@ export class SepayWebhookService {
           !payment ||
           payment.currency !== 'VND' ||
           (body.currency !== undefined && body.currency !== 'VND') ||
-          !['PENDING', 'USER_CONFIRMED'].includes(payment.status)
+          !['PENDING', 'USER_CONFIRMED'].includes(payment.status) ||
+          payment.receivingBankAccountId !== mapped.id
         ) {
           await tx.paymentTransaction.create({
             data: {
+              receivingBankAccountId: mapped.id,
+              bankReference: body.referenceCode || null,
+              verificationSource: 'SEPAY_WEBHOOK',
+              sourceVerifiedAt: new Date(),
+              sourceVerifiedById: null,
               provider: 'SEPAY',
               providerTransactionId,
               amount: body.transferAmount,
@@ -131,16 +144,27 @@ export class SepayWebhookService {
 
         const latestPayment = await tx.payment.findUnique({
           where: { id: payment.id },
-          select: { id: true, status: true, currency: true },
+          select: {
+            id: true,
+            status: true,
+            currency: true,
+            receivingBankAccountId: true,
+          },
         });
 
         if (
           !latestPayment ||
           latestPayment.currency !== 'VND' ||
-          !['PENDING', 'USER_CONFIRMED'].includes(latestPayment.status)
+          !['PENDING', 'USER_CONFIRMED'].includes(latestPayment.status) ||
+          latestPayment.receivingBankAccountId !== mapped.id
         ) {
           await tx.paymentTransaction.create({
             data: {
+              receivingBankAccountId: mapped.id,
+              bankReference: body.referenceCode || null,
+              verificationSource: 'SEPAY_WEBHOOK',
+              sourceVerifiedAt: new Date(),
+              sourceVerifiedById: null,
               provider: 'SEPAY',
               providerTransactionId,
               amount: body.transferAmount,
@@ -160,6 +184,11 @@ export class SepayWebhookService {
 
         await tx.paymentTransaction.create({
           data: {
+            receivingBankAccountId: mapped.id,
+            bankReference: body.referenceCode || null,
+            verificationSource: 'SEPAY_WEBHOOK',
+            sourceVerifiedAt: new Date(),
+            sourceVerifiedById: null,
             paymentId: latestPayment.id,
             provider: 'SEPAY',
             providerTransactionId,
@@ -181,17 +210,12 @@ export class SepayWebhookService {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        const existing = await this.prisma.paymentTransaction.findUnique({
-          where: {
-            provider_providerTransactionId: {
-              provider: 'SEPAY',
-              providerTransactionId,
-            },
-          },
+        const existing = await this.prisma.paymentTransaction.findFirst({
+          where: { provider: 'SEPAY', providerTransactionId },
         });
 
         if (existing) {
-          this.assertDuplicate(existing, body);
+          await this.assertDuplicate(existing, body);
           return this.handleDuplicateTransaction(existing);
         }
 
@@ -247,34 +271,42 @@ export class SepayWebhookService {
     body: SepayWebhookDto,
     providerTransactionId: string,
   ) {
+    const mapped = await this.accounts.resolveSepay(
+      this.config.get<string>('SEPAY_RECEIVING_BANK_ACCOUNT_ID'),
+      body.accountNumber,
+      body.gateway,
+    );
     try {
-      await this.prisma.paymentTransaction.create({
-        data: {
-          provider: 'SEPAY',
-          providerTransactionId,
-          amount: body.transferAmount,
-          currency: body.currency ?? 'VND',
-          status: 'UNMATCHED',
-          reference: body.content,
-          note: 'SEPAY_REFERENCE_UNMATCHED_OR_AMBIGUOUS',
-          receivedAt: this.parseTransactionDate(body.transactionDate),
-        },
+      await this.prisma.$transaction(async (tx) => {
+        await this.accounts.lock(tx, mapped.id, true);
+        return tx.paymentTransaction.create({
+          data: {
+            receivingBankAccountId: mapped.id,
+            bankReference: body.referenceCode || null,
+            verificationSource: 'SEPAY_WEBHOOK',
+            sourceVerifiedAt: new Date(),
+            sourceVerifiedById: null,
+            provider: 'SEPAY',
+            providerTransactionId,
+            amount: body.transferAmount,
+            currency: body.currency ?? 'VND',
+            status: 'UNMATCHED',
+            reference: body.content,
+            note: 'SEPAY_REFERENCE_UNMATCHED_OR_AMBIGUOUS',
+            receivedAt: this.parseTransactionDate(body.transactionDate),
+          },
+        });
       });
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        const existing = await this.prisma.paymentTransaction.findUnique({
-          where: {
-            provider_providerTransactionId: {
-              provider: 'SEPAY',
-              providerTransactionId,
-            },
-          },
+        const existing = await this.prisma.paymentTransaction.findFirst({
+          where: { provider: 'SEPAY', providerTransactionId },
         });
         if (!existing) throw error;
-        this.assertDuplicate(existing, body);
+        await this.assertDuplicate(existing, body);
         return;
       }
 
@@ -287,10 +319,21 @@ export class SepayWebhookService {
     return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
   }
 
-  private assertDuplicate(
-    existing: { amount: number; currency: string },
+  private async assertDuplicate(
+    existing: {
+      amount: number;
+      currency: string;
+      receivingBankAccountId: string | null;
+    },
     body: SepayWebhookDto,
   ) {
+    const mapped = await this.accounts.resolveSepay(
+      this.config.get<string>('SEPAY_RECEIVING_BANK_ACCOUNT_ID'),
+      body.accountNumber,
+      body.gateway,
+    );
+    if (existing.receivingBankAccountId !== mapped.id)
+      throw new ConflictException('SEPAY_LEGACY_OR_ACCOUNT_CONFLICT');
     if (
       existing.amount !== body.transferAmount ||
       existing.currency !== (body.currency ?? 'VND')

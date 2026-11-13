@@ -1,5 +1,13 @@
 const en = {
   translation: {
+    bankPolicy: {
+      account: "Receiving bank account",
+      unknown: "Unknown",
+      spendable: "Spendable surplus",
+      unverified: "Insufficient evidence",
+      reviewRequired:
+        "Reconciliation totals do not establish the source of funds. Review is required before confirmation or surplus handling.",
+    },
     auth: {
       login: {
         errors: {

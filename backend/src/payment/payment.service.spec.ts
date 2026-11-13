@@ -1,3 +1,7 @@
+import {
+  isolateBankPolicy,
+  sourceFixture,
+} from '../../test/jest-mocks/receiving-bank.fixture';
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { PaymentService } from './payment.service';
@@ -33,6 +37,7 @@ describe('PaymentService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    isolateBankPolicy();
     prismaMock.promotion.findFirst.mockResolvedValue(null);
     const module: TestingModule = await Test.createTestingModule({
       providers: [

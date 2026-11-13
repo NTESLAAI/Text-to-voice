@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import {
   confirmAdminPayment,
@@ -8,6 +9,9 @@ import {
 import type { AdminPayment } from "../../services/api";
 
 interface PaymentDetail {
+  receivingBankAccount: AdminPayment["receivingBankAccount"];
+  spendabilityStatus: AdminPayment["spendabilityStatus"];
+  spendableAmount: AdminPayment["spendableAmount"];
   id: string;
   userName: string;
   email: string;
@@ -80,6 +84,9 @@ function getStatusClass(status: string) {
 
 function toPaymentDetail(payment: AdminPayment): PaymentDetail {
   return {
+    receivingBankAccount: payment.receivingBankAccount,
+    spendabilityStatus: payment.spendabilityStatus,
+    spendableAmount: payment.spendableAmount,
     id: payment.id,
     userName: payment.user?.name || "—",
     email: payment.user?.email || "—",
@@ -100,6 +107,7 @@ function toPaymentDetail(payment: AdminPayment): PaymentDetail {
 }
 
 export default function AdminPayments() {
+  const { t } = useTranslation();
   const [referenceSearch, setReferenceSearch] = useState("");
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
@@ -320,6 +328,29 @@ export default function AdminPayments() {
 
             <div className="admin-payment-detail">
               <div>
+                <span>{t("bankPolicy.account")}</span>
+                <strong>
+                  {selectedPayment.receivingBankAccount
+                    ? `${selectedPayment.receivingBankAccount.code} · ${selectedPayment.receivingBankAccount.accountNumberMasked} · ${selectedPayment.receivingBankAccount.policy}`
+                    : t("bankPolicy.unknown")}
+                </strong>
+              </div>
+              <div>
+                <span>{t("bankPolicy.spendable")}</span>
+                <strong>
+                  {selectedPayment.spendabilityStatus === "VERIFIED" &&
+                  selectedPayment.spendableAmount != null
+                    ? formatAmount(
+                        Number(selectedPayment.spendableAmount),
+                        selectedPayment.currency,
+                      )
+                    : t("bankPolicy.unverified")}
+                </strong>
+              </div>
+              {selectedPayment.spendabilityStatus !== "VERIFIED" && (
+                <p role="status">{t("bankPolicy.reviewRequired")}</p>
+              )}
+              <div>
                 <span>Tài khoản</span>
                 <strong>{selectedPayment.userName}</strong>
               </div>
@@ -450,7 +481,10 @@ export default function AdminPayments() {
                   type="button"
                   className="admin-modal-confirm"
                   onClick={handleConfirmPayment}
-                  disabled={confirming}
+                  disabled={
+                    confirming ||
+                    selectedPayment.spendabilityStatus !== "VERIFIED"
+                  }
                 >
                   {confirming ? "Đang xác nhận..." : "Xác nhận đã nhận tiền"}
                 </button>
