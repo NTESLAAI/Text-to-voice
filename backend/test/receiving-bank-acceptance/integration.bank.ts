@@ -1,3 +1,4 @@
+import { CommercialControlService } from '../../src/commercial-control/commercial-control.service';
 /* Synthetic bank acceptance; no AppModule, dotenv, external AI/payment/SMTP. */
 import 'reflect-metadata';
 import { randomUUID, randomBytes, createHmac } from 'node:crypto';
@@ -496,7 +497,12 @@ describe('Receiving bank acceptance', () => {
     manual2 = await account('manual2');
     sepay = await account('sepay', 'SEPAY_PRIMARY');
     inactive = await account('inactive', 'MANUAL_ALLOWED', false);
-    const payment = new PaymentService(db),
+    const payment = new PaymentService(
+        db,
+        new CommercialControlService(
+          new ConfigService({ PAYMENTS_ENABLED: 'true' }),
+        ),
+      ),
       configValues = {
         JWT_SECRET: secret,
         SEPAY_WEBHOOK_SECRET: hookSecret,

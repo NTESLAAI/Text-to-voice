@@ -2,6 +2,7 @@
 // Actual bank-policy and transaction services; only database delegates are mocked.
 import { PaymentTransactionService } from './payment-transaction.service';
 import { PaymentService } from './payment.service';
+import { CommercialControlService } from '../commercial-control/commercial-control.service';
 
 describe('Receiving-account service boundary (no database)', () => {
   const at = new Date('2026-11-13T00:00:00Z');
@@ -296,8 +297,14 @@ describe('Direct confirmation legacy source guard (mock only)', () => {
         subscription: { create: jest.fn() },
       };
       const db: any = { $transaction: jest.fn(async (fn) => fn(tx)) };
+
+      const commercialControlMock = {
+        assertPaymentsEnabled: jest.fn(),
+        isPaymentsEnabled: jest.fn().mockReturnValue(true),
+      } as unknown as CommercialControlService;
+
       await expect(
-        new PaymentService(db).confirmPayment('legacy'),
+        new PaymentService(db, commercialControlMock).confirmPayment('legacy'),
       ).rejects.toMatchObject({
         status: 409,
         message: 'RECEIVING_ACCOUNT_UNKNOWN',

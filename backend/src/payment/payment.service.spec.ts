@@ -3,9 +3,13 @@ import {
   sourceFixture,
 } from '../../test/jest-mocks/receiving-bank.fixture';
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { PaymentService } from './payment.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { CommercialControlService } from '../commercial-control/commercial-control.service';
 
 describe('PaymentService', () => {
   let service: PaymentService;
@@ -46,6 +50,13 @@ describe('PaymentService', () => {
           provide: PrismaService,
           useValue: prismaMock,
         },
+        {
+          provide: CommercialControlService,
+          useValue: {
+            assertPaymentsEnabled: jest.fn(),
+            isPaymentsEnabled: jest.fn().mockReturnValue(true),
+          },
+        },
       ],
     }).compile();
 
@@ -54,6 +65,45 @@ describe('PaymentService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+  it('should block creating payment when payments are disabled', async () => {
+    const commercialControl = {
+      assertPaymentsEnabled: jest.fn(() => {
+        throw new ServiceUnavailableException('PAYMENTS_DISABLED');
+      }),
+    };
+
+    const blockedService = new PaymentService(
+      prismaMock as unknown as PrismaService,
+      commercialControl as unknown as CommercialControlService,
+    );
+
+    await expect(
+      blockedService.createPayment('test-user', 'BASIC'),
+    ).rejects.toThrow('PAYMENTS_DISABLED');
+
+    expect(commercialControl.assertPaymentsEnabled).toHaveBeenCalledTimes(1);
+    expect(prismaMock.payment.create).not.toHaveBeenCalled();
+  });
+
+  it('should block confirming payment when payments are disabled', async () => {
+    const commercialControl = {
+      assertPaymentsEnabled: jest.fn(() => {
+        throw new ServiceUnavailableException('PAYMENTS_DISABLED');
+      }),
+    };
+
+    const blockedService = new PaymentService(
+      prismaMock as unknown as PrismaService,
+      commercialControl as unknown as CommercialControlService,
+    );
+
+    await expect(blockedService.confirmPayment('test-payment')).rejects.toThrow(
+      'PAYMENTS_DISABLED',
+    );
+
+    expect(commercialControl.assertPaymentsEnabled).toHaveBeenCalledTimes(1);
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 
   afterEach(() => {

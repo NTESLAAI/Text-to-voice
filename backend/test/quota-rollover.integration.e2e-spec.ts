@@ -1,3 +1,5 @@
+import { ConfigService } from '@nestjs/config';
+import { CommercialControlService } from '../src/commercial-control/commercial-control.service';
 import 'dotenv/config';
 
 import { randomUUID } from 'crypto';
@@ -30,7 +32,12 @@ describe('Quota rollover integration: T1 → T2 → T3', () => {
       if (rows[0]?.database_name !== 'text_to_voice_test') {
         throw new Error('Sai database kiểm thử. Dừng ngay, không ghi dữ liệu.');
       }
-      paymentService = new PaymentService(prisma);
+      paymentService = new PaymentService(
+        prisma,
+        new CommercialControlService(
+          new ConfigService({ PAYMENTS_ENABLED: 'true' }),
+        ),
+      );
     } catch (error) {
       await prisma.$disconnect().catch(() => undefined);
       prisma = undefined;

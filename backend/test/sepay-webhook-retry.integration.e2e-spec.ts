@@ -1,3 +1,5 @@
+import { ConfigService } from '@nestjs/config';
+import { CommercialControlService } from '../src/commercial-control/commercial-control.service';
 import 'dotenv/config';
 
 import { randomUUID } from 'crypto';
@@ -34,7 +36,12 @@ describe('SePay webhook retry integration', () => {
         throw new Error('Sai database kiểm thử. Dừng ngay, không ghi dữ liệu.');
       }
 
-      paymentService = new PaymentService(prisma);
+      paymentService = new PaymentService(
+        prisma,
+        new CommercialControlService(
+          new ConfigService({ PAYMENTS_ENABLED: 'true' }),
+        ),
+      );
       webhookService = new SepayWebhookService(prisma, paymentService);
     } catch (error) {
       await prisma.$disconnect().catch(() => undefined);
@@ -217,13 +224,8 @@ describe('SePay webhook retry integration', () => {
       'Simulated transient confirmation failure',
     );
 
-    const savedTransaction = await prisma.paymentTransaction.findUnique({
-      where: {
-        provider_providerTransactionId: {
-          provider: 'SEPAY',
-          providerTransactionId: String(body.id),
-        },
-      },
+    const savedTransaction = await prisma.paymentTransaction.findFirst({
+      where: { provider: 'SEPAY', providerTransactionId: String(body.id) },
     });
     expect(savedTransaction).toMatchObject({
       paymentId: payment.id,

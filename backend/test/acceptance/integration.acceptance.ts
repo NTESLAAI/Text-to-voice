@@ -1,3 +1,4 @@
+import { CommercialControlService } from '../../src/commercial-control/commercial-control.service';
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-require-imports, @typescript-eslint/require-await */
 // Prepared integration suite. Never selected by the ordinary Jest testRegex.
 import 'reflect-metadata';
@@ -218,7 +219,12 @@ describe('Acceptance on independently guarded PostgreSQL 17', () => {
     users = new UsersService(db);
     jwt = new JwtService({ secret, signOptions: { expiresIn: '5m' } });
     auth = new AuthService(users, jwt, db, mail as any);
-    payment = new PaymentService(db);
+    payment = new PaymentService(
+      db,
+      new CommercialControlService(
+        new ConfigService({ PAYMENTS_ENABLED: 'true' }),
+      ),
+    );
     cron = new SubscriptionExpiryService(db);
     store = new StoreBillingService(
       db,
@@ -243,6 +249,9 @@ describe('Acceptance on independently guarded PostgreSQL 17', () => {
       ),
       apple as any,
       google as any,
+      new CommercialControlService(
+        new ConfigService({ PAYMENTS_ENABLED: 'true' }),
+      ),
     );
     tts = new Tts(db, new Audio(db), pcm, new Workload(new ConfigService()));
     const module = await Test.createTestingModule({

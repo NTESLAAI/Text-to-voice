@@ -1,3 +1,4 @@
+import { CommercialControlService } from '../../src/commercial-control/commercial-control.service';
 /* Synthetic PostgreSQL acceptance; never imports AppModule or application env. */
 import 'reflect-metadata';
 import { randomUUID, randomBytes, createHmac } from 'node:crypto';
@@ -321,7 +322,12 @@ describe('RCR independent PostgreSQL', () => {
         durationDays: 7,
       },
     });
-    const payment = new PaymentService(db),
+    const payment = new PaymentService(
+        db,
+        new CommercialControlService(
+          new ConfigService({ PAYMENTS_ENABLED: 'true' }),
+        ),
+      ),
       config = new ConfigService({
         JWT_SECRET: secret,
         SEPAY_WEBHOOK_SECRET: webhookSecret,

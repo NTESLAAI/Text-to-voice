@@ -6,6 +6,7 @@ import {
 // Transaction delegates are isolated mock state machines, not PostgreSQL evidence.
 import { Logger } from '@nestjs/common';
 import { PaymentService } from './payment.service';
+import { CommercialControlService } from '../commercial-control/commercial-control.service';
 import { SubscriptionService } from '../subscription/subscription.service';
 import { SubscriptionExpiryService } from '../subscription/subscription-expiry.service';
 import { AdminService } from '../admin/admin.service';
@@ -33,6 +34,13 @@ describe('Expired FREE purchase, quota and activation (mock)', () => {
     quotaLots: [{ charactersRemaining: 99 }],
   });
   let db: any;
+  const commercialControlMock = {
+    assertPaymentsEnabled: jest.fn(),
+    isPaymentsEnabled: jest.fn().mockReturnValue(true),
+  } as unknown as CommercialControlService;
+
+  const createPaymentService = () =>
+    new PaymentService(db, commercialControlMock);
   beforeEach(() => {
     isolateBankPolicy();
     db = {
@@ -86,7 +94,7 @@ describe('Expired FREE purchase, quota and activation (mock)', () => {
       status: 'PAID',
       paidAt,
     });
-    const result = await new PaymentService(db).confirmPayment('p', true);
+    const result = await createPaymentService().confirmPayment('p', true);
     expect(result).toEqual({
       id: 'p',
       status: 'PAID',
@@ -107,7 +115,7 @@ describe('Expired FREE purchase, quota and activation (mock)', () => {
   it('reconciliation opt-in activates once then replays PAID without granting again (mock)', async () => {
     db.payment.findUnique.mockResolvedValue(pending());
     db.subscription.findFirst.mockResolvedValue(free());
-    const service = new PaymentService(db);
+    const service = createPaymentService();
     await service.confirmPayment('p', true);
     db.payment.findUnique.mockResolvedValue({ ...pending(), status: 'PAID' });
     const result = await service.confirmPayment('p', true);
@@ -123,7 +131,7 @@ describe('Expired FREE purchase, quota and activation (mock)', () => {
     async () => {
       db.subscription.count.mockResolvedValue(1);
       await expect(
-        new PaymentService(db).createPayment('u', 'BASIC'),
+        createPaymentService().createPayment('u', 'BASIC'),
       ).rejects.toThrow('ACTIVE_PAID_SUBSCRIPTION_EXISTS');
       expect(db.subscription.count).toHaveBeenCalledWith({
         where: expect.objectContaining({
@@ -139,7 +147,7 @@ describe('Expired FREE purchase, quota and activation (mock)', () => {
   it('a paid entitlement acquired after order creation blocks bank activation without discarding the payment', async () => {
     db.payment.findUnique.mockResolvedValue(pending());
     db.subscription.count.mockResolvedValue(1);
-    await expect(new PaymentService(db).confirmPayment('p')).rejects.toThrow(
+    await expect(createPaymentService().confirmPayment('p')).rejects.toThrow(
       'ACTIVE_PAID_SUBSCRIPTION_EXISTS',
     );
     expect(db.payment.update).not.toHaveBeenCalled();
@@ -164,13 +172,13 @@ describe('Expired FREE purchase, quota and activation (mock)', () => {
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(expired);
       await expect(
-        new PaymentService(db).createPayment('u', 'BASIC'),
+        createPaymentService().createPayment('u', 'BASIC'),
       ).resolves.toMatchObject({ paymentType: 'NEW_PURCHASE' });
       db.payment.findUnique.mockResolvedValue(pending());
       db.subscription.findFirst
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(expired);
-      await new PaymentService(db).confirmPayment('p');
+      await createPaymentService().confirmPayment('p');
       expect(db.subscription.create).toHaveBeenCalledTimes(1);
       expect(db.quotaLot.create).toHaveBeenCalledTimes(1);
       expect(db.quotaLot.update).not.toHaveBeenCalled();
@@ -183,7 +191,7 @@ describe('Expired FREE purchase, quota and activation (mock)', () => {
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce({ ...free(), status });
-      const result = await new PaymentService(db).createPayment('u', 'BASIC');
+      const result = await createPaymentService().createPayment('u', 'BASIC');
       expect(result.paymentType).toBe('NEW_PURCHASE');
       expect(db.payment.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -203,7 +211,7 @@ describe('Expired FREE purchase, quota and activation (mock)', () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ ...free(), plan: target });
     await expect(
-      new PaymentService(db).createPayment('u', 'BASIC'),
+      createPaymentService().createPayment('u', 'BASIC'),
     ).resolves.toMatchObject({ paymentType: 'NEW_PURCHASE' });
     expect(db.quotaLot.create).not.toHaveBeenCalled();
   });
@@ -214,7 +222,7 @@ describe('Expired FREE purchase, quota and activation (mock)', () => {
       db.subscription.findFirst
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce({ ...free(), status });
-      await new PaymentService(db).confirmPayment('p');
+      await createPaymentService().confirmPayment('p');
       expect(db.subscription.create).toHaveBeenCalledTimes(1);
       expect(db.quotaLot.create).toHaveBeenCalledTimes(1);
       expect(db.quotaLot.create).toHaveBeenCalledWith({
@@ -235,9 +243,9 @@ describe('Expired FREE purchase, quota and activation (mock)', () => {
     db.subscription.findFirst
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(free());
-    await new PaymentService(db).confirmPayment('p');
+    await createPaymentService().confirmPayment('p');
     db.payment.findUnique.mockResolvedValue({ ...pending(), status: 'PAID' });
-    await expect(new PaymentService(db).confirmPayment('p')).rejects.toThrow();
+    await expect(createPaymentService().confirmPayment('p')).rejects.toThrow();
     expect(db.quotaLot.create).toHaveBeenCalledTimes(1);
     expect(db.subscription.create).toHaveBeenCalledTimes(1);
   });
@@ -245,7 +253,7 @@ describe('Expired FREE purchase, quota and activation (mock)', () => {
     db.payment.findUnique.mockResolvedValue(pending());
     db.paymentTransaction.aggregate.mockResolvedValue({ _sum: { amount: 50 } });
     await expect(
-      new PaymentService(db).confirmPayment('p'),
+      createPaymentService().confirmPayment('p'),
     ).rejects.toMatchObject({
       response: expect.objectContaining({ code: 'PAYMENT_UNDERFUNDED' }),
     });
@@ -260,7 +268,7 @@ describe('Expired FREE purchase, quota and activation (mock)', () => {
       plan: target,
       expiresAt: new Date(Date.now() + 10000),
     });
-    await expect(new PaymentService(db).confirmPayment('p')).rejects.toThrow();
+    await expect(createPaymentService().confirmPayment('p')).rejects.toThrow();
     expect(db.quotaLot.create).not.toHaveBeenCalled();
   });
   it('expired FREE is visible as expired, never as usable quota', async () => {

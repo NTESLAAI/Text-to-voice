@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { createCipheriv, createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { CommercialControlService } from '../commercial-control/commercial-control.service';
 import { StoreSettings } from './store-settings.service';
 import { AppleStoreService } from './apple-store.service';
 import { GoogleStoreService } from './google-store.service';
@@ -22,6 +23,7 @@ export class StoreBillingService {
     private readonly settings: StoreSettings,
     private readonly apple: AppleStoreService,
     private readonly google: GoogleStoreService,
+    private readonly commercialControl: CommercialControlService,
   ) {}
   binding(userId: string, platform: StorePlatform) {
     if (platform === 'APPLE') {
@@ -58,6 +60,7 @@ export class StoreBillingService {
     };
   }
   async verify(userId: string, platform: StorePlatform, reference: string) {
+    this.commercialControl.assertPaymentsEnabled();
     if (platform === 'APPLE' && !/^\d{1,64}$/.test(reference))
       throw new BadRequestException('STORE_REFERENCE_INVALID');
     const now = Date.now();
@@ -266,6 +269,7 @@ export class StoreBillingService {
           ['ACTIVE', 'CANCELED'].includes(v.state) &&
           v.expiresAt > new Date()
         ) {
+          this.commercialControl.assertPaymentsEnabled();
           const otherPaid = await tx.subscription.findFirst({
             where: {
               userId,
@@ -332,6 +336,7 @@ export class StoreBillingService {
           });
           // Charged conflicts remain recorded for review, never replace benefits.
           if (!paid && (v.initialCycle || renewal)) {
+            this.commercialControl.assertPaymentsEnabled();
             const free = await tx.subscription.findFirst({
               where: { userId, status: 'ACTIVE', plan: { code: 'FREE' } },
             });

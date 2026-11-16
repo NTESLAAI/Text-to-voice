@@ -13,6 +13,9 @@ import { GoogleAuth, OAuth2Client } from 'google-auth-library';
 import { createHash } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { PaymentService } from '../payment/payment.service';
+import { ServiceUnavailableException } from '@nestjs/common';
+import { CommercialControlService } from '../commercial-control/commercial-control.service';
+
 jest.mock('@apple/app-store-server-library', () => ({
   AppStoreServerAPIClient: jest.fn(),
   SignedDataVerifier: jest.fn(),
@@ -131,7 +134,10 @@ describe('Store ledger and delivery transaction (mock only)', () => {
       notification: jest.fn(),
       acknowledge: jest.fn(async () => events.push('ACK')),
     };
-    service = new StoreBillingService(db, settings(), apple, google);
+    service = new StoreBillingService(db, settings(), apple, google, {
+      assertPaymentsEnabled: jest.fn(),
+      isPaymentsEnabled: jest.fn().mockReturnValue(true),
+    } as unknown as CommercialControlService);
   });
   it('catalog never enables purchases before release checks are complete', async () => {
     expect(await service.catalog(user, 'APPLE')).toMatchObject({
@@ -158,6 +164,39 @@ describe('Store ledger and delivery transaction (mock only)', () => {
     expect(tx.quotaLot.create).toHaveBeenCalledTimes(1);
     expect(tx.subscription.create).toHaveBeenCalledTimes(1);
     expect(tx.$queryRaw.mock.calls[0][0].join(' ')).toContain('FOR UPDATE');
+  });
+  it('blocks new paid entitlement from Apple notification when payments are disabled', async () => {
+    const commercialControlMock = {
+      assertPaymentsEnabled: jest.fn(() => {
+        throw new ServiceUnavailableException('PAYMENTS_DISABLED');
+      }),
+      isPaymentsEnabled: jest.fn().mockReturnValue(false),
+    };
+
+    const blockedService = new StoreBillingService(
+      db,
+      settings(),
+      apple,
+      google,
+      commercialControlMock as unknown as CommercialControlService,
+    );
+
+    db.storePurchase.findUnique = jest.fn(async () => ({
+      userId: user,
+    }));
+
+    await expect(
+      blockedService.notification('APPLE', 'mock-notification'),
+    ).rejects.toThrow('PAYMENTS_DISABLED');
+
+    expect(commercialControlMock.assertPaymentsEnabled).toHaveBeenCalledTimes(
+      1,
+    );
+
+    expect(tx.subscription.create).not.toHaveBeenCalled();
+    expect(tx.quotaLot.create).not.toHaveBeenCalled();
+    expect(tx.subscription.update).not.toHaveBeenCalled();
+    expect(events).not.toContain('COMMIT');
   });
   it('expired FREE may be replaced without FREE rollover', async () => {
     tx.subscription.findFirst
@@ -462,7 +501,10 @@ describe('Store ledger and delivery transaction (mock only)', () => {
     apple.verify.mockImplementation(async (ref) =>
       verified({ cycleId: ref, chainId: ref }),
     );
-    const worker = new StoreBillingService(db, settings(), apple, google);
+    const worker = new StoreBillingService(db, settings(), apple, google, {
+      assertPaymentsEnabled: jest.fn(),
+      isPaymentsEnabled: jest.fn().mockReturnValue(true),
+    } as unknown as CommercialControlService);
     const result = await Promise.all([
       service.verify(user, 'APPLE', '100'),
       worker.verify(user, 'APPLE', '101'),
@@ -524,6 +566,185 @@ describe('Store ledger and delivery transaction (mock only)', () => {
         data: { status: 'EXPIRED' },
       });
       expect(tx.quotaLot.create).toHaveBeenCalledTimes(1);
+    },
+  );
+  it('blocks ON_HOLD reactivation when payments are disabled', async () => {
+    const commercialControlMock = {
+      assertPaymentsEnabled: jest.fn(() => {
+        throw new ServiceUnavailableException('PAYMENTS_DISABLED');
+      }),
+      isPaymentsEnabled: jest.fn().mockReturnValue(false),
+    };
+
+    const blockedService = new StoreBillingService(
+      db,
+      settings(),
+      apple,
+      google,
+      commercialControlMock as unknown as CommercialControlService,
+    );
+
+    const holdCycle = verified({ state: 'ON_HOLD' });
+
+    cycle = {
+      id: 'cycle',
+      purchaseId: 'purchase',
+      subscriptionId: 'sub',
+      state: 'ON_HOLD',
+      refundReview: false,
+      observedAt: new Date(Date.now() - 60000),
+      deliveryStatus: 'GRANTED',
+      productId: holdCycle.productId,
+      expiresAt: holdCycle.expiresAt,
+    };
+
+    purchase = {
+      id: 'purchase',
+      userId: user,
+    };
+
+    apple.notification.mockResolvedValue(verified({ state: 'ACTIVE' }));
+
+    await expect(
+      blockedService.notification('APPLE', 'mock-notification'),
+    ).rejects.toThrow('PAYMENTS_DISABLED');
+
+    expect(commercialControlMock.assertPaymentsEnabled).toHaveBeenCalledTimes(
+      1,
+    );
+
+    expect(tx.subscription.updateMany).not.toHaveBeenCalled();
+    expect(tx.quotaLot.updateMany).not.toHaveBeenCalled();
+    expect(tx.subscription.create).not.toHaveBeenCalled();
+    expect(tx.quotaLot.create).not.toHaveBeenCalled();
+    expect(events).not.toContain('COMMIT');
+  });
+  it('processes REVOKED notification even when payments are disabled', async () => {
+    const commercialControlMock = {
+      assertPaymentsEnabled: jest.fn(() => {
+        throw new ServiceUnavailableException('PAYMENTS_DISABLED');
+      }),
+      isPaymentsEnabled: jest.fn().mockReturnValue(false),
+    };
+
+    const blockedService = new StoreBillingService(
+      db,
+      settings(),
+      apple,
+      google,
+      commercialControlMock as unknown as CommercialControlService,
+    );
+
+    const oldCycle = verified({ state: 'ACTIVE' });
+
+    cycle = {
+      id: 'cycle',
+      purchaseId: 'purchase',
+      subscriptionId: 'sub',
+      state: 'ACTIVE',
+      refundReview: false,
+      observedAt: new Date(Date.now() - 60000),
+      deliveryStatus: 'GRANTED',
+      productId: oldCycle.productId,
+      expiresAt: oldCycle.expiresAt,
+    };
+
+    purchase = {
+      id: 'purchase',
+      userId: user,
+    };
+
+    apple.notification.mockResolvedValue(verified({ state: 'REVOKED' }));
+
+    await expect(
+      blockedService.notification('APPLE', 'mock-notification'),
+    ).resolves.toMatchObject({
+      state: 'REVOKED',
+    });
+
+    expect(commercialControlMock.assertPaymentsEnabled).not.toHaveBeenCalled();
+
+    expect(tx.subscription.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'sub',
+        userId: user,
+        billingSource: 'APPLE',
+      },
+      data: { status: 'EXPIRED' },
+    });
+
+    expect(tx.quotaLot.updateMany).toHaveBeenCalledWith({
+      where: { subscriptionId: 'sub' },
+      data: { charactersRemaining: 0 },
+    });
+
+    expect(tx.subscription.create).not.toHaveBeenCalled();
+    expect(tx.quotaLot.create).not.toHaveBeenCalled();
+
+    expect(events).toContain('COMMIT');
+  });
+  it.each(['EXPIRED', 'ON_HOLD'])(
+    'processes %s notification even when payments are disabled',
+    async (state) => {
+      const commercialControlMock = {
+        assertPaymentsEnabled: jest.fn(() => {
+          throw new ServiceUnavailableException('PAYMENTS_DISABLED');
+        }),
+        isPaymentsEnabled: jest.fn().mockReturnValue(false),
+      };
+
+      const blockedService = new StoreBillingService(
+        db,
+        settings(),
+        apple,
+        google,
+        commercialControlMock as unknown as CommercialControlService,
+      );
+
+      const oldCycle = verified({ state: 'ACTIVE' });
+
+      cycle = {
+        id: 'cycle',
+        purchaseId: 'purchase',
+        subscriptionId: 'sub',
+        state: 'ACTIVE',
+        refundReview: false,
+        observedAt: new Date(Date.now() - 60000),
+        deliveryStatus: 'GRANTED',
+        productId: oldCycle.productId,
+        expiresAt: oldCycle.expiresAt,
+      };
+
+      purchase = {
+        id: 'purchase',
+        userId: user,
+      };
+
+      apple.notification.mockResolvedValue(verified({ state }));
+
+      await expect(
+        blockedService.notification('APPLE', 'mock-notification'),
+      ).resolves.toMatchObject({
+        state,
+      });
+
+      expect(
+        commercialControlMock.assertPaymentsEnabled,
+      ).not.toHaveBeenCalled();
+
+      expect(tx.subscription.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'sub',
+          userId: user,
+          billingSource: 'APPLE',
+        },
+        data: { status: 'EXPIRED' },
+      });
+
+      expect(tx.quotaLot.updateMany).not.toHaveBeenCalled();
+      expect(tx.subscription.create).not.toHaveBeenCalled();
+      expect(tx.quotaLot.create).not.toHaveBeenCalled();
+      expect(events).toContain('COMMIT');
     },
   );
   it('older observation does not overwrite a newer state', async () => {
@@ -604,13 +825,64 @@ describe('Store ledger and delivery transaction (mock only)', () => {
       billingSource: 'APPLE',
       plan: { code: 'BASIC' },
     });
+    const commercialControl = {
+      assertPaymentsEnabled: jest.fn(),
+      isPaymentsEnabled: jest.fn().mockReturnValue(true),
+    };
+
     await expect(
-      new PaymentService(db).createPayment(user, 'PRO'),
+      new PaymentService(
+        db,
+        commercialControl as unknown as CommercialControlService,
+      ).createPayment(user, 'PRO'),
     ).rejects.toThrow('ACTIVE_PAID_SUBSCRIPTION_EXISTS');
     expect(db.payment.create).not.toHaveBeenCalled();
   });
 });
+describe('Store Billing commercial control', () => {
+  it('blocks verification before provider and database access when payments are disabled', async () => {
+    const dbMock = {
+      subscription: {
+        findFirst: jest.fn(),
+      },
+    };
 
+    const appleMock = {
+      verify: jest.fn(),
+    };
+
+    const googleMock = {
+      verify: jest.fn(),
+    };
+
+    const commercialControlMock = {
+      assertPaymentsEnabled: jest.fn(() => {
+        throw new ServiceUnavailableException('PAYMENTS_DISABLED');
+      }),
+      isPaymentsEnabled: jest.fn().mockReturnValue(false),
+    };
+
+    const blockedService = new StoreBillingService(
+      dbMock as any,
+      settings(),
+      appleMock as any,
+      googleMock as any,
+      commercialControlMock as unknown as CommercialControlService,
+    );
+
+    await expect(blockedService.verify(user, 'APPLE', '100')).rejects.toThrow(
+      'PAYMENTS_DISABLED',
+    );
+
+    expect(commercialControlMock.assertPaymentsEnabled).toHaveBeenCalledTimes(
+      1,
+    );
+
+    expect(appleMock.verify).not.toHaveBeenCalled();
+    expect(googleMock.verify).not.toHaveBeenCalled();
+    expect(dbMock.subscription.findFirst).not.toHaveBeenCalled();
+  });
+});
 describe('Official Apple SDK verification orchestration (mock SDK)', () => {
   let api: any, verifier: any, provider: AppleStoreService, payload: any;
   beforeEach(() => {

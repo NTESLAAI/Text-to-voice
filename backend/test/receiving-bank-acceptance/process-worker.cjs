@@ -31,7 +31,17 @@ const path = require('node:path'),
         PaymentTransactionService,
       } = require('../../dist/src/payment/payment-transaction.service.js'),
       { PaymentService } = require('../../dist/src/payment/payment.service.js');
-    const service = new PaymentTransactionService(db, new PaymentService(db));
+    const {
+      CommercialControlService,
+    } = require('../../dist/src/commercial-control/commercial-control.service.js');
+    const { ConfigService } = require('@nestjs/config');
+    const control = new CommercialControlService(
+      new ConfigService({ PAYMENTS_ENABLED: 'true' }),
+    );
+    const service = new PaymentTransactionService(
+      db,
+      new PaymentService(db, control),
+    );
     try {
       const r = await service.recordBankTransaction({
         receivingBankAccountId: account,

@@ -9,10 +9,14 @@ import { randomInt } from 'crypto';
 import { Prisma } from '../../generated/prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { CommercialControlService } from '../commercial-control/commercial-control.service';
 
 @Injectable()
 export class PaymentService {
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly commercialControl: CommercialControlService,
+  ) {
     this.accounts = new ReceivingBankAccountService(prisma);
   }
   private readonly accounts: ReceivingBankAccountService;
@@ -127,6 +131,8 @@ export class PaymentService {
     planCode: string,
     upgradeOption?: string,
   ) {
+    this.commercialControl.assertPaymentsEnabled();
+
     const normalizedPlanCode = planCode.trim().toUpperCase();
 
     const now = new Date();
@@ -635,6 +641,8 @@ export class PaymentService {
   }
 
   async confirmPayment(paymentId: string, allowAlreadyPaid = false) {
+    this.commercialControl.assertPaymentsEnabled();
+
     return this.prisma.$transaction(async (tx) => {
       let now = new Date();
       await tx.$queryRaw`

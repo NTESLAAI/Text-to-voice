@@ -1,3 +1,4 @@
+import { CommercialControlService } from '../../src/commercial-control/commercial-control.service';
 /* Synthetic integration only; no application module, dotenv or external providers. */
 import 'reflect-metadata';
 import { randomUUID, randomBytes, createHash } from 'node:crypto';
@@ -118,7 +119,7 @@ describe('REFUND/CREDIT on independently guarded PostgreSQL', () => {
         [p.id],
       )
     )[0];
-    const { Prisma } = await import('../../generated/prisma/client');
+    const { Prisma } = await import('../../generated/prisma/client.js');
     const total = Prisma.Decimal.max(
       0,
       new Prisma.Decimal(sums.matched).minus(sums.amount),
@@ -196,7 +197,7 @@ describe('REFUND/CREDIT on independently guarded PostgreSQL', () => {
     ).toBe(0);
     const { Pool } = await import('pg');
     const { PrismaPg } = await import('@prisma/adapter-pg');
-    const { PrismaClient } = await import('../../generated/prisma/client');
+    const { PrismaClient } = await import('../../generated/prisma/client.js');
     db = new PrismaClient({
       adapter: new PrismaPg(
         new Pool({ ...g.connection(packet, 'writer'), max: 10 }),
@@ -273,7 +274,12 @@ describe('REFUND/CREDIT on independently guarded PostgreSQL', () => {
       });
       payments[id] = { ...p, receiptId: receipt.id };
     }
-    const payment = new PaymentService(db);
+    const payment = new PaymentService(
+      db,
+      new CommercialControlService(
+        new ConfigService({ PAYMENTS_ENABLED: 'true' }),
+      ),
+    );
     const surplus = new PaymentSurplusService(db);
     jwt = new JwtService({ secret, signOptions: { expiresIn: '5m' } });
     const module = await Test.createTestingModule({

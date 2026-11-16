@@ -1,3 +1,5 @@
+import { ConfigService } from '@nestjs/config';
+import { CommercialControlService } from '../src/commercial-control/commercial-control.service';
 jest.mock('../src/tts/providers/openrouter-tts.provider', () => ({
   OpenRouterTtsProvider: class MockOpenRouterTtsProvider {},
 }));
@@ -247,7 +249,12 @@ describe('TTS and CONVERT_TO_CREDIT concurrency integration', () => {
       providerMock,
     );
 
-    const paymentService = new PaymentService(prisma);
+    const paymentService = new PaymentService(
+      prisma,
+      new CommercialControlService(
+        new ConfigService({ PAYMENTS_ENABLED: 'true' }),
+      ),
+    );
 
     const request = {
       projectId: project.id,
